@@ -59,15 +59,26 @@ export const HomePage: React.FC = () => {
 
       <section className="section-padding" style={{ backgroundColor: 'var(--bg-main)', paddingTop: '1.5rem' }}>
         <div className="container">
-          <div className="products-grid">
-            {allProducts.map(product => (
-              <ProductCard 
-                key={product.id} 
-                product={product} 
-                onQuickView={(p) => setQuickViewProduct(p)} 
-              />
-            ))}
-          </div>
+          {allProducts.length === 0 ? (
+            <div style={{ padding: '4rem 2rem', textAlign: 'center', backgroundColor: '#ffffff', borderRadius: 'var(--radius-lg)', border: '1px solid var(--brand-border)', margin: '2rem 0' }}>
+              <h3 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)', marginBottom: '0.5rem' }}>
+                Products are being prepared for launch.
+              </h3>
+              <p style={{ color: 'var(--brand-muted)', fontSize: '0.95rem', maxWidth: '500px', margin: '0 auto' }}>
+                The MUETY Atelier is currently updating our luxury handloom collection. Please check back shortly.
+              </p>
+            </div>
+          ) : (
+            <div className="products-grid">
+              {allProducts.map(product => (
+                <ProductCard 
+                  key={product.id} 
+                  product={product} 
+                  onQuickView={(p) => setQuickViewProduct(p)} 
+                />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

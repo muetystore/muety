@@ -163,7 +163,7 @@ export const ProductsPage: React.FC = () => {
               }
             </h1>
             <p style={{ color: '#94a3b8', fontSize: '0.92rem' }}>
-              Explore handcrafted horology, Italian leather pieces, tailored apparel, and acoustics.
+              Explore pure silk sarees, festive handlooms, bridal couture, and royal temple jewelry.
             </p>
           </div>
         </div>
@@ -423,9 +423,9 @@ export const ProductsPage: React.FC = () => {
                 border: '1px dashed var(--brand-border)'
               }}>
                 <Sparkles size={48} color="var(--brand-accent)" style={{ marginBottom: '1rem' }} />
-                <h3 style={{ marginBottom: '0.5rem' }}>No Matching Creations Found</h3>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', maxWidth: '400px', margin: '0 auto 1.5rem' }}>
-                  We couldn't find any products matching your specific filters or search keywords.
+                <h3 style={{ marginBottom: '0.5rem' }}>Products are being prepared for launch.</h3>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', maxWidth: '440px', margin: '0 auto 1.5rem' }}>
+                  The MUETY Atelier is currently updating our luxury handloom collection. Please check back shortly or adjust your filter selection.
                 </p>
                 <button onClick={resetFilters} className="btn btn-primary btn-sm">
                   Reset All Filters

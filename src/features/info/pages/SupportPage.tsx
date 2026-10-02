@@ -8,16 +8,16 @@ export const SupportPage: React.FC = () => {
 
   const faqs = [
     {
-      q: 'How do I care for my MUETY automatic watch movement?',
-      a: 'MUETY mechanical movements feature a 42-hour power reserve. If the watch has been at rest, gently wind the crown clockwise 25-30 times before wearing. We recommend caliber servicing every 4-5 years.'
+      q: 'How do I care for my MUETY pure silk saree?',
+      a: 'MUETY pure silk sarees should be dry cleaned to preserve natural luster and zari integrity. Store your saree wrapped in a breathable muslin fabric in a cool, dry place away from direct sunlight.'
     },
     {
-      q: 'How should I treat full-grain Tuscan leather?',
-      a: 'Our vegetable-tanned hides develop a richer patina over time. Keep away from prolonged submersion in water and apply a neutral organic beeswax leather conditioner once every six months.'
+      q: 'How do I verify the authenticity of the silk and zari?',
+      a: 'All MUETY sarees come with Silk Mark certification and quality guarantees. Our zaris utilize tested gold and silver thread plating interweaving with 100% pure Mulberry silk.'
     },
     {
-      q: 'How do I track my global express shipment?',
-      a: 'As soon as your order leaves our atelier dock, an automated dispatch notification with your carrier airway bill number is sent to your email and accessible under your MUETY Account.'
+      q: 'How do I track my delivery dispatch?',
+      a: 'As soon as your order leaves our atelier, an automated dispatch notification with your courier tracking number is sent to your email and accessible under your MUETY Account.'
     },
     {
       q: 'Can I apply a promo coupon to my order?',
@@ -32,11 +32,11 @@ export const SupportPage: React.FC = () => {
           <span style={{ fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.12em', color: '#d4af37', textTransform: 'uppercase' }}>
             PATRON ASSISTANCE
           </span>
-          <h1 style={{ color: '#ffffff', fontSize: '2.5rem', marginTop: '4px', marginBottom: '0.5rem' }}>
+          <h1 style={{ color: '#ffffff', fontSize: '2.5rem', marginTop: '4px', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
             MUETY Customer Support & FAQ
           </h1>
           <p style={{ color: '#94a3b8', fontSize: '1rem', maxWidth: '540px', margin: '0 auto' }}>
-            Expert answers, horological guides, and direct concierge assistance.
+            Expert saree care guidance, weaving consultation, and direct concierge assistance.
           </p>
         </div>
       </div>
@@ -46,25 +46,25 @@ export const SupportPage: React.FC = () => {
         <div className="grid-3" style={{ gap: '1.5rem', marginBottom: '3.5rem' }}>
           <div className="card" style={{ padding: '1.5rem', textAlign: 'center' }}>
             <Phone size={24} color="var(--brand-accent)" style={{ margin: '0 auto 8px' }} />
-            <h4 style={{ fontSize: '1rem', marginBottom: '4px' }}>Phone Concierge</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--brand-muted)' }}>+1 (800) 555-MUETY</p>
+            <h4 style={{ fontSize: '1rem', marginBottom: '4px' }}>Phone / WhatsApp</h4>
+            <p style={{ fontSize: '0.85rem', color: 'var(--brand-muted)' }}>+91 93857 91540</p>
           </div>
 
           <div className="card" style={{ padding: '1.5rem', textAlign: 'center' }}>
             <Mail size={24} color="var(--brand-accent)" style={{ margin: '0 auto 8px' }} />
             <h4 style={{ fontSize: '1rem', marginBottom: '4px' }}>Email Assistance</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--brand-muted)' }}>concierge@muety.com</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--brand-muted)' }}>muetystore@gmail.com</p>
           </div>
 
           <div className="card" style={{ padding: '1.5rem', textAlign: 'center' }}>
             <Clock size={24} color="var(--brand-accent)" style={{ margin: '0 auto 8px' }} />
             <h4 style={{ fontSize: '1rem', marginBottom: '4px' }}>Availability</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--brand-muted)' }}>24/7 Global Priority</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--brand-muted)' }}>Mon–Sun: 9 AM–9 PM IST</p>
           </div>
         </div>
 
         {/* FAQs */}
-        <h2 style={{ fontSize: '1.8rem', color: 'var(--brand-primary)', marginBottom: '1.5rem' }}>
+        <h2 style={{ fontSize: '1.8rem', color: 'var(--brand-primary)', marginBottom: '1.5rem', fontFamily: 'var(--font-heading)' }}>
           Frequently Asked Questions
         </h2>
 
@@ -90,11 +90,11 @@ export const SupportPage: React.FC = () => {
           padding: '2.5rem',
           textAlign: 'center'
         }}>
-          <h3 style={{ color: '#ffffff', fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+          <h3 style={{ color: '#ffffff', fontSize: '1.5rem', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
             Require Individual Atelier Assistance?
           </h3>
           <p style={{ color: '#94a3b8', fontSize: '0.95rem', marginBottom: '1.5rem', maxWidth: '480px', margin: '0 auto 1.5rem' }}>
-            Our master horologists and bespoke leather consultants are happy to provide personalized guidance.
+            Our master weaving specialists and bridal advisors are happy to provide personalized guidance.
           </p>
           <Link to="/contact" className="btn btn-accent">
             Contact Customer Support &rarr;

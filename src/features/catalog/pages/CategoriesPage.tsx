@@ -24,7 +24,7 @@ export const CategoriesPage: React.FC = () => {
             MUETY Product Categories
           </h1>
           <p style={{ color: '#94a3b8', fontSize: '1rem', maxWidth: '540px' }}>
-            Discover our specialized ateliers in horology, leather crafting, bespoke knitwear, and acoustic engineering.
+            Discover our handloom silk sarees, bridal collections, heritage weaves, and royal temple jewelry.
           </p>
         </div>
       </div>

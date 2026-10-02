@@ -44,7 +44,7 @@ export const AdminProducts: React.FC = () => {
   const [origPrice, setOrigPrice] = useState<number>(0);
   const [stock, setStock] = useState<number>(10);
   const [sku, setSku] = useState('');
-  const [categoryName, setCategoryName] = useState('Timepieces');
+  const [categoryName, setCategoryName] = useState('Festive Silk Sarees');
   const [images, setImages] = useState<string[]>([]);
   const [newImageUrl, setNewImageUrl] = useState('');
   const [colorsText, setColorsText] = useState('');
@@ -168,14 +168,14 @@ export const AdminProducts: React.FC = () => {
     setName('');
     setShortDesc('');
     setDesc('');
-    setPrice(295);
-    setOrigPrice(0);
+    setPrice(18500);
+    setOrigPrice(24500);
     setStock(15);
     setSku(`MUETY-${Math.floor(100 + Math.random() * 900)}`);
-    setCategoryName(categories[0]?.name || 'Timepieces');
-    setImages(['https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=1000&q=80']);
+    setCategoryName(categories[0]?.name || 'Festive Silk Sarees');
+    setImages(['https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=1000&q=80']);
     setNewImageUrl('');
-    setColorsText('Obsidian Black, Champagne Gold');
+    setColorsText('Crimson Red, Royal Gold');
     setSizesText('');
     setFeatured(false);
     setNewArrival(true);

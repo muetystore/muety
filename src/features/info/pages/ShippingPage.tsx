@@ -45,7 +45,7 @@ export const ShippingPage: React.FC = () => {
             1. Dispatch Timelines
           </h2>
           <p style={{ marginBottom: '1.5rem' }}>
-            Orders placed before 2:00 PM EST Monday through Friday are prepared, serial-verified, and dispatched within 24 hours. Custom engraved timepieces may require 48 hours for master artisan personalization.
+            Orders placed before 2:00 PM IST Monday through Friday are prepared, quality-verified, and dispatched within 24 hours. Custom woven bridal sarees or bespoke blouses may require 48 to 72 hours for master weaver finishing.
           </p>
 
           <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem' }}>

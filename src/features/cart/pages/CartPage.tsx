@@ -81,11 +81,11 @@ export const CartPage: React.FC = () => {
 
           <h2 style={{ fontSize: '1.6rem', marginBottom: '0.5rem' }}>Your Shopping Bag is Empty</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '2rem' }}>
-            Explore our curated collections of precision timepieces, Tuscan leather, and cashmere essentials.
+            Explore our curated collections of festive silk sarees, bridal handloom, and royal temple jewelry.
           </p>
 
           <Link to="/products" className="btn btn-primary" style={{ width: '100%' }}>
-            Explore MUETY Repertory
+            Explore MUETY Collection
           </Link>
         </div>
       </div>

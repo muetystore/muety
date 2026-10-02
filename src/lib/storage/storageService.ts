@@ -34,32 +34,23 @@ class StorageService {
 
   private initializeDefaults() {
     if (typeof window === 'undefined') return;
+    const existingRaw = localStorage.getItem(KEYS.PRODUCTS);
+    if (existingRaw && (existingRaw.includes('dfvdfvdf') || existingRaw.includes('cat-timepieces'))) {
+      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+      localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
+      localStorage.setItem(KEYS.INITIALIZED, 'v3_clean');
+    }
+
     const isInit = localStorage.getItem(KEYS.INITIALIZED);
-    if (!isInit) {
-      if (!localStorage.getItem(KEYS.PRODUCTS)) {
-        localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
-      }
-      if (!localStorage.getItem(KEYS.CATEGORIES)) {
-        localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
-      }
-      if (!localStorage.getItem(KEYS.COUPONS)) {
-        localStorage.setItem(KEYS.COUPONS, JSON.stringify(INITIAL_COUPONS));
-      }
-      if (!localStorage.getItem(KEYS.SETTINGS)) {
-        localStorage.setItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
-      }
-      if (!localStorage.getItem(KEYS.USERS)) {
-        localStorage.setItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
-      }
-      if (!localStorage.getItem(KEYS.ORDERS)) {
-        localStorage.setItem(KEYS.ORDERS, JSON.stringify(INITIAL_ORDERS));
-      }
-      if (!localStorage.getItem(KEYS.REVIEWS)) {
-        localStorage.setItem(KEYS.REVIEWS, JSON.stringify(INITIAL_REVIEWS));
-      }
-      localStorage.setItem(KEYS.INITIALIZED, 'true');
-    } else if (!localStorage.getItem(KEYS.REVIEWS)) {
+    if (!isInit || isInit !== 'v3_clean') {
+      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+      localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
+      localStorage.setItem(KEYS.COUPONS, JSON.stringify(INITIAL_COUPONS));
+      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
+      localStorage.setItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
+      localStorage.setItem(KEYS.ORDERS, JSON.stringify(INITIAL_ORDERS));
       localStorage.setItem(KEYS.REVIEWS, JSON.stringify(INITIAL_REVIEWS));
+      localStorage.setItem(KEYS.INITIALIZED, 'v3_clean');
     }
   }
 

@@ -215,7 +215,7 @@ export const AccountPage: React.FC = () => {
                 <Package size={48} color="var(--brand-muted)" style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
                 <h3 style={{ marginBottom: '0.5rem' }}>No Order History Yet</h3>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                  Explore our luxury timepieces and bespoke collections to place your first order.
+                  Explore our pure silk sarees and heritage handloom collections to place your first order.
                 </p>
                 <Link to="/products" className="btn btn-primary btn-sm">Explore Collection</Link>
               </div>

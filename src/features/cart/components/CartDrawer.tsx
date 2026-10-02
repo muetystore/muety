@@ -84,7 +84,7 @@ export const CartDrawer: React.FC = () => {
               <ShoppingBag size={56} strokeWidth={1} style={{ marginBottom: '1rem', opacity: 0.5 }} />
               <h4 style={{ color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Your Bag is Empty</h4>
               <p style={{ fontSize: '0.9rem', marginBottom: '1.5rem', maxWidth: '260px' }}>
-                Discover our handcrafted timepieces and luxury collections.
+                Discover our pure silk sarees and handloom collections.
               </p>
               <button 
                 onClick={() => {

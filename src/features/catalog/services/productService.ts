@@ -80,7 +80,15 @@ export async function uploadProductImages(images: string[], productId: string): 
 
 export const productService = {
   getAllProducts(): Product[] {
-    return storageService.getProducts();
+    const list = storageService.getProducts();
+    return list.filter(p => 
+      p.name && 
+      !p.name.toLowerCase().includes('dfvdfvdf') && 
+      p.categorySlug !== 'timepieces' && 
+      p.categorySlug !== 'leather-goods' && 
+      p.categorySlug !== 'eyewear' &&
+      p.categorySlug !== 'audio'
+    );
   },
 
   getProductById(id: string): Product | undefined {

@@ -33,7 +33,7 @@ export const PrivacyPage: React.FC = () => {
             2. Data Collection and Usage
           </h2>
           <p style={{ marginBottom: '1.5rem' }}>
-            We collect information solely to fulfill your bespoke orders, coordinate international courier deliveries, provide tailored concierge support, and issue official certificates of authenticity for your timepieces and leather goods.
+            We collect information solely to fulfill your bespoke orders, coordinate courier deliveries, provide tailored concierge support, and issue official quality certificates for your pure silk sarees and temple jewelry.
           </p>
 
           <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem' }}>

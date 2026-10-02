@@ -26,14 +26,14 @@ export const TermsPage: React.FC = () => {
             1. Acceptance of Terms
           </h2>
           <p style={{ marginBottom: '1.5rem' }}>
-            By accessing or acquiring products through <strong>MUETY</strong> (the "Website"), you agree to be bound by these Terms and Conditions. These terms govern all purchases of timepieces, leather goods, apparel, and lifestyle accessories.
+            By accessing or acquiring products through <strong>MUETY</strong> (the "Website"), you agree to be bound by these Terms and Conditions. These terms govern all purchases of pure silk sarees, handloom apparel, and heritage jewelry.
           </p>
 
           <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem' }}>
             2. Product Authenticity and Descriptions
           </h2>
           <p style={{ marginBottom: '1.5rem' }}>
-            MUETY guarantees the 100% authenticity of all materials, calibers, and craftsmanship stated on our product pages. Slight natural grain variations in Italian leathers are hallmarks of authentic organic tanning.
+            MUETY guarantees the 100% authenticity of pure silk fibers, handloom weaves, and gold zari stated on our product pages. Slight natural weave textures and hand-loom characteristics are hallmarks of genuine artisan handloom weaving.
           </p>
 
           <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem' }}>

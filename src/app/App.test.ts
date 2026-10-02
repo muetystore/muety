@@ -91,13 +91,22 @@ describe('MUETY Security & Authorization Matrix Integration Tests', () => {
   });
 
   describe('03. Catalog & Storage Domain Services', () => {
-    it('retrieves initial product catalog correctly', () => {
+    it('retrieves authentic Muety saree product catalog correctly', () => {
       const products = productService.getAllProducts();
       expect(Array.isArray(products)).toBe(true);
       expect(products.length).toBeGreaterThan(0);
+      
+      // Ensure no corrupt dfvdfvdf or legacy non-saree categories exist
+      const hasCorruptProduct = products.some(p => p.name.includes('dfvdfvdf') || p.id.includes('dfvdfvdf'));
+      expect(hasCorruptProduct).toBe(false);
+
+      const hasNonSareeCategory = products.some(p => ['timepieces', 'leather_goods', 'eyewear', 'fragrances', 'audio'].includes(p.category));
+      expect(hasNonSareeCategory).toBe(false);
+
       expect(products[0]).toHaveProperty('id');
       expect(products[0]).toHaveProperty('name');
       expect(products[0]).toHaveProperty('price');
+      expect(products[0]).toHaveProperty('category');
     });
 
     it('fetches single product by ID or returns undefined if non-existent', () => {
@@ -111,6 +120,17 @@ describe('MUETY Security & Authorization Matrix Integration Tests', () => {
 
       const nonExistent = productService.getProductById('invalid-product-99999');
       expect(nonExistent).toBeUndefined();
+    });
+
+    it('supports realtime subscription callback pattern', () => {
+      let receivedProducts: any[] = [];
+      const unsubscribe = productService.subscribeToProducts((products) => {
+        receivedProducts = products;
+      });
+
+      expect(typeof unsubscribe).toBe('function');
+      expect(Array.isArray(receivedProducts)).toBe(true);
+      unsubscribe();
     });
   });
 
