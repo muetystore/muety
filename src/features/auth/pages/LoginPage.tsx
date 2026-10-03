@@ -48,7 +48,7 @@ export const LoginPage: React.FC = () => {
       success(`Welcome to MUETY, ${user.displayName}.`, 'Authenticated via Google');
       navigate(from, { replace: true });
     } catch (err: any) {
-      error('Google Authentication was cancelled or encountered an error.');
+      error(err?.message || 'Google Authentication was cancelled or encountered an error.');
     } finally {
       setLoading(false);
     }

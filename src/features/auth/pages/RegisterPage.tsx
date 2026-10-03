@@ -53,7 +53,7 @@ export const RegisterPage: React.FC = () => {
       success(`Welcome to MUETY, ${user.displayName}.`, 'Authenticated via Google');
       navigate('/account');
     } catch (err: any) {
-      error('Google Authentication was cancelled.');
+      error(err?.message || 'Google Authentication was cancelled or encountered an error.');
     } finally {
       setLoading(false);
     }

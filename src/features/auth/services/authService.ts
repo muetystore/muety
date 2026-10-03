@@ -249,26 +249,33 @@ export class AuthService {
     if (auth && isLiveFirebase) {
       try {
         const provider = new GoogleAuthProvider();
-        const cred = await withTimeout(signInWithPopup(auth, provider), 5000);
+        const cred = await withTimeout(signInWithPopup(auth, provider), 10000);
         const profile = await this.fetchUserProfile(cred.user);
+        
+        // Ensure user document exists in Firestore
+        if (db && isLiveFirebase) {
+          try {
+            await setDoc(doc(db, 'users', cred.user.uid), profile, { merge: true });
+          } catch (docErr) {
+            console.warn('Firestore setDoc Google user note:', docErr);
+          }
+        }
+        
         this.setCurrentUser(profile);
         return profile;
       } catch (e: any) {
         console.warn('Firebase Google login error:', e);
+        if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') {
+          throw new Error('Google Sign-In popup was closed before completing authentication.');
+        }
+        if (e?.code === 'auth/unauthorized-domain') {
+          throw new Error('This domain is not authorized for Google Sign-In in Firebase Console. Please add it under Authentication > Authorized domains.');
+        }
+        throw new Error(e?.message || 'Google Sign-In failed. Please check your credentials or network connection.');
       }
     }
 
-    const profile: UserProfile = {
-      uid: `usr-google-${Date.now()}`,
-      email: 'patron@example.com',
-      displayName: 'MUETY Patron',
-      roles: ['customer'],
-      role: 'customer',
-      createdAt: new Date().toISOString()
-    };
-    storageService.saveUser(profile);
-    this.setCurrentUser(profile);
-    return profile;
+    throw new Error('Firebase Authentication is not available. Please verify your Firebase project configuration.');
   }
 
   async logout(): Promise<void> {
