@@ -1,6 +1,6 @@
 import { Product, Category } from '../types';
 import { storageService } from '@/lib/storage/storageService';
-import { db, storage } from '@/lib/firebase/firebase';
+import { db } from '@/lib/firebase/firebase';
 import { 
   collection, 
   doc, 
@@ -14,11 +14,9 @@ import {
   Unsubscribe 
 } from 'firebase/firestore';
 import { 
-  ref, 
-  uploadString, 
-  uploadBytes, 
-  getDownloadURL 
-} from 'firebase/storage';
+  uploadToCloudinary, 
+  uploadProductImagesToCloudinary 
+} from '@/lib/media/cloudinary';
 
 export async function uploadProductImage(
   imageDataOrUrl: string, 
@@ -31,51 +29,21 @@ export async function uploadProductImage(
     return imageDataOrUrl;
   }
 
-  if (!storage) {
-    console.warn('Firebase Storage is not initialized, keeping local image data.');
-    return imageDataOrUrl;
-  }
-
   try {
-    const timestamp = Date.now();
-    const cleanId = productId.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const storagePath = `products/${cleanId}/image_${index}_${timestamp}.jpg`;
-    const imageRef = ref(storage, storagePath);
-
-    const uploadTask = async () => {
-      if (imageDataOrUrl.startsWith('data:')) {
-        const mimeMatch = imageDataOrUrl.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+).*,.*/);
-        const contentType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-        
-        const snapshot = await uploadString(imageRef, imageDataOrUrl, 'data_url', { contentType });
-        const downloadUrl = await getDownloadURL(snapshot.ref);
-        return downloadUrl;
-      } else if (imageDataOrUrl.startsWith('blob:')) {
-        const res = await fetch(imageDataOrUrl);
-        const blob = await res.blob();
-        const snapshot = await uploadBytes(imageRef, blob, { contentType: blob.type || 'image/jpeg' });
-        const downloadUrl = await getDownloadURL(snapshot.ref);
-        return downloadUrl;
-      }
-      return imageDataOrUrl;
-    };
-
-    const timeoutPromise = new Promise<string>((resolve) => {
-      setTimeout(() => {
-        resolve(imageDataOrUrl);
-      }, 2000);
+    const res = await uploadToCloudinary(imageDataOrUrl, {
+      productId,
+      publicId: `image_${index}_${Date.now()}`
     });
-
-    return await Promise.race([uploadTask(), timeoutPromise]);
+    return res.url;
   } catch (err: any) {
+    console.warn('Cloudinary image upload note:', err);
     return imageDataOrUrl;
   }
 }
 
 export async function uploadProductImages(images: string[], productId: string): Promise<string[]> {
   if (!images || images.length === 0) return [];
-  const uploadPromises = images.map((img, idx) => uploadProductImage(img, productId, idx));
-  return await Promise.all(uploadPromises);
+  return await uploadProductImagesToCloudinary(images, productId);
 }
 
 export const productService = {

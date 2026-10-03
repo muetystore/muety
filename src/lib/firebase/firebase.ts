@@ -1,7 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { env } from '@/lib/config/env';
 
 const firebaseConfig = {
@@ -16,7 +15,8 @@ const firebaseConfig = {
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
-let storage: FirebaseStorage | null = null;
+// Application product & category media is managed via Cloudinary (Stage 02D). Firebase Storage is disabled.
+const storage = null;
 const isLiveFirebase = env.firebase.isConfigured;
 
 try {
@@ -38,7 +38,6 @@ try {
         console.warn('Firestore fallback init note:', e);
       }
     }
-    storage = getStorage(app);
   }
 } catch (error) {
   console.warn("MUETY: Running in local fallback mode (LocalStorage active)", error);

@@ -224,4 +224,59 @@ describe('MUETY Security & Authorization Matrix Integration Tests', () => {
     });
   });
 
+  describe('06. Cloudinary Media Architecture & Security Contracts', () => {
+    it('validates image files, base64 strings, and file sizes correctly', async () => {
+      const { validateImageFile } = await import('@/lib/media/cloudinary');
+
+      // Valid HTTP URL
+      const validUrlRes = validateImageFile('https://images.unsplash.com/photo-1610030469983-98e550d6193c');
+      expect(validUrlRes.valid).toBe(true);
+
+      // Valid base64 JPEG
+      const validBase64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP...';
+      const validBase64Res = validateImageFile(validBase64);
+      expect(validBase64Res.valid).toBe(true);
+
+      // Invalid base64 MIME
+      const invalidBase64 = 'data:application/pdf;base64,JVBERi0xLj...';
+      const invalidBase64Res = validateImageFile(invalidBase64);
+      expect(invalidBase64Res.valid).toBe(false);
+      expect(invalidBase64Res.error).toContain('Invalid base64 image format');
+    });
+
+    it('formats dynamic Cloudinary responsive transformation URLs', async () => {
+      const { getCloudinaryUrl } = await import('@/lib/media/cloudinary');
+
+      const rawUrl = 'https://res.cloudinary.com/muety-atelier/image/upload/v12345/muety/products/prod-1/image-1.jpg';
+      const transformed = getCloudinaryUrl(rawUrl, { width: 600, height: 800, crop: 'fill' });
+
+      expect(transformed).toContain('c_fill');
+      expect(transformed).toContain('w_600');
+      expect(transformed).toContain('h_800');
+      expect(transformed).toContain('f_auto');
+      expect(transformed).toContain('q_auto');
+    });
+
+    it('extracts public IDs cleanly from Cloudinary asset URLs', async () => {
+      const { extractCloudinaryPublicId } = await import('@/lib/media/cloudinary');
+
+      const url = 'https://res.cloudinary.com/muety-atelier/image/upload/v1234567/muety/products/prod_101/image_1.jpg';
+      const publicId = extractCloudinaryPublicId(url);
+
+      expect(publicId).toBe('muety/products/prod_101/image_1');
+    });
+
+    it('verifies Cloudinary configuration boundary without exposing API secret', async () => {
+      const { env } = await import('@/lib/config/env');
+
+      expect(env.cloudinary).toBeDefined();
+      expect(typeof env.cloudinary.cloudName).toBe('string');
+      expect(typeof env.cloudinary.uploadPreset).toBe('string');
+
+      // Security Check: Ensure CLOUDINARY_API_SECRET is NOT exposed in env object
+      expect((env as any).CLOUDINARY_API_SECRET).toBeUndefined();
+      expect((env.cloudinary as any).apiSecret).toBeUndefined();
+    });
+  });
+
 });
