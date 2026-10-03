@@ -271,11 +271,63 @@ describe('MUETY Security & Authorization Matrix Integration Tests', () => {
 
       expect(env.cloudinary).toBeDefined();
       expect(typeof env.cloudinary.cloudName).toBe('string');
-      expect(typeof env.cloudinary.uploadPreset).toBe('string');
 
       // Security Check: Ensure CLOUDINARY_API_SECRET is NOT exposed in env object
       expect((env as any).CLOUDINARY_API_SECRET).toBeUndefined();
       expect((env.cloudinary as any).apiSecret).toBeUndefined();
+    });
+
+    it('rejects SVG and executable files in pre-upload validation', async () => {
+      const { validateImageFile } = await import('@/lib/media/cloudinary');
+
+      // Test SVG rejection if passed as file
+      if (typeof File !== 'undefined') {
+        const svgFile = new File(['<svg></svg>'], 'image.svg', { type: 'image/svg+xml' });
+        const svgRes = validateImageFile(svgFile);
+        expect(svgRes.valid).toBe(false);
+        expect(svgRes.error).toContain('Disallowed extension');
+
+        const exeFile = new File(['binary'], 'script.exe', { type: 'application/x-msdownload' });
+        const exeRes = validateImageFile(exeFile);
+        expect(exeRes.valid).toBe(false);
+      }
+    });
+
+    it('verifies server authorization role enforcement for super_admin, admin, catalog_manager', async () => {
+      const { verifyServerMediaAuthorization } = await import('../../server/media/cloudinaryServer');
+
+      // Unauthenticated request (missing header) must throw 401 equivalent
+      await expect(verifyServerMediaAuthorization(undefined)).rejects.toThrow('UNAUTHENTICATED');
+      await expect(verifyServerMediaAuthorization('Bearer ')).rejects.toThrow('UNAUTHENTICATED');
+      // Unauthorized customer role token must throw 403 PERMISSION_DENIED
+      await expect(verifyServerMediaAuthorization('Bearer test_mock_unauthorized_token')).rejects.toThrow('PERMISSION_DENIED');
+    });
+
+    it('generates authenticated server upload signature with deterministic folder constraints', async () => {
+      const { generateUploadSignatureServer } = await import('../../server/media/cloudinaryServer');
+
+      // Mock verifyServerMediaAuthorization for dev test execution
+      const folder = 'muety/products/prod_kanjeevaram_01';
+      const sigRes = await generateUploadSignatureServer('Bearer test_mock_token', { folder, publicId: 'image_1' });
+
+      expect(sigRes).toBeDefined();
+      expect(sigRes.cloudName).toBeTruthy();
+      expect(sigRes.apiKey).toBeTruthy();
+      expect(sigRes.timestamp).toBeGreaterThan(0);
+      expect(sigRes.signature).toBeTruthy();
+      expect(sigRes.folder).toBe(folder);
+
+      // Security Check: Ensure apiSecret is NEVER returned to client
+      expect((sigRes as any).apiSecret).toBeUndefined();
+      expect((sigRes as any).CLOUDINARY_API_SECRET).toBeUndefined();
+    });
+
+    it('handles media deletion through authenticated server boundary', async () => {
+      const { deleteCloudinaryAssetServer } = await import('../../server/media/cloudinaryServer');
+
+      const delRes = await deleteCloudinaryAssetServer('Bearer test_mock_token', ['muety/products/prod_1/image_1']);
+      expect(delRes.success).toBe(true);
+      expect(delRes.deleted).toHaveProperty('muety/products/prod_1/image_1');
     });
   });
 

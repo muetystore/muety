@@ -24,7 +24,6 @@ export interface EnvConfig {
   };
   cloudinary: {
     cloudName: string;
-    uploadPreset: string;
     signatureEndpoint: string;
     isConfigured: boolean;
   };
@@ -41,9 +40,7 @@ const getEnvVar = (key: string, defaultValue = ''): string => {
 };
 
 const apiKey = getEnvVar('VITE_FIREBASE_API_KEY', 'AIzaSyDWB9sPanFfGUTHRuDCjt8V2mzZcLU-7Mg');
-
 const cloudName = getEnvVar('VITE_CLOUDINARY_CLOUD_NAME', 'muety-atelier');
-const uploadPreset = getEnvVar('VITE_CLOUDINARY_UPLOAD_PRESET', 'muety_products_preset');
 
 export const env: EnvConfig = {
   firebase: {
@@ -62,8 +59,7 @@ export const env: EnvConfig = {
   },
   cloudinary: {
     cloudName,
-    uploadPreset,
-    signatureEndpoint: getEnvVar('VITE_CLOUDINARY_SIGNATURE_ENDPOINT', ''),
-    isConfigured: Boolean(cloudName && uploadPreset)
+    signatureEndpoint: getEnvVar('VITE_CLOUDINARY_SIGNATURE_ENDPOINT', '/api/cloudinary/sign'),
+    isConfigured: Boolean(cloudName)
   }
 };

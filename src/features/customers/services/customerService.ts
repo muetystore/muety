@@ -71,7 +71,7 @@ export const customerService = {
     if (db) {
       try {
         await deleteDoc(doc(db, 'users', uid));
-      } catch (err) {}
+      } catch {}
     }
 
     return true;
@@ -112,7 +112,7 @@ export const customerService = {
         });
 
         return unsubscribe;
-      } catch (err) {}
+      } catch {}
     }
 
     return () => {};

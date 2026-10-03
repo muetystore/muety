@@ -15,7 +15,10 @@ import {
 } from 'firebase/firestore';
 import { 
   uploadToCloudinary, 
-  uploadProductImagesToCloudinary 
+  uploadProductImagesToCloudinary,
+  deleteCloudinaryMedia,
+  extractCloudinaryPublicId,
+  CloudinaryMediaMetadata
 } from '@/lib/media/cloudinary';
 
 export async function uploadProductImage(
@@ -43,7 +46,8 @@ export async function uploadProductImage(
 
 export async function uploadProductImages(images: string[], productId: string): Promise<string[]> {
   if (!images || images.length === 0) return [];
-  return await uploadProductImagesToCloudinary(images, productId);
+  const metaList = await uploadProductImagesToCloudinary(images, productId);
+  return metaList.map(m => m.url);
 }
 
 export const productService = {
@@ -157,19 +161,27 @@ export const productService = {
     const title = productData.title || productData.name || 'Untitled Product';
     const slug = productData.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || productId;
 
-    let uploadedImages: string[] = [];
+    let mediaMetadata: CloudinaryMediaMetadata[] = [];
     if (productData.images && productData.images.length > 0) {
       try {
-        uploadedImages = await uploadProductImages(productData.images, productId);
-      } catch (uploadErr) {
-        uploadedImages = productData.images;
+        mediaMetadata = await uploadProductImagesToCloudinary(productData.images, productId);
+      } catch (uploadErr: any) {
+        console.error('Cloudinary product media upload failed:', uploadErr);
+        const hasUnsignedFiles = productData.images.some(img => img.startsWith('data:') || img.startsWith('blob:'));
+        if (hasUnsignedFiles) {
+          throw new Error(`Product creation aborted: Cloudinary image upload failed (${uploadErr?.message || 'Upload error'}).`);
+        }
+        mediaMetadata = productData.images.map(img => ({
+          url: img,
+          publicId: extractCloudinaryPublicId(img) || ''
+        }));
       }
     }
 
     const nowIso = new Date().toISOString();
     const stock = Number(productData.stock !== undefined ? productData.stock : (productData.inventory !== undefined ? productData.inventory : 10));
     const status = productData.status || (stock > 0 ? 'active' : 'out_of_stock');
-    const finalImages = uploadedImages.length > 0 ? uploadedImages : (productData.images || ['/saree_model_individual.jpg']);
+    const finalImages = mediaMetadata.length > 0 ? mediaMetadata.map(m => m.url) : (productData.images || ['/saree_model_individual.jpg']);
 
     const newProduct: Product = {
       ...productData,
@@ -181,6 +193,7 @@ export const productService = {
       inventory: stock,
       status,
       images: finalImages,
+      media: mediaMetadata,
       createdAt: nowIso,
       updatedAt: nowIso
     };
@@ -201,6 +214,7 @@ export const productService = {
           inventory: Number(stock) || 0,
           stock: Number(stock) || 0,
           images: Array.isArray(finalImages) ? finalImages : [],
+          media: mediaMetadata,
           description: String(newProduct.description || 'Exquisite handcrafted MUETY piece.'),
           shortDescription: String(newProduct.shortDescription || (newProduct.description ? newProduct.description.slice(0, 100) : 'Handcrafted atelier piece.')),
           status: String(status),
@@ -234,22 +248,52 @@ export const productService = {
 
   async updateProduct(product: Product): Promise<Product> {
     const productId = product.id;
+    const existing = storageService.getProductById(productId);
     const title = product.title || product.name || 'Untitled Product';
     const slug = product.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || productId;
 
-    let uploadedImages: string[] = [];
+    let mediaMetadata: CloudinaryMediaMetadata[] = [];
     if (product.images && product.images.length > 0) {
       try {
-        uploadedImages = await uploadProductImages(product.images, productId);
-      } catch (uploadErr) {
-        uploadedImages = product.images;
+        mediaMetadata = await uploadProductImagesToCloudinary(product.images, productId);
+      } catch (uploadErr: any) {
+        console.error('Cloudinary product media update failed:', uploadErr);
+        const hasUnsignedFiles = product.images.some(img => img.startsWith('data:') || img.startsWith('blob:'));
+        if (hasUnsignedFiles) {
+          throw new Error(`Product update aborted: Cloudinary image upload failed (${uploadErr?.message || 'Upload error'}).`);
+        }
+        mediaMetadata = product.images.map(img => ({
+          url: img,
+          publicId: extractCloudinaryPublicId(img) || ''
+        }));
+      }
+    }
+
+    // Cleanup replaced/removed Cloudinary assets
+    if (existing && existing.images) {
+      const newUrls = mediaMetadata.map(m => m.url);
+      const removedPublicIds: string[] = [];
+
+      for (const oldUrl of existing.images) {
+        if (!newUrls.includes(oldUrl)) {
+          const pubId = extractCloudinaryPublicId(oldUrl);
+          if (pubId && pubId.startsWith('muety/')) {
+            removedPublicIds.push(pubId);
+          }
+        }
+      }
+
+      if (removedPublicIds.length > 0) {
+        deleteCloudinaryMedia(removedPublicIds).catch(err => {
+          console.warn('Failed to delete replaced Cloudinary assets:', err);
+        });
       }
     }
 
     const nowIso = new Date().toISOString();
     const stock = Number(product.stock !== undefined ? product.stock : (product.inventory !== undefined ? product.inventory : 10));
     const status = product.status || (stock > 0 ? 'active' : 'out_of_stock');
-    const finalImages = uploadedImages.length > 0 ? uploadedImages : (product.images || ['/saree_model_individual.jpg']);
+    const finalImages = mediaMetadata.length > 0 ? mediaMetadata.map(m => m.url) : (product.images || ['/saree_model_individual.jpg']);
 
     const updated: Product = {
       ...product,
@@ -260,6 +304,7 @@ export const productService = {
       inventory: stock,
       status,
       images: finalImages,
+      media: mediaMetadata,
       updatedAt: nowIso
     };
 
@@ -279,6 +324,7 @@ export const productService = {
           inventory: Number(stock) || 0,
           stock: Number(stock) || 0,
           images: Array.isArray(finalImages) ? finalImages : [],
+          media: mediaMetadata,
           description: String(updated.description || ''),
           shortDescription: String(updated.shortDescription || ''),
           status: String(status),
@@ -310,6 +356,34 @@ export const productService = {
   },
 
   async deleteProduct(id: string): Promise<boolean> {
+    const existing = storageService.getProductById(id);
+
+    // Delete associated Cloudinary assets via secure server boundary
+    if (existing) {
+      const publicIdsToDelete: string[] = [];
+
+      if (existing.media && Array.isArray(existing.media)) {
+        existing.media.forEach((m: any) => {
+          if (m?.publicId) publicIdsToDelete.push(m.publicId);
+        });
+      }
+
+      if (publicIdsToDelete.length === 0 && existing.images) {
+        existing.images.forEach((imgUrl: string) => {
+          const pubId = extractCloudinaryPublicId(imgUrl);
+          if (pubId && pubId.startsWith('muety/')) {
+            publicIdsToDelete.push(pubId);
+          }
+        });
+      }
+
+      if (publicIdsToDelete.length > 0) {
+        deleteCloudinaryMedia(publicIdsToDelete).catch(err => {
+          console.warn('Failed to delete Cloudinary assets on product deletion:', err);
+        });
+      }
+    }
+
     storageService.deleteProduct(id);
 
     if (db) {
@@ -392,7 +466,7 @@ export const productService = {
             storageService.saveProducts([]);
             callback([]);
           }
-        }, (err) => {
+        }, (_err) => {
           callback(storageService.getProducts());
         });
         return unsubscribe;
@@ -472,7 +546,7 @@ export const productService = {
         count: localProducts.length,
         message: `Instantly synchronized ${localProducts.length} product(s) with Firebase Cloud Firestore!`
       };
-    } catch (err: any) {
+    } catch {
       return {
         success: true,
         count: localProducts.length,
@@ -502,7 +576,7 @@ export const productService = {
     if (db) {
       try {
         await setDoc(doc(db, 'categories', category.id), category);
-      } catch (err) {}
+      } catch {}
     }
 
     return category;
@@ -514,7 +588,7 @@ export const productService = {
     if (db) {
       try {
         await setDoc(doc(db, 'categories', category.id), category, { merge: true });
-      } catch (err) {}
+      } catch {}
     }
 
     return category;
@@ -526,7 +600,7 @@ export const productService = {
     if (db) {
       try {
         await deleteDoc(doc(db, 'categories', id));
-      } catch (err) {}
+      } catch {}
     }
 
     return true;
@@ -557,7 +631,7 @@ export const productService = {
         });
 
         return unsubscribe;
-      } catch (err) {}
+      } catch {}
     }
 
     return () => {};

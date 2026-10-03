@@ -145,10 +145,10 @@ export const orderService = {
             const data = snap.data() as Order;
             callback(data);
           }
-        }, (err) => {
-          console.warn('Firestore onSnapshot error for order:', err);
+        }, (_err) => {
+          console.warn('Firestore onSnapshot error for order:', _err);
         });
-      } catch (err) {}
+      } catch {}
     }
 
     const handleLocalSync = () => {
@@ -202,10 +202,10 @@ export const orderService = {
           } else {
             callback(storageService.getOrders());
           }
-        }, (err) => {
+        }, (_err) => {
           callback(storageService.getOrders());
         });
-      } catch (err) {}
+      } catch {}
     }
 
     const handleLocalSync = () => {
@@ -248,8 +248,8 @@ export const orderService = {
             userOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             callback(userOrders);
           }
-        }, (err) => {});
-      } catch (err) {}
+        }, () => {});
+      } catch {}
     }
 
     const handleLocalSync = () => {
@@ -276,7 +276,7 @@ export const orderService = {
     if (db) {
       try {
         await deleteDoc(doc(db, 'orders', id));
-      } catch (err: any) {}
+      } catch {}
     }
 
     this.broadcastUpdate({ id } as any);
@@ -297,7 +297,7 @@ export const orderService = {
           deletedCount++;
         });
         await batch.commit();
-      } catch (err: any) {}
+      } catch {}
     }
 
     this.broadcastUpdate({ id: 'all_cleared' } as any);

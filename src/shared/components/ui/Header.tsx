@@ -15,7 +15,6 @@ import {
   Package,
   LayoutDashboard
 } from 'lucide-react';
-import { productService } from '@/features/catalog/services/productService';
 
 export const Header: React.FC = () => {
   const { cartCount, setIsDrawerOpen, wishlist } = useCart();
@@ -27,7 +26,6 @@ export const Header: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [, setCategories] = useState(productService.getCategories());
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
 
   useEffect(() => {

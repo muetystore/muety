@@ -211,7 +211,7 @@ export class AuthService {
         uid = cred.user.uid;
         try {
           await updateProfile(cred.user, { displayName: cleanName });
-        } catch (pErr) {}
+        } catch {}
       } catch (fbErr: any) {
         if (fbErr?.code === 'auth/email-already-in-use') {
           throw new Error('An account with this email already exists. Please log in.');
@@ -282,7 +282,7 @@ export class AuthService {
     if (auth && isLiveFirebase) {
       try {
         await fbSignOut(auth);
-      } catch (e) {}
+      } catch {}
     }
     this.setCurrentUser(null);
   }

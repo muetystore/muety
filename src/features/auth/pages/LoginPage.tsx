@@ -4,7 +4,7 @@ import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { Logo } from '@/shared/components/ui/Logo';
-import { Mail, Lock, ArrowRight, Eye, EyeOff, ShieldCheck, KeyRound } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Eye, EyeOff, KeyRound } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   useDocumentTitle('Sign In | MUETY Atelier');

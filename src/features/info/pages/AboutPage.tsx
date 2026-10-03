@@ -1,6 +1,6 @@
 import React from 'react';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
-import { Award, Compass, Sparkles, ShieldCheck } from 'lucide-react';
+import { Award, Compass } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const AboutPage: React.FC = () => {

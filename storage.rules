@@ -1,6 +1,7 @@
-// MUETYSTORE — Firebase Storage Rules
-// NOTE (Stage 02D): Application product & category media is managed exclusively via Cloudinary.
-// Firebase Storage is not used for primary product media workflow.
+// MUETYSTORE — Firebase Storage Rules (OBSOLETE & DEPRECATED)
+// ARCHITECTURAL DIRECTIVE (Stage 02D.1):
+// Firebase Storage is NOT initialized or used for application product, category, or gallery media.
+// All application assets are strictly processed via Cloudinary signed upload and deletion endpoints.
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
