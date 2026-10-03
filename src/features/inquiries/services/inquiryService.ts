@@ -65,7 +65,7 @@ class InquiryService {
     try {
       const existing = localStorage.getItem(STORAGE_KEY);
       if (!existing) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_INQUIRIES));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
       }
     } catch {
       // LocalStorage error fallback

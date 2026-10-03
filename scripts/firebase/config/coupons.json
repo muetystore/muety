@@ -1,0 +1,25 @@
+[
+  {
+    "id": "cpn-diwali",
+    "code": "DIWALI25",
+    "discountType": "percentage",
+    "discountValue": 25,
+    "minSpend": 15000,
+    "maxDiscount": 5000,
+    "isActive": true,
+    "usageCount": 260,
+    "description": "✨ Shubh Deepavali 25% Off Storewide + Gold Gift Packaging",
+    "expiresAt": "2027-12-31T23:59:59Z"
+  },
+  {
+    "id": "cpn-welcome",
+    "code": "MUETYFIRST",
+    "discountType": "fixed",
+    "discountValue": 2000,
+    "minSpend": 20000,
+    "isActive": true,
+    "usageCount": 142,
+    "description": "✨ Welcome Patron Offer: ₹2,000 Off Your First Saree Order",
+    "expiresAt": "2027-12-31T23:59:59Z"
+  }
+]

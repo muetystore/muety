@@ -1,0 +1,18 @@
+{
+  "storeName": "MUETY Atelier",
+  "tagline": "Handwoven Pure Silk Sarees & Luxury Ethnic Heirloom Couture",
+  "contactEmail": "concierge@muety.in",
+  "contactPhone": "+91 93857 91540",
+  "address": "MUETY Atelier, 2/32 Ramireddypatti, Salem, Tamil Nadu – 636501, India",
+  "currency": "INR",
+  "currencySymbol": "₹",
+  "taxRate": 5,
+  "freeShippingThreshold": 10000,
+  "standardShippingFee": 250,
+  "expressShippingFee": 500,
+  "announcementBanner": {
+    "enabled": true,
+    "text": "✨ Compliments: Free Shipping Across India on Orders Above ₹10,000 | Silk Mark Certified Handlooms ✨",
+    "link": "/products"
+  }
+}

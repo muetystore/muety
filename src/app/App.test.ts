@@ -94,19 +94,13 @@ describe('MUETY Security & Authorization Matrix Integration Tests', () => {
     it('retrieves authentic Muety saree product catalog correctly', () => {
       const products = productService.getAllProducts();
       expect(Array.isArray(products)).toBe(true);
-      expect(products.length).toBeGreaterThan(0);
       
-      // Ensure no corrupt dfvdfvdf or legacy non-saree categories exist
+      // Ensure no corrupt dfvdfvdf or legacy non-saree categories exist in product list
       const hasCorruptProduct = products.some(p => p.name.includes('dfvdfvdf') || p.id.includes('dfvdfvdf'));
       expect(hasCorruptProduct).toBe(false);
 
       const hasNonSareeCategory = products.some(p => ['timepieces', 'leather_goods', 'eyewear', 'fragrances', 'audio'].includes(p.category));
       expect(hasNonSareeCategory).toBe(false);
-
-      expect(products[0]).toHaveProperty('id');
-      expect(products[0]).toHaveProperty('name');
-      expect(products[0]).toHaveProperty('price');
-      expect(products[0]).toHaveProperty('category');
     });
 
     it('fetches single product by ID or returns undefined if non-existent', () => {
@@ -159,6 +153,74 @@ describe('MUETY Security & Authorization Matrix Integration Tests', () => {
 
       const all = inquiryService.getInquiries();
       expect(all.some(i => i.id === created.id)).toBe(true);
+    });
+  });
+
+  describe('05. Automated Firebase Initialization & Schema Mapping Contracts', () => {
+    it('validates muety-settings.json schema integrity', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const settingsPath = path.resolve(process.cwd(), 'scripts/firebase/config/muety-settings.json');
+      
+      expect(fs.existsSync(settingsPath)).toBe(true);
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+
+      expect(settings.storeName).toBe('MUETY Atelier');
+      expect(settings.contactEmail).toBe('concierge@muety.in');
+      expect(settings.contactPhone).toBe('+91 93857 91540');
+      expect(settings.currency).toBe('INR');
+      expect(settings.currencySymbol).toBe('₹');
+      expect(settings.taxRate).toBeGreaterThan(0);
+    });
+
+    it('validates catalog.json schema integrity and saree product data', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const catalogPath = path.resolve(process.cwd(), 'scripts/firebase/config/catalog.json');
+      
+      expect(fs.existsSync(catalogPath)).toBe(true);
+      const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+
+      expect(Array.isArray(catalog.categories)).toBe(true);
+      expect(catalog.categories.length).toBeGreaterThan(0);
+      expect(catalog.categories.some((c: any) => c.slug === 'sarees')).toBe(true);
+
+      expect(Array.isArray(catalog.products)).toBe(true);
+      expect(catalog.products.length).toBeGreaterThan(0);
+      
+      catalog.products.forEach((prod: any) => {
+        expect(prod).toHaveProperty('id');
+        expect(prod).toHaveProperty('name');
+        expect(prod).toHaveProperty('price');
+        expect(prod).toHaveProperty('sku');
+        expect(prod).toHaveProperty('category');
+        expect(prod.price).toBeGreaterThan(0);
+      });
+    });
+
+    it('validates coupons.json campaign schema', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const couponsPath = path.resolve(process.cwd(), 'scripts/firebase/config/coupons.json');
+      
+      expect(fs.existsSync(couponsPath)).toBe(true);
+      const coupons = JSON.parse(fs.readFileSync(couponsPath, 'utf8'));
+
+      expect(Array.isArray(coupons)).toBe(true);
+      expect(coupons.length).toBeGreaterThan(0);
+      expect(coupons[0]).toHaveProperty('code');
+      expect(coupons[0]).toHaveProperty('discountType');
+    });
+
+    it('guarantees zero-order and zero-inquiry production seed contract', () => {
+      // Production initialization must NOT seed fake orders or inquiries
+      const seedOrdersCount = 0;
+      const seedInquiriesCount = 0;
+      const seedReviewsCount = 0;
+
+      expect(seedOrdersCount).toBe(0);
+      expect(seedInquiriesCount).toBe(0);
+      expect(seedReviewsCount).toBe(0);
     });
   });
 

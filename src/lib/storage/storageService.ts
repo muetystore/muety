@@ -36,30 +36,38 @@ class StorageService {
     if (typeof window === 'undefined') return;
     const existingRaw = localStorage.getItem(KEYS.PRODUCTS);
     if (existingRaw && (existingRaw.includes('dfvdfvdf') || existingRaw.includes('cat-timepieces'))) {
-      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
-      localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
-      localStorage.setItem(KEYS.INITIALIZED, 'v3_clean');
+      localStorage.removeItem(KEYS.PRODUCTS);
+      localStorage.removeItem(KEYS.CATEGORIES);
+      localStorage.setItem(KEYS.INITIALIZED, 'v4_prod_clean');
     }
 
     const isInit = localStorage.getItem(KEYS.INITIALIZED);
-    if (!isInit || isInit !== 'v3_clean') {
-      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
-      localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
-      localStorage.setItem(KEYS.COUPONS, JSON.stringify(INITIAL_COUPONS));
-      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
-      localStorage.setItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
-      localStorage.setItem(KEYS.ORDERS, JSON.stringify(INITIAL_ORDERS));
-      localStorage.setItem(KEYS.REVIEWS, JSON.stringify(INITIAL_REVIEWS));
-      localStorage.setItem(KEYS.INITIALIZED, 'v3_clean');
+    if (!isInit || isInit !== 'v4_prod_clean') {
+      const isDev = Boolean(typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV);
+      if (isDev) {
+        localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+        localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
+        localStorage.setItem(KEYS.COUPONS, JSON.stringify(INITIAL_COUPONS));
+        localStorage.setItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
+      } else {
+        localStorage.setItem(KEYS.PRODUCTS, JSON.stringify([]));
+        localStorage.setItem(KEYS.CATEGORIES, JSON.stringify([]));
+        localStorage.setItem(KEYS.COUPONS, JSON.stringify([]));
+        localStorage.setItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
+      }
+      localStorage.setItem(KEYS.USERS, JSON.stringify([]));
+      localStorage.setItem(KEYS.ORDERS, JSON.stringify([]));
+      localStorage.setItem(KEYS.REVIEWS, JSON.stringify([]));
+      localStorage.setItem(KEYS.INITIALIZED, 'v4_prod_clean');
     }
   }
 
   // --- PRODUCTS ---
   getProducts(): Product[] {
     try {
-      if (typeof window === 'undefined') return INITIAL_PRODUCTS as Product[];
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.PRODUCTS);
-      const items = data ? JSON.parse(data) : INITIAL_PRODUCTS;
+      const items = data ? JSON.parse(data) : [];
       return (items || []).map((p: any) => {
         const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : ['/saree_model_individual.jpg'];
         
@@ -74,7 +82,7 @@ class StorageService {
         };
       });
     } catch {
-      return INITIAL_PRODUCTS as Product[];
+      return [];
     }
   }
 
@@ -83,8 +91,11 @@ class StorageService {
   }
 
   saveProducts(products: Product[]): void {
-    localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(products));
-    window.dispatchEvent(new Event('muety_products_updated'));
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(products));
+      window.dispatchEvent(new Event('muety_products_updated'));
+    } catch {}
   }
 
   addProduct(product: Product): Product {
@@ -114,17 +125,20 @@ class StorageService {
   // --- CATEGORIES ---
   getCategories(): Category[] {
     try {
-      if (typeof window === 'undefined') return INITIAL_CATEGORIES as Category[];
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.CATEGORIES);
-      return data ? JSON.parse(data) : (INITIAL_CATEGORIES as Category[]);
+      return data ? JSON.parse(data) : [];
     } catch {
-      return INITIAL_CATEGORIES as Category[];
+      return [];
     }
   }
 
   saveCategories(categories: Category[]): void {
-    localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(categories));
-    window.dispatchEvent(new Event('muety_categories_updated'));
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(categories));
+      window.dispatchEvent(new Event('muety_categories_updated'));
+    } catch {}
   }
 
   addCategory(category: Category): Category {

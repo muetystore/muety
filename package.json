@@ -13,11 +13,15 @@
     "build": "tsc && vite build",
     "check": "npm run typecheck && npm run lint",
     "preview": "vite preview",
+    "firebase:setup": "node scripts/firebase/bootstrap.mjs",
+    "firebase:status": "node scripts/firebase/status.mjs",
+    "firebase:seed:dev": "node scripts/firebase/seed-firestore.mjs --dev",
     "seed:firebase": "node scripts/seed/seed-to-firebase.mjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
     "firebase": "^10.14.1",
+    "firebase-admin": "^14.5.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

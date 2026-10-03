@@ -1,0 +1,176 @@
+{
+  "categories": [
+    {
+      "id": "cat-sarees",
+      "name": "Festive Silk Sarees",
+      "slug": "sarees",
+      "description": "Handwoven pure Kanchipuram & Banarasi mulberry silk sarees with authentic 24K gold zari borders.",
+      "image": "/saree_model_individual.jpg",
+      "itemCount": 2,
+      "featured": true
+    },
+    {
+      "id": "cat-bridal",
+      "name": "Bridal Couture",
+      "slug": "bridal",
+      "description": "Exquisite bridal silk sarees featuring heirloom Korvai interlocking weaves and rich temple motifs.",
+      "image": "/saree_fabric_detail.jpg",
+      "itemCount": 1,
+      "featured": true
+    },
+    {
+      "id": "cat-handloom",
+      "name": "Heritage Handloom",
+      "slug": "handloom",
+      "description": "Traditional handloom weaves crafted by master weavers celebrating regional textile heritage.",
+      "image": "/saree_model_drape.jpg",
+      "itemCount": 1,
+      "featured": true
+    },
+    {
+      "id": "cat-jewelry",
+      "name": "Royal Temple Jewelry",
+      "slug": "jewelry",
+      "description": "Hand-crafted 24K gold finished silver temple jewelry designed to complement wedding and festive attire.",
+      "image": "/diwali_hero_banner.jpg",
+      "itemCount": 1,
+      "featured": true
+    }
+  ],
+  "products": [
+    {
+      "id": "muety-saree-01",
+      "name": "MUETY Royal Kanchipuram Pure Silk Saree",
+      "title": "MUETY Royal Kanchipuram Pure Silk Saree",
+      "slug": "royal-kanchipuram-pure-silk-saree",
+      "shortDescription": "Handwoven pure mulberry silk in cream with royal emerald green & 24K gold zari elephant border.",
+      "description": "A masterpiece of royal Indian handloom heritage. Handwoven with 100% pure mulberry silk in regal ivory cream, paired with a rich emerald green Korvai border and pallu intricately woven with gold zari elephant and peacock motifs. Includes matching unstitched pure silk blouse piece.",
+      "price": 34500,
+      "originalPrice": 42000,
+      "discountPercentage": 18,
+      "rating": 5.0,
+      "reviewCount": 42,
+      "stock": 12,
+      "inventory": 12,
+      "status": "active",
+      "sku": "MUETY-S-001",
+      "category": "Festive Silk Sarees",
+      "categorySlug": "sarees",
+      "images": [
+        "/saree_model_individual.jpg",
+        "/saree_fabric_detail.jpg",
+        "/saree_model_drape.jpg"
+      ],
+      "featured": true,
+      "isNewArrival": true,
+      "isBestSeller": true,
+      "tags": ["Pure Silk", "Kanchipuram", "Gold Zari", "Diwali Special", "Festive Heritage", "Handloom"],
+      "specifications": {
+        "Fabric": "100% Pure Mulberry Silk (Silk Mark Certified)",
+        "Zari": "Gold Thread Zari Weave",
+        "Border Detail": "Emerald Green Korvai Elephant & Peacock Border",
+        "Length": "6.2 Meters (Includes 0.8M Unstitched Blouse)",
+        "Weave Technique": "Handloom Interlocking Korvai",
+        "Care": "Dry Clean Only • Store in Pure Muslin Bag"
+      },
+      "colors": ["Regal Cream & Emerald Green", "Gold Accents"]
+    },
+    {
+      "id": "muety-saree-02",
+      "name": "MUETY Banarasi Brocade Pure Silk Saree",
+      "title": "MUETY Banarasi Brocade Pure Silk Saree",
+      "slug": "banarasi-brocade-pure-silk-saree",
+      "shortDescription": "Vibrant royal crimson pink Banarasi silk with intricate floral Kadwa zari work throughout.",
+      "description": "Woven in the ancient city of Varanasi, this opulent Banarasi silk saree features intricate silver & gold zari floral Kadwa motifs. The shimmering drape and rich pallu evoke royal courts.",
+      "price": 28900,
+      "originalPrice": 35000,
+      "discountPercentage": 17,
+      "rating": 4.9,
+      "reviewCount": 28,
+      "stock": 8,
+      "inventory": 8,
+      "status": "active",
+      "sku": "MUETY-S-002",
+      "category": "Festive Silk Sarees",
+      "categorySlug": "sarees",
+      "images": [
+        "/saree_fabric_detail.jpg",
+        "/saree_model_drape.jpg"
+      ],
+      "featured": true,
+      "isNewArrival": true,
+      "isBestSeller": false,
+      "tags": ["Banarasi", "Pure Silk", "Kadwa Zari", "Festive"],
+      "specifications": {
+        "Fabric": "100% Pure Banarasi Silk",
+        "Zari": "Tested Silver & Gold Plated Zari",
+        "Care": "Dry Clean Only"
+      },
+      "colors": ["Royal Crimson Pink & Gold"]
+    },
+    {
+      "id": "muety-saree-03",
+      "name": "MUETY Bridal Scarlet Gold Tissue Kanchipuram Saree",
+      "title": "MUETY Bridal Scarlet Gold Tissue Kanchipuram Saree",
+      "slug": "bridal-scarlet-gold-tissue-kanchipuram-saree",
+      "shortDescription": "Heirloom bridal saree crafted with full gold tissue weave and heavy temple border.",
+      "description": "Designed for the modern royal bride. This luminous gold tissue Kanchipuram saree glistens under light with pure silk warp and full gold zari thread weft.",
+      "price": 48900,
+      "originalPrice": 56000,
+      "discountPercentage": 13,
+      "rating": 5.0,
+      "reviewCount": 19,
+      "stock": 5,
+      "inventory": 5,
+      "status": "active",
+      "sku": "MUETY-B-001",
+      "category": "Bridal Couture",
+      "categorySlug": "bridal",
+      "images": [
+        "/saree_model_drape.jpg",
+        "/saree_model_individual.jpg"
+      ],
+      "featured": true,
+      "isNewArrival": true,
+      "isBestSeller": true,
+      "tags": ["Bridal", "Gold Tissue", "Kanchipuram", "Heirloom"],
+      "specifications": {
+        "Fabric": "Pure Silk Gold Tissue Weave",
+        "Care": "Dry Clean Only"
+      },
+      "colors": ["Scarlet Red & Luminous Gold"]
+    },
+    {
+      "id": "muety-jewelry-01",
+      "name": "MUETY Royal Temple Heritage Gold Necklace",
+      "title": "MUETY Royal Temple Heritage Gold Necklace",
+      "slug": "royal-temple-heritage-gold-necklace",
+      "shortDescription": "Handcrafted 24K gold plated silver temple choker set with ruby cabochons & pearls.",
+      "description": "Handcrafted by hereditary goldsmiths, this temple necklace features intricate Goddess Lakshmi motifs surrounded by natural ruby cabochons and freshwater pearls.",
+      "price": 14500,
+      "originalPrice": 18000,
+      "discountPercentage": 19,
+      "rating": 4.9,
+      "reviewCount": 15,
+      "stock": 10,
+      "inventory": 10,
+      "status": "active",
+      "sku": "MUETY-J-001",
+      "category": "Royal Temple Jewelry",
+      "categorySlug": "jewelry",
+      "images": [
+        "/diwali_hero_banner.jpg"
+      ],
+      "featured": true,
+      "isNewArrival": true,
+      "isBestSeller": false,
+      "tags": ["Temple Jewelry", "24K Gold Plated", "Silver 925", "Bridal Accessories"],
+      "specifications": {
+        "Base Metal": "925 Sterling Silver",
+        "Plating": "24K Antique Gold Finish",
+        "Stones": "Natural Ruby Cabochons & Pearl Drops"
+      },
+      "colors": ["Antique Gold & Ruby Red"]
+    }
+  ]
+}
