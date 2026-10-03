@@ -83,7 +83,7 @@ service cloud.firestore {
 
     // Orders Collection
     match /orders/{orderId} {
-      allow read: if isOrderManager() || (isSignedIn() && (resource.data.customerId == request.auth.uid || resource.data.userId == request.auth.uid));
+      allow read: if isOrderManager() || (isSignedIn() && resource.data.customerId == request.auth.uid);
       allow create: if true; // Public guest/patron checkout
       allow update, delete: if isOrderManager();
     }

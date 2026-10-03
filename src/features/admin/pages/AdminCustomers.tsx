@@ -327,7 +327,7 @@ export const AdminCustomers: React.FC = () => {
                     type="text" 
                     value={newPhone} 
                     onChange={e => setNewPhone(e.target.value)} 
-                    placeholder="+1 555-0199" 
+                    placeholder="+91 93857 91540" 
                     className="form-input" 
                   />
                 </div>

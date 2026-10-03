@@ -1,14 +1,43 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getRoles() {
+      return isSignedIn() && request.auth.token.keys().hasAll(['roles'])
+        ? request.auth.token.roles
+        : (isSignedIn() && request.auth.token.keys().hasAll(['role'])
+            ? [request.auth.token.role]
+            : []);
+    }
+
+    function isCatalogManager() {
+      return getRoles().hasAny(['super_admin', 'admin', 'catalog_manager']);
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Product images public read, catalog manager write
     match /products/{allPaths=**} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isCatalogManager();
     }
+
+    // User avatar/profile media public read, owner write
     match /users/{userId}/{allPaths=**} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isOwner(userId) || isCatalogManager();
     }
+
+    // Default match: read public, write admin/catalog manager
     match /{allPaths=**} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isCatalogManager();
     }
   }
 }

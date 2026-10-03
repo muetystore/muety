@@ -133,10 +133,11 @@ class ReviewService {
             storageService.saveReviews(cloudReviews);
             callback(cloudReviews);
           } else {
-            callback(storageService.getReviews());
+            storageService.saveReviews([]);
+            callback([]);
           }
         }, (err) => {
-          console.warn('Firestore reviews subscription fallback to cache:', err);
+          console.warn('Firestore reviews subscription note:', err);
           callback(storageService.getReviews());
         });
 

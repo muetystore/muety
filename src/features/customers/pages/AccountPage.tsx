@@ -385,7 +385,7 @@ export const AccountPage: React.FC = () => {
                   type="tel" 
                   value={phoneNumber} 
                   onChange={e => setPhoneNumber(e.target.value)} 
-                  placeholder="+1 (555) 000-0000" 
+                  placeholder="+91 93857 91540" 
                   className="form-input" 
                 />
               </div>

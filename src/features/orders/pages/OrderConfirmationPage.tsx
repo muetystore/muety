@@ -177,8 +177,8 @@ export const OrderConfirmationPage: React.FC = () => {
             <div>
               <Logo size="lg" showTagline />
               <div style={{ fontSize: '0.82rem', color: 'var(--brand-muted)', marginTop: '8px' }}>
-                740 Madison Avenue, New York, NY 10065<br />
-                VAT / Tax ID: US-MUETY-99214
+                MUETY Atelier, 2/32 Ramireddypatti, Salem, Tamil Nadu – 636501, India<br />
+                GST / Tax ID: 33AAACM0000A1Z5
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
