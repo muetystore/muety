@@ -1,4 +1,23 @@
+[build]
+  publish = "Countown"
+  command = ""
+
 [[redirects]]
-  from = "/*"
-  to = "/index.html"
+  from = "/terms-and-conditions"
+  to = "/terms-and-conditions.html"
+  status = 200
+
+[[redirects]]
+  from = "/privacy-policy"
+  to = "/privacy-policy.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/newsletter/subscribe"
+  to = "/.netlify/functions/subscribe"
+  status = 200
+
+[[redirects]]
+  from = "/api/launch-status"
+  to = "/.netlify/functions/launch-status"
   status = 200
