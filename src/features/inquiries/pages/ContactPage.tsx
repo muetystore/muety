@@ -217,15 +217,15 @@ export const ContactPage: React.FC = () => {
                   </div>
                   <div>
                     <h5 style={{ fontSize: '0.95rem', color: 'var(--brand-primary)', fontWeight: 700, marginBottom: '2px' }}>
-                      Atelier & Weaving Center
+                      Registered Address
                     </h5>
                     <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                      2/32 Ramireddypatti, Salem, Tamil Nadu – 636501, India
+                      2/32B Ramireddypatti, Palikadu, Salem – 636501, Tamil Nadu, India
                     </p>
                   </div>
                 </div>
 
-                {/* Phone */}
+                {/* Phone & WhatsApp */}
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
                   <div style={{
                     padding: '12px',
@@ -239,18 +239,20 @@ export const ContactPage: React.FC = () => {
                   </div>
                   <div>
                     <h5 style={{ fontSize: '0.95rem', color: 'var(--brand-primary)', fontWeight: 700, marginBottom: '2px' }}>
-                      Direct Phone / Support
+                      Phone & WhatsApp Support
                     </h5>
-                    <a 
-                      href="tel:+919385791540" 
-                      style={{ fontSize: '0.88rem', color: 'var(--brand-accent)', fontWeight: 600, textDecoration: 'none' }}
-                    >
-                      +91 9385791540
-                    </a>
+                    <div style={{ fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <a href="tel:+919385791540" style={{ color: 'var(--brand-accent)', fontWeight: 600, textDecoration: 'none' }}>
+                        Phone: +91 9385791540
+                      </a>
+                      <a href="https://wa.me/919940668095" target="_blank" rel="noreferrer" style={{ color: '#10b981', fontWeight: 600, textDecoration: 'none' }}>
+                        WhatsApp: +91 9940668095
+                      </a>
+                    </div>
                   </div>
                 </div>
 
-                {/* Email */}
+                {/* Email Channels */}
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
                   <div style={{
                     padding: '12px',
@@ -264,18 +266,20 @@ export const ContactPage: React.FC = () => {
                   </div>
                   <div>
                     <h5 style={{ fontSize: '0.95rem', color: 'var(--brand-primary)', fontWeight: 700, marginBottom: '2px' }}>
-                      Official Inquiries Email
+                      Official Email Inquiries
                     </h5>
-                    <a 
-                      href="mailto:muetystore@gmail.com" 
-                      style={{ fontSize: '0.88rem', color: 'var(--brand-accent)', fontWeight: 600, textDecoration: 'none' }}
-                    >
-                      muetystore@gmail.com
-                    </a>
+                    <div style={{ fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <a href="mailto:support@muety.in" style={{ color: 'var(--brand-accent)', fontWeight: 600, textDecoration: 'none' }}>
+                        Support: support@muety.in
+                      </a>
+                      <a href="mailto:orders@muety.in" style={{ color: 'var(--brand-accent)', fontWeight: 600, textDecoration: 'none' }}>
+                        Orders: orders@muety.in
+                      </a>
+                    </div>
                   </div>
                 </div>
 
-                {/* Operating Hours */}
+                {/* Instagram & Operating Hours */}
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
                   <div style={{
                     padding: '12px',
@@ -289,10 +293,11 @@ export const ContactPage: React.FC = () => {
                   </div>
                   <div>
                     <h5 style={{ fontSize: '0.95rem', color: 'var(--brand-primary)', fontWeight: 700, marginBottom: '2px' }}>
-                      Operational Hours
+                      Instagram & Operating Hours
                     </h5>
-                    <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                      Monday – Sunday: 9:00 AM – 9:00 PM IST (Online Store 24/7)
+                    <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      Instagram: <a href="https://instagram.com/Themuety" target="_blank" rel="noreferrer" style={{ color: 'var(--brand-accent)', fontWeight: 600, textDecoration: 'none' }}>@Themuety</a><br />
+                      Mon – Sun: 9:00 AM – 9:00 PM IST (Online Store 24/7)
                     </p>
                   </div>
                 </div>

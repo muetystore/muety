@@ -13,21 +13,38 @@ import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth, DecodedIdToken } from 'firebase-admin/auth';
 import { v2 as cloudinary } from 'cloudinary';
 
+import fs from 'fs';
+
 function getFirebaseAdminAuth() {
   if (!getApps().length) {
     const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'muetystore-fdad2';
-    const saPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    if (saPath) {
+    const saPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+    const rawCredJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+    let credential = null;
+
+    if (rawCredJson) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const serviceAccount = require(saPath);
-        initializeApp({
-          credential: cert(serviceAccount),
-          projectId
-        });
+        const parsed = JSON.parse(rawCredJson);
+        credential = cert(parsed);
       } catch {
-        initializeApp({ projectId });
+        console.warn('Could not parse FIREBASE_SERVICE_ACCOUNT_JSON string.');
       }
+    } else if (saPath && fs.existsSync(saPath)) {
+      try {
+        const content = fs.readFileSync(saPath, 'utf8');
+        const parsed = JSON.parse(content);
+        credential = cert(parsed);
+      } catch {
+        console.warn(`Could not load service account from path: ${saPath}`);
+      }
+    }
+
+    if (credential) {
+      initializeApp({
+        credential,
+        projectId
+      });
     } else {
       initializeApp({ projectId });
     }

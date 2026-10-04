@@ -16,9 +16,20 @@ import {
   X, 
   ShieldCheck, 
   ExternalLink,
-  MessageSquare
+  MessageSquare,
+  UserCheck,
+  FileText,
+  Warehouse,
+  History,
+  FileCode,
+  TrendingUp
 } from 'lucide-react';
-import { hasPermission, getUserRoles, Permission } from '@/shared/utils/permissions';
+import { hasPermission, getUserRoles, ROLE_LABELS, Permission } from '@/shared/utils/permissions';
+
+interface NavSection {
+  title: string;
+  items: { to: string; label: string; icon: any; permission: Permission }[];
+}
 
 export const AdminLayout: React.FC = () => {
   useDocumentTitle('Admin Control Center');
@@ -31,20 +42,43 @@ export const AdminLayout: React.FC = () => {
     navigate('/admin/login');
   };
 
-  const navItems: { to: string; label: string; icon: any; permission: Permission }[] = [
-    { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'products.read' },
-    { to: '/admin/products', label: 'Products', icon: Package, permission: 'products.read' },
-    { to: '/admin/orders', label: 'Orders', icon: ShoppingBag, permission: 'orders.read' },
-    { to: '/admin/inquiries', label: 'Inquiries', icon: MessageSquare, permission: 'inquiries.manage' },
-    { to: '/admin/reviews', label: 'Patron Reviews', icon: Star, permission: 'reviews.manage' },
-    { to: '/admin/customers', label: 'Customers', icon: Users, permission: 'customers.read' },
-    { to: '/admin/categories', label: 'Categories', icon: Layers, permission: 'categories.write' },
-    { to: '/admin/coupons', label: 'Coupons', icon: Tag, permission: 'coupons.manage' },
-    { to: '/admin/settings', label: 'Settings', icon: Settings, permission: 'settings.manage' },
+  const navSections: NavSection[] = [
+    {
+      title: 'OVERVIEW',
+      items: [
+        { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'products.read' }
+      ]
+    },
+    {
+      title: 'COMMERCE',
+      items: [
+        { to: '/admin/products', label: 'Products', icon: Package, permission: 'products.read' },
+        { to: '/admin/categories', label: 'Categories', icon: Layers, permission: 'categories.write' },
+        { to: '/admin/orders', label: 'Orders', icon: ShoppingBag, permission: 'orders.read' },
+        { to: '/admin/coupons', label: 'Coupons', icon: Tag, permission: 'coupons.manage' }
+      ]
+    },
+    {
+      title: 'CUSTOMERS',
+      items: [
+        { to: '/admin/customers', label: 'Customers CRM', icon: Users, permission: 'customers.read' },
+        { to: '/admin/inquiries', label: 'Inquiries & Support', icon: MessageSquare, permission: 'inquiries.manage' },
+        { to: '/admin/reviews', label: 'Patron Reviews', icon: Star, permission: 'reviews.manage' }
+      ]
+    },
+    {
+      title: 'SYSTEM',
+      items: [
+        { to: '/admin/admins', label: 'Admin Users', icon: UserCheck, permission: 'roles.manage' },
+        { to: '/admin/audit-logs', label: 'Audit Logs', icon: History, permission: 'audit.read' },
+        { to: '/admin/settings', label: 'Store Settings', icon: Settings, permission: 'settings.manage' }
+      ]
+    }
   ];
 
-  const visibleNavItems = navItems.filter(item => hasPermission(user, item.permission));
   const userRoles = getUserRoles(user);
+  const primaryRole = userRoles[0] || 'customer';
+  const roleLabel = ROLE_LABELS[primaryRole] || primaryRole;
 
   return (
     <div className="admin-layout" style={{
@@ -110,7 +144,7 @@ export const AdminLayout: React.FC = () => {
               <div style={{
                 fontFamily: 'var(--font-heading)',
                 fontWeight: 800,
-                fontSize: '1.25rem',
+                fontSize: '1.2rem',
                 letterSpacing: '0.14em',
                 color: '#ffffff',
                 display: 'flex',
@@ -118,12 +152,12 @@ export const AdminLayout: React.FC = () => {
                 gap: '6px'
               }}>
                 <span>MUETY</span>
-                <span style={{ fontSize: '0.62rem', backgroundColor: '#d4af37', color: '#0f172a', padding: '2px 5px', borderRadius: '4px', letterSpacing: '0.05em', fontWeight: 800 }}>
-                  ADMIN
+                <span style={{ fontSize: '0.6rem', backgroundColor: '#d4af37', color: '#0f172a', padding: '2px 5px', borderRadius: '4px', letterSpacing: '0.05em', fontWeight: 800 }}>
+                  ERP
                 </span>
               </div>
               <span style={{ fontSize: '0.65rem', color: '#94a3b8', letterSpacing: '0.04em', display: 'block', marginTop: '1px' }}>
-                Management Suite
+                Atelier Control Center
               </span>
             </div>
           </div>
@@ -137,33 +171,53 @@ export const AdminLayout: React.FC = () => {
           </button>
         </div>
 
-        {/* Navigation Items */}
-        <nav style={{ padding: '1.5rem 1rem', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, overflowY: 'auto' }}>
-          {visibleNavItems.map(item => {
-            const IconComp = item.icon;
+        {/* Navigation Items Grouped by Section */}
+        <nav style={{ padding: '1.25rem 1rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', flex: 1, overflowY: 'auto' }}>
+          {navSections.map((section, sIdx) => {
+            const visibleItems = section.items.filter(item => hasPermission(user, item.permission));
+            if (visibleItems.length === 0) return null;
+
             return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => setSidebarOpen(false)}
-                style={({ isActive }) => ({
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 14px',
-                  borderRadius: 'var(--radius-md)',
-                  fontFamily: 'var(--font-heading)',
-                  fontSize: '0.92rem',
-                  fontWeight: isActive ? 700 : 500,
-                  color: isActive ? '#ffffff' : '#94a3b8',
-                  backgroundColor: isActive ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
-                  borderLeft: isActive ? '3px solid #d4af37' : '3px solid transparent',
-                  transition: 'all var(--transition-fast)'
+              <div key={sIdx} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  color: '#64748b',
+                  paddingLeft: '14px',
+                  marginBottom: '4px'
+                }}>
+                  {section.title}
+                </span>
+
+                {visibleItems.map(item => {
+                  const IconComp = item.icon;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setSidebarOpen(false)}
+                      style={({ isActive }) => ({
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '9px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        fontFamily: 'var(--font-heading)',
+                        fontSize: '0.9rem',
+                        fontWeight: isActive ? 700 : 500,
+                        color: isActive ? '#ffffff' : '#94a3b8',
+                        backgroundColor: isActive ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
+                        borderLeft: isActive ? '3px solid #d4af37' : '3px solid transparent',
+                        transition: 'all var(--transition-fast)'
+                      })}
+                    >
+                      <IconComp size={17} color="currentColor" />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  );
                 })}
-              >
-                <IconComp size={18} color="currentColor" />
-                <span>{item.label}</span>
-              </NavLink>
+              </div>
             );
           })}
 
@@ -179,7 +233,7 @@ export const AdminLayout: React.FC = () => {
                 borderRadius: 'var(--radius-md)',
                 color: '#ef4444',
                 fontFamily: 'var(--font-heading)',
-                fontSize: '0.92rem',
+                fontSize: '0.9rem',
                 fontWeight: 600,
                 textAlign: 'left'
               }}
@@ -199,7 +253,7 @@ export const AdminLayout: React.FC = () => {
           color: '#64748b'
         }}>
           <div style={{ color: '#cbd5e1', fontWeight: 600 }}>{user?.displayName || 'Authorized Executive'}</div>
-          <div>Roles: <span style={{ color: '#10b981', fontWeight: 700 }}>{userRoles.join(', ')}</span></div>
+          <div>Role: <span style={{ color: '#10b981', fontWeight: 700 }}>{roleLabel}</span></div>
         </div>
       </aside>
 
@@ -275,7 +329,7 @@ export const AdminLayout: React.FC = () => {
               fontWeight: 700
             }}>
               <ShieldCheck size={14} color="#10b981" />
-              <span>Multi-Role Claims Active</span>
+              <span>{roleLabel} Logged In</span>
             </div>
           </div>
         </header>
@@ -308,3 +362,4 @@ export const AdminLayout: React.FC = () => {
     </div>
   );
 };
+

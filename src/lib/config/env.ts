@@ -24,6 +24,7 @@ export interface EnvConfig {
   };
   cloudinary: {
     cloudName: string;
+    apiKey: string;
     signatureEndpoint: string;
     isConfigured: boolean;
   };
@@ -40,7 +41,8 @@ const getEnvVar = (key: string, defaultValue = ''): string => {
 };
 
 const apiKey = getEnvVar('VITE_FIREBASE_API_KEY', 'AIzaSyDWB9sPanFfGUTHRuDCjt8V2mzZcLU-7Mg');
-const cloudName = getEnvVar('VITE_CLOUDINARY_CLOUD_NAME', 'muety-atelier');
+const cloudName = getEnvVar('VITE_CLOUDINARY_CLOUD_NAME', 'cxivbion');
+const cloudinaryApiKey = getEnvVar('VITE_CLOUDINARY_API_KEY', '922177698232752');
 
 export const env: EnvConfig = {
   firebase: {
@@ -59,6 +61,7 @@ export const env: EnvConfig = {
   },
   cloudinary: {
     cloudName,
+    apiKey: cloudinaryApiKey,
     signatureEndpoint: getEnvVar('VITE_CLOUDINARY_SIGNATURE_ENDPOINT', '/api/cloudinary/sign'),
     isConfigured: Boolean(cloudName)
   }

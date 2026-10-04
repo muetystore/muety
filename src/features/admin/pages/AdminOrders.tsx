@@ -2,28 +2,42 @@ import React, { useState, useEffect } from 'react';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { orderService } from '@/features/orders/services/orderService';
 import { storageService } from '@/lib/storage/storageService';
+import { auditService } from '@/shared/services/auditService';
+import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { Order, OrderStatus } from '@/types';
+import { getUserRoles } from '@/shared/utils/permissions';
 import { 
   Search, 
   Eye, 
   X, 
   Cloud, 
   Loader2, 
-  Trash2
+  Trash2,
+  Truck,
+  PackageCheck,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  FileText,
+  User
 } from 'lucide-react';
 
 export const AdminOrders: React.FC = () => {
-  useDocumentTitle('MUETY Admin | Orders');
+  useDocumentTitle('Orders ERP & Fulfillment');
+  const { user } = useAuth();
   const { success, error } = useNotification();
 
   const [orders, setOrders] = useState<Order[]>(storageService.getOrders());
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  // Edit Tracking State
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [courier, setCourier] = useState('');
   const [statusNote, setStatusNote] = useState('');
-  const [isPushing, setIsPushing] = useState(false);
-  const [isClearing, setIsClearing] = useState(false);
+  const [isUpdatingTracking, setIsUpdatingTracking] = useState(false);
 
   useEffect(() => {
     const unsubscribe = orderService.subscribeToAllOrders((liveOrders) => {
@@ -35,369 +49,401 @@ export const AdminOrders: React.FC = () => {
     });
 
     return () => {
-      unsubscribe();
+      if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, [selectedOrder]);
+
+  const openOrderDetails = (ord: Order) => {
+    setSelectedOrder(ord);
+    setTrackingNumber(ord.trackingNumber || '');
+    setCourier(ord.courier || ord.trackingCarrier || 'Bluedart Express');
+    setStatusNote('');
+  };
+
+  const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
+    const updated = await orderService.updateOrderStatus(orderId, newStatus, statusNote || undefined);
+    if (updated) {
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder(updated);
+      }
+
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'order_manager',
+        actorRole: getUserRoles(user)[0] || 'order_manager',
+        action: 'ORDER_STATUS_CHANGED',
+        entityType: 'ORDER',
+        entityId: orderId,
+        reason: `Changed order #${updated.orderNumber} status to ${newStatus}`
+      });
+
+      success(`Order #${updated.orderNumber} status updated to ${newStatus.toUpperCase()}`);
+      setStatusNote('');
+    }
+  };
+
+  const handleSaveTracking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOrder) return;
+
+    setIsUpdatingTracking(true);
+    try {
+      const updated: Order = {
+        ...selectedOrder,
+        trackingNumber: trackingNumber.trim(),
+        courier: courier.trim(),
+        trackingCarrier: courier.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      storageService.createOrder(updated);
+      setSelectedOrder(updated);
+
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'order_manager',
+        actorRole: getUserRoles(user)[0] || 'order_manager',
+        action: 'ORDER_FULFILLMENT_UPDATED',
+        entityType: 'ORDER',
+        entityId: selectedOrder.id,
+        reason: `Updated shipping courier (${courier}) and tracking number (${trackingNumber})`
+      });
+
+      success(`Updated shipping tracking details for Order #${selectedOrder.orderNumber}`);
+    } catch (err: any) {
+      error(err?.message || 'Failed to update tracking info.');
+    } finally {
+      setIsUpdatingTracking(false);
+    }
+  };
 
   const filteredOrders = orders.filter(o => {
     const matchesStatus = statusFilter === 'all' || o.orderStatus === statusFilter;
     const q = search.toLowerCase().trim();
     const matchesSearch = !q ||
-                          (o.orderNumber || '').toLowerCase().includes(q) ||
-                          (o.customerName || '').toLowerCase().includes(q) ||
-                          (o.customerEmail || '').toLowerCase().includes(q);
+      (o.orderNumber || '').toLowerCase().includes(q) ||
+      (o.customerName || '').toLowerCase().includes(q) ||
+      (o.customerEmail || '').toLowerCase().includes(q);
     return matchesStatus && matchesSearch;
   });
-
-  const handleUpdateStatus = async (orderId: string, status: OrderStatus) => {
-    const updated = await orderService.updateOrderStatus(orderId, status, statusNote || undefined);
-    if (updated) {
-      if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder(updated);
-      }
-      success(`Order #${updated.orderNumber} updated to ${status.toUpperCase()}`, 'Status Updated');
-      setStatusNote('');
-    }
-  };
-
-  const handleDeleteOrder = async (orderId: string, orderNumber: string) => {
-    if (window.confirm(`Permanently remove Order #${orderNumber} from Firebase and store records?`)) {
-      await orderService.deleteOrder(orderId);
-      if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder(null);
-      }
-      success(`Order #${orderNumber} removed from Firebase.`, 'Order Removed');
-    }
-  };
-
-  const handleClearAllOrders = async () => {
-    if (window.confirm('Are you sure you want to remove ALL orders from Firebase and store records? This cannot be undone.')) {
-      setIsClearing(true);
-      try {
-        const res = await orderService.clearAllOrdersFromFirestore();
-        setSelectedOrder(null);
-        success(res.message, 'Orders Cleared');
-      } catch (err: any) {
-        error(err?.message || 'Failed to clear orders.');
-      } finally {
-        setIsClearing(false);
-      }
-    }
-  };
-
-  const handlePushAllToFirestore = async () => {
-    setIsPushing(true);
-    try {
-      const result = await orderService.pushAllOrdersToFirestore();
-      if (result.success) {
-        success(result.message, 'Firestore Synchronized');
-      } else {
-        error(result.message, 'Sync Failed');
-      }
-    } catch (err: any) {
-      error(err?.message || 'Failed to push orders to Cloud Firestore.');
-    } finally {
-      setIsPushing(false);
-    }
-  };
 
   return (
     <div className="admin-orders animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem', paddingBottom: '4rem' }}>
       
-      {/* Header */}
+      {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ fontSize: '1.8rem', color: 'var(--brand-primary)', margin: 0 }}>Client Order Fulfillment</h1>
-            <span className="badge badge-gold" style={{ fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block', boxShadow: '0 0 8px #10b981' }} />
-              FIRESTORE "orders" SYNC ACTIVE
-            </span>
-          </div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
-            Process shipments, track carrier assignments, and manage luxury delivery workflows with live instant dispatching.
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--brand-primary)', margin: 0, fontFamily: 'var(--font-heading)' }}>
+            Fulfillment & Order ERP Operations
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '4px 0 0' }}>
+            Dispatch tracking, order status lifecycle management, and customer delivery snapshots.
           </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button 
-            onClick={handleClearAllOrders} 
-            disabled={isClearing || orders.length === 0}
-            className="btn btn-outline"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', borderColor: '#fca5a5', color: '#ef4444' }}
-            title="Remove all orders from Firebase Firestore"
-          >
-            {isClearing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-            {isClearing ? 'Clearing...' : 'Clear All Orders'}
-          </button>
-
-          <button 
-            onClick={handlePushAllToFirestore} 
-            disabled={isPushing}
-            className="btn btn-outline"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', borderColor: 'var(--brand-accent)', color: 'var(--brand-primary)' }}
-            title="Push all order records directly to Firebase Firestore collection 'orders'"
-          >
-            {isPushing ? <Loader2 size={16} className="animate-spin" /> : <Cloud size={16} color="var(--brand-accent)" />}
-            {isPushing ? 'Syncing to Cloud...' : `Push Orders to Cloud (${orders.length})`}
-          </button>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="card" style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ position: 'relative', minWidth: '280px', maxWidth: '400px', flex: 1 }}>
+      <div className="card" style={{ padding: '1.25rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ position: 'relative', flex: '1 1 280px', maxWidth: '400px' }}>
+          <Search size={18} color="var(--brand-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
           <input 
             type="text" 
-            placeholder="Search by order #, client name, email..." 
+            placeholder="Search by order #, client name, or email..." 
             value={search} 
             onChange={e => setSearch(e.target.value)} 
             className="form-input" 
             style={{ paddingLeft: '2.5rem' }} 
           />
-          <Search size={18} color="var(--brand-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
         </div>
 
-        {/* Status Filter Pills */}
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {['all', 'pending', 'processing', 'shipped', 'delivered', 'cancelled'].map(st => (
-            <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                textTransform: 'capitalize',
-                border: statusFilter === st ? '1.5px solid var(--brand-primary)' : '1px solid var(--brand-border)',
-                backgroundColor: statusFilter === st ? 'var(--brand-primary)' : '#ffffff',
-                color: statusFilter === st ? '#ffffff' : 'var(--text-primary)',
-                transition: 'all var(--transition-fast)'
-              }}
-            >
-              {st}
-            </button>
-          ))}
-        </div>
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className="form-input"
+          style={{ width: '220px', margin: 0 }}
+        >
+          <option value="all">All Order Statuses ({orders.length})</option>
+          <option value="pending_payment">Pending Payment</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="processing">Processing</option>
+          <option value="packed">Packed</option>
+          <option value="shipped">Shipped</option>
+          <option value="out_for_delivery">Out For Delivery</option>
+          <option value="delivered">Delivered</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
       </div>
 
       {/* Orders Table */}
-      <div className="card" style={{ padding: '1.5rem', overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid var(--brand-border)', textAlign: 'left', fontSize: '0.78rem', textTransform: 'uppercase', color: 'var(--brand-muted)' }}>
-              <th style={{ padding: '10px 12px' }}>Order #</th>
-              <th style={{ padding: '10px 12px' }}>Client</th>
-              <th style={{ padding: '10px 12px' }}>Date</th>
-              <th style={{ padding: '10px 12px' }}>Total</th>
-              <th style={{ padding: '10px 12px' }}>Payment</th>
-              <th style={{ padding: '10px 12px' }}>Status</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredOrders.map(ord => (
-              <tr key={ord.id} style={{ borderBottom: '1px solid var(--brand-border)' }}>
-                <td style={{ padding: '14px 12px', fontWeight: 700, color: 'var(--brand-primary)' }}>
-                  #{ord.orderNumber}
-                </td>
-                <td style={{ padding: '14px 12px' }}>
-                  <div style={{ fontWeight: 600 }}>{ord.customerName}</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--brand-muted)' }}>{ord.customerEmail}</div>
-                </td>
-                <td style={{ padding: '14px 12px', color: 'var(--text-secondary)' }}>
-                  {new Date(ord.createdAt).toLocaleDateString()}
-                </td>
-                <td style={{ padding: '14px 12px', fontWeight: 700, color: 'var(--brand-primary)' }}>
-                  ₹{ord.total.toFixed(2)}
-                </td>
-                <td style={{ padding: '14px 12px' }}>
-                  <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
-                    {ord.paymentStatus.toUpperCase()}
-                  </span>
-                </td>
-                <td style={{ padding: '14px 12px' }}>
-                  <span className={`badge badge-${ord.orderStatus === 'delivered' ? 'success' : ord.orderStatus === 'shipped' ? 'gold' : 'dark'}`}>
-                    {ord.orderStatus.toUpperCase()}
-                  </span>
-                </td>
-                <td style={{ padding: '14px 12px', textAlign: 'right' }}>
-                  <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
-                    <button
-                      onClick={() => setSelectedOrder(ord)}
-                      className="btn btn-primary btn-sm"
-                      style={{ padding: '6px 12px' }}
-                    >
-                      <Eye size={14} /> Details
-                    </button>
-                    <button
-                      onClick={() => handleDeleteOrder(ord.id, ord.orderNumber)}
-                      className="btn btn-outline btn-sm"
-                      style={{ color: '#ef4444', borderColor: '#fca5a5', padding: '6px 8px' }}
-                      title="Remove order from Firebase"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '800px', fontSize: '0.9rem' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#090d16', color: '#f8fafc', borderBottom: '1px solid #1e293b' }}>
+                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Order #</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Customer Patron</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Date</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Items Count</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Total (₹)</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Status</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+                    <Truck size={36} color="#cbd5e1" style={{ margin: '0 auto 0.75rem', display: 'block' }} />
+                    <p style={{ margin: 0, fontWeight: 600 }}>No client orders found matching current filters.</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredOrders.map(ord => (
+                  <tr key={ord.id} style={{ borderBottom: '1px solid var(--brand-border)' }}>
+                    <td style={{ padding: '14px 18px', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'monospace' }}>
+                      #{ord.orderNumber}
+                    </td>
+
+                    <td style={{ padding: '14px 18px' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--brand-primary)' }}>{ord.customerName}</div>
+                      <span style={{ fontSize: '0.78rem', color: '#64748b' }}>{ord.customerEmail}</span>
+                    </td>
+
+                    <td style={{ padding: '14px 18px', color: '#64748b', fontSize: '0.82rem' }}>
+                      {new Date(ord.createdAt).toLocaleDateString()}
+                    </td>
+
+                    <td style={{ padding: '14px 18px', color: 'var(--text-secondary)' }}>
+                      {ord.items.reduce((s: number, i: any) => s + i.quantity, 0)} saree(s)
+                    </td>
+
+                    <td style={{ padding: '14px 18px', fontWeight: 800, color: 'var(--brand-primary)' }}>
+                      ₹{ord.total.toLocaleString('en-IN')}
+                    </td>
+
+                    <td style={{ padding: '14px 18px' }}>
+                      <span style={{
+                        padding: '4px 10px',
+                        borderRadius: '12px',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        backgroundColor: ord.orderStatus === 'delivered' ? '#dcfce7' : ord.orderStatus === 'shipped' ? '#e0f2fe' : ord.orderStatus === 'cancelled' ? '#fee2e2' : '#fef3c7',
+                        color: ord.orderStatus === 'delivered' ? '#15803d' : ord.orderStatus === 'shipped' ? '#0369a1' : ord.orderStatus === 'cancelled' ? '#b91c1c' : '#b45309'
+                      }}>
+                        {ord.orderStatus.replace('_', ' ').toUpperCase()}
+                      </span>
+                    </td>
+
+                    <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                      <button onClick={() => openOrderDetails(ord)} className="btn btn-primary btn-sm">
+                        <Eye size={14} /> View Order
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Order Details & Status Manager Modal */}
+      {/* ORDER DETAIL & FULFILLMENT MODAL */}
       {selectedOrder && (
         <div style={{
           position: 'fixed',
           inset: 0,
           backgroundColor: 'rgba(15, 23, 42, 0.75)',
-          backdropFilter: 'blur(6px)',
+          backdropFilter: 'blur(8px)',
           zIndex: 9999,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '1.5rem'
+          padding: '1rem'
         }}>
-          <div 
-            onClick={e => e.stopPropagation()}
-            style={{
-              backgroundColor: '#ffffff',
-              borderRadius: 'var(--radius-xl)',
-              maxWidth: '800px',
-              width: '100%',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              boxShadow: 'var(--shadow-xl)',
-              padding: '2.5rem',
-              position: 'relative'
-            }}
-          >
-            <button 
-              onClick={() => setSelectedOrder(null)}
-              style={{ position: 'absolute', top: '16px', right: '16px', color: 'var(--brand-muted)' }}
-            >
-              <X size={22} />
-            </button>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <div>
-                <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)', textTransform: 'uppercase' }}>ORDER DETAILS</span>
-                <h2 style={{ fontSize: '1.6rem', color: 'var(--brand-primary)' }}>Order #{selectedOrder.orderNumber}</h2>
-              </div>
-              <span className={`badge badge-${selectedOrder.orderStatus === 'delivered' ? 'success' : 'gold'}`} style={{ padding: '0.4rem 0.8rem' }}>
-                {selectedOrder.orderStatus.toUpperCase()}
-              </span>
-            </div>
-
-            {/* Status Transition Controls */}
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: 'var(--radius-xl)',
+            width: '100%',
+            maxWidth: '850px',
+            maxHeight: '92vh',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.5)',
+            overflow: 'hidden'
+          }}>
+            {/* Modal Header */}
             <div style={{
-              backgroundColor: 'var(--bg-main)',
-              padding: '1.25rem',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid var(--brand-border)',
-              marginBottom: '2rem'
+              padding: '1.25rem 1.75rem',
+              backgroundColor: '#090d16',
+              color: '#ffffff',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexShrink: 0
             }}>
-              <h4 style={{ fontSize: '0.95rem', marginBottom: '8px' }}>Update Fulfillment Status</h4>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                {(['pending', 'processing', 'shipped', 'delivered', 'cancelled'] as OrderStatus[]).map(st => (
-                  <button
-                    key={st}
-                    onClick={() => handleUpdateStatus(selectedOrder.id, st)}
-                    className={`btn btn-sm ${selectedOrder.orderStatus === st ? 'btn-primary' : 'btn-outline'}`}
-                    style={{ textTransform: 'capitalize' }}
+              <div>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', margin: 0, fontFamily: 'var(--font-heading)' }}>
+                  Order #{selectedOrder.orderNumber}
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: '#d4af37' }}>
+                  Placed on {new Date(selectedOrder.createdAt).toLocaleString()}
+                </span>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setSelectedOrder(null)}
+                style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer' }}
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              
+              {/* Order Status & Quick Change */}
+              <div className="card" style={{ padding: '1.25rem', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Current Fulfillment Status</span>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--brand-primary)', marginTop: '2px' }}>
+                    {selectedOrder.orderStatus.replace('_', ' ').toUpperCase()}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <select
+                    value={selectedOrder.orderStatus}
+                    onChange={(e) => handleUpdateStatus(selectedOrder.id, e.target.value as OrderStatus)}
+                    className="form-input"
+                    style={{ margin: 0, width: '200px' }}
                   >
-                    {st}
+                    <option value="pending_payment">Pending Payment</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="processing">Processing</option>
+                    <option value="packed">Packed</option>
+                    <option value="shipped">Shipped</option>
+                    <option value="out_for_delivery">Out For Delivery</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Courier & Tracking Form */}
+              <form onSubmit={handleSaveTracking} className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--brand-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Truck size={18} color="var(--brand-accent)" /> Dispatch Courier & Tracking Details
+                </h4>
+
+                <div className="grid-2" style={{ gap: '1rem' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Courier Carrier Name</label>
+                    <input 
+                      type="text" 
+                      value={courier} 
+                      onChange={e => setCourier(e.target.value)} 
+                      placeholder="e.g. Bluedart / DTDC / India Post" 
+                      className="form-input" 
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Waybill / Tracking Reference #</label>
+                    <input 
+                      type="text" 
+                      value={trackingNumber} 
+                      onChange={e => setTrackingNumber(e.target.value)} 
+                      placeholder="e.g. BD-9940182741" 
+                      className="form-input" 
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="submit" className="btn btn-secondary btn-sm" disabled={isUpdatingTracking}>
+                    {isUpdatingTracking ? 'Saving...' : 'Update Tracking Details'}
                   </button>
-                ))}
-              </div>
-              <input
-                type="text"
-                placeholder="Optional custom timeline event note (e.g. Courier airway bill assigned)..."
-                value={statusNote}
-                onChange={e => setStatusNote(e.target.value)}
-                className="form-input"
-                style={{ fontSize: '0.85rem' }}
-              />
-            </div>
+                </div>
+              </form>
 
-            {/* Client & Delivery Info */}
-            <div className="grid-2" style={{ marginBottom: '2rem', gap: '2rem' }}>
-              <div>
-                <h4 style={{ fontSize: '0.9rem', color: 'var(--brand-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>Client Info</h4>
-                <div style={{ fontWeight: 600 }}>{selectedOrder.customerName}</div>
-                <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                  Email: {selectedOrder.customerEmail}<br />
-                  Phone: {selectedOrder.customerPhone || 'N/A'}
+              {/* Client & Address Snapshot */}
+              <div className="grid-2" style={{ gap: '1rem' }}>
+                <div className="card" style={{ padding: '1.25rem' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <User size={16} color="var(--brand-accent)" /> Patron Profile Snapshot
+                  </h4>
+                  <div style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>
+                    <strong>Name:</strong> {selectedOrder.customerName}<br />
+                    <strong>Email:</strong> {selectedOrder.customerEmail}<br />
+                    {selectedOrder.customerPhone && <><strong>Phone:</strong> {selectedOrder.customerPhone}<br /></>}
+                    <strong>Payment Method:</strong> {(selectedOrder.paymentMethod || 'Razorpay').toUpperCase()}<br />
+                    <strong>Payment Status:</strong> <span style={{ color: selectedOrder.paymentStatus === 'paid' ? '#10b981' : '#f59e0b', fontWeight: 700 }}>{(selectedOrder.paymentStatus || 'paid').toUpperCase()}</span>
+                  </div>
+                </div>
+
+                <div className="card" style={{ padding: '1.25rem' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Truck size={16} color="var(--brand-accent)" /> Shipping Address Snapshot
+                  </h4>
+                  <div style={{ fontSize: '0.88rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                    {selectedOrder.shippingAddress ? (
+                      <>
+                        <strong>{selectedOrder.shippingAddress.fullName}</strong><br />
+                        {selectedOrder.shippingAddress.streetAddress}{selectedOrder.shippingAddress.apartment ? `, ${selectedOrder.shippingAddress.apartment}` : ''}<br />
+                        {selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} – {selectedOrder.shippingAddress.postalCode}<br />
+                        Phone: {selectedOrder.shippingAddress.phone}
+                      </>
+                    ) : 'Standard Registered Atelier Address'}
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <h4 style={{ fontSize: '0.9rem', color: 'var(--brand-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>Delivery Address</h4>
-                <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                  {selectedOrder.shippingAddress.streetAddress}<br />
-                  {selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} {selectedOrder.shippingAddress.postalCode}<br />
-                  {selectedOrder.shippingAddress.country}
-                </div>
-              </div>
-            </div>
+              {/* Order Items Breakdown */}
+              <div className="card" style={{ padding: '1.25rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--brand-primary)', marginBottom: '1rem' }}>
+                  Order Line Items ({selectedOrder.items?.length || 0})
+                </h4>
 
-            {/* Items */}
-            <h4 style={{ fontSize: '0.95rem', marginBottom: '1rem', borderBottom: '1px solid var(--brand-border)', paddingBottom: '6px' }}>
-              Purchased Creations ({selectedOrder.items.length})
-            </h4>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '1.5rem' }}>
-              {selectedOrder.items.map((it: any, i: number) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' }}>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <img src={it.product.images[0]} alt="" style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-sm)', objectFit: 'contain', backgroundColor: '#f8fafc', border: '1px solid var(--brand-border)', padding: '2px' }} />
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{it.product.name}</div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--brand-muted)' }}>
-                        Qty: {it.quantity} {it.selectedColor ? `• ${it.selectedColor}` : ''}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {(selectedOrder.items || []).map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <img src={item.product?.images?.[0] || '/saree_model_individual.jpg'} alt="" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
+                        <div>
+                          <strong style={{ fontSize: '0.9rem', color: 'var(--brand-primary)' }}>{item.product?.name || 'MUETY Luxury Silk Saree'}</strong>
+                          <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>Qty: {item.quantity} x ₹{item.product?.price || 0}</span>
+                        </div>
+                      </div>
+                      <div style={{ fontWeight: 700, color: 'var(--brand-primary)' }}>
+                        ₹{((item.product?.price || 0) * item.quantity).toLocaleString('en-IN')}
                       </div>
                     </div>
-                  </div>
-                  <div style={{ fontWeight: 700 }}>
-                    ₹{(it.product.price * it.quantity).toFixed(2)}
-                  </div>
-                </div>
-              ))}
-            </div>
+                  ))}
 
-            {/* Totals & Delete Actions */}
-            <div style={{ borderTop: '2px solid var(--brand-border)', paddingTop: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-              <button
-                onClick={() => handleDeleteOrder(selectedOrder.id, selectedOrder.orderNumber)}
-                className="btn btn-outline"
-                style={{ color: '#ef4444', borderColor: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                title="Remove this order permanently from Firebase and store records"
-              >
-                <Trash2 size={16} /> Remove Order from Firebase
-              </button>
-
-              <div style={{ width: '240px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Subtotal:</span>
-                  <span>₹{selectedOrder.subtotal.toFixed(2)}</span>
-                </div>
-                {selectedOrder.discount > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#10b981' }}>
-                    <span>Discount:</span>
-                    <span>-₹{selectedOrder.discount.toFixed(2)}</span>
+                  <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '2px solid var(--brand-border)', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Subtotal</span>
+                      <span>₹{(selectedOrder.subtotal || selectedOrder.total).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Shipping Charge</span>
+                      <span>₹{(selectedOrder.shippingFee || 100).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 800, color: 'var(--brand-primary)', paddingTop: '6px', borderTop: '1px solid #e2e8f0' }}>
+                      <span>Grand Total</span>
+                      <span>₹{selectedOrder.total.toLocaleString('en-IN')}</span>
+                    </div>
                   </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Tax:</span>
-                  <span>₹{selectedOrder.tax.toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.15rem', color: 'var(--brand-primary)', borderTop: '1px solid var(--brand-border)', paddingTop: '6px' }}>
-                  <span>Total:</span>
-                  <span>₹{selectedOrder.total.toFixed(2)}</span>
                 </div>
               </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: '1rem 1.75rem', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', textAlign: 'right' }}>
+              <button type="button" onClick={() => setSelectedOrder(null)} className="btn btn-outline">
+                Close Order View
+              </button>
             </div>
           </div>
         </div>

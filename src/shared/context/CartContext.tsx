@@ -156,7 +156,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
   const settings = storageService.getSettings();
-  const shippingFee = subtotal === 0 || subtotal >= settings.freeShippingThreshold ? 0 : settings.standardShippingFee;
+  const shippingFee = subtotal === 0 ? 0 : (settings.standardShippingFee || 100);
   const taxableAmount = Math.max(0, subtotal - discountAmount);
   const taxAmount = Number(((taxableAmount * settings.taxRate) / 100).toFixed(2));
   const grandTotal = Number((taxableAmount + shippingFee + taxAmount).toFixed(2));

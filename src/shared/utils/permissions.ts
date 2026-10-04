@@ -3,7 +3,8 @@ export type AppRole =
   | 'admin' 
   | 'catalog_manager' 
   | 'order_manager' 
-  | 'support_agent' 
+  | 'support_manager' 
+  | 'support_agent'
   | 'customer';
 
 export type Permission =
@@ -20,7 +21,8 @@ export type Permission =
   | 'inquiries.manage'
   | 'reviews.manage'
   | 'settings.manage'
-  | 'roles.manage';
+  | 'roles.manage'
+  | 'audit.read';
 
 export const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
   super_admin: [
@@ -37,7 +39,8 @@ export const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'inquiries.manage',
     'reviews.manage',
     'settings.manage',
-    'roles.manage'
+    'roles.manage',
+    'audit.read'
   ],
   admin: [
     'products.read',
@@ -66,6 +69,12 @@ export const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'orders.fulfill',
     'customers.read'
   ],
+  support_manager: [
+    'inquiries.manage',
+    'reviews.manage',
+    'orders.read',
+    'customers.read'
+  ],
   support_agent: [
     'inquiries.manage',
     'reviews.manage',
@@ -77,26 +86,43 @@ export const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
   ]
 };
 
+export const ROLE_LABELS: Record<AppRole, string> = {
+  super_admin: 'Super Admin',
+  admin: 'Admin',
+  catalog_manager: 'Catalog Manager',
+  order_manager: 'Order Manager',
+  support_manager: 'Support Manager',
+  support_agent: 'Support Manager',
+  customer: 'Customer'
+};
+
 export function getUserRoles(user: { roles?: AppRole[]; role?: AppRole } | null): AppRole[] {
   if (!user) return ['customer'];
+  let rawRoles: AppRole[] = [];
   if (Array.isArray(user.roles) && user.roles.length > 0) {
-    return user.roles;
+    rawRoles = user.roles;
+  } else if (user.role) {
+    rawRoles = [user.role];
+  } else {
+    rawRoles = ['customer'];
   }
-  if (user.role) {
-    return [user.role];
-  }
-  return ['customer'];
+
+  // Normalize support_agent to support_manager
+  return rawRoles.map(r => r === 'support_agent' ? 'support_manager' : r);
 }
 
 export function hasRole(user: { roles?: AppRole[]; role?: AppRole } | null, requiredRole: AppRole): boolean {
   const roles = getUserRoles(user);
-  return roles.includes('super_admin') || roles.includes(requiredRole);
+  if (roles.includes('super_admin')) return true;
+  const target = requiredRole === 'support_agent' ? 'support_manager' : requiredRole;
+  return roles.includes(target);
 }
 
 export function hasAnyRole(user: { roles?: AppRole[]; role?: AppRole } | null, requiredRoles: AppRole[]): boolean {
   const roles = getUserRoles(user);
   if (roles.includes('super_admin')) return true;
-  return requiredRoles.some(r => roles.includes(r));
+  const normalizedTargets = requiredRoles.map(r => r === 'support_agent' ? 'support_manager' : r);
+  return normalizedTargets.some(r => roles.includes(r));
 }
 
 export function hasPermission(user: { roles?: AppRole[]; role?: AppRole } | null, permission: Permission): boolean {
@@ -106,3 +132,4 @@ export function hasPermission(user: { roles?: AppRole[]; role?: AppRole } | null
     return perms.includes(permission);
   });
 }
+

@@ -58,9 +58,49 @@ export const orderService = {
     razorpayPaymentId?: string;
     notes?: string;
   }): Promise<Order> {
+    let serverRes: any = null;
+    try {
+      const res = await fetch('/api/orders/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          customerId: params.customerId,
+          customerName: params.customerName,
+          customerEmail: params.customerEmail,
+          customerPhone: params.customerPhone,
+          shippingAddress: params.shippingAddress,
+          items: params.items.map(item => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+            selectedColor: item.selectedColor
+          })),
+          couponCode: params.appliedCoupon,
+          paymentMethod: params.paymentMethod,
+          razorpayPaymentId: params.razorpayPaymentId,
+          notes: params.notes
+        })
+      });
+      serverRes = await res.json();
+    } catch (netErr) {
+      console.warn('Server order API note:', netErr);
+    }
+
+    if (serverRes && serverRes.success && serverRes.order) {
+      const serverOrder: Order = serverRes.order;
+      storageService.createOrder(serverOrder);
+      this.broadcastUpdate(serverOrder);
+      return serverOrder;
+    }
+
+    if (serverRes && serverRes.error) {
+      throw new Error(serverRes.error.message || 'Server rejected order creation.');
+    }
+
+    // Local fallback
     const orderNumber = `MT-${Math.floor(100000 + Math.random() * 900000)}`;
     const now = new Date().toISOString();
-
     const order: Order = {
       id: `ord-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       orderNumber,
@@ -74,8 +114,8 @@ export const orderService = {
       discount: params.discount,
       appliedCoupon: params.appliedCoupon,
       tax: params.tax,
-      shippingFee: params.shippingFee,
-      total: params.total,
+      shippingFee: 100, // Canonical ₹100 flat shipping
+      total: Number((params.subtotal - params.discount + params.tax + 100).toFixed(2)),
       paymentMethod: params.paymentMethod,
       paymentStatus: params.paymentStatus || (params.paymentMethod === 'cash_on_delivery' ? 'pending' : 'paid'),
       orderStatus: 'pending',
@@ -86,11 +126,7 @@ export const orderService = {
           status: 'pending',
           label: 'Order Confirmed',
           timestamp: new Date().toLocaleString(),
-          description: params.paymentMethod === 'razorpay'
-            ? `Paid via Razorpay Secure (ID: ${params.razorpayPaymentId || 'VERIFIED'}). Order accepted.`
-            : params.paymentMethod === 'cash_on_delivery'
-            ? 'Cash on Delivery order confirmed. Payment will be collected on delivery.'
-            : 'Payment authorized and order received by MUETY concierge.'
+          description: 'Payment authorized and order accepted.'
         }
       ],
       razorpayPaymentId: params.razorpayPaymentId,

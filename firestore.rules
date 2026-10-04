@@ -1,8 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // --- Helper Functions ---
+
+    // --- HELPER FUNCTIONS ---
     function isSignedIn() {
       return request.auth != null;
     }
@@ -39,41 +39,17 @@ service cloud.firestore {
       return hasAnyRole(['super_admin', 'admin', 'order_manager']);
     }
 
-    function isSupportAgent() {
-      return hasAnyRole(['super_admin', 'admin', 'support_agent']);
+    function isSupportManager() {
+      return hasAnyRole(['super_admin', 'admin', 'support_manager', 'support_agent']);
     }
 
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Products Collection
-    match /products/{productId} {
-      allow read: if true;
-      allow write: if isCatalogManager();
-    }
-
-    // Categories Collection
-    match /categories/{categoryId} {
-      allow read: if true;
-      allow write: if isCatalogManager();
-    }
-
-    // Coupons Collection
-    match /coupons/{couponId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // Store Settings
-    match /settings/{settingId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // User Profiles Collection
+    // --- USERS COLLECTION ---
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin() || isSupportAgent() || isOrderManager();
+      allow read: if isOwner(userId) || isAdmin() || isSupportManager() || isOrderManager();
       allow create: if isSignedIn() && (!request.resource.data.keys().hasAll(['roles']) || isAdmin());
       allow update: if isOwner(userId) 
         ? (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['roles', 'role', 'isBlocked']))
@@ -81,24 +57,135 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    // Orders Collection
-    match /orders/{orderId} {
-      allow read: if isOrderManager() || (isSignedIn() && resource.data.customerId == request.auth.uid);
-      allow create: if true; // Public guest/patron checkout
-      allow update, delete: if isOrderManager();
+    // --- ADMINS COLLECTION ---
+    match /admins/{adminId} {
+      allow read: if isAdmin();
+      allow write: if isSuperAdmin();
     }
 
-    // Patron Reviews Collection
+    // --- CUSTOMERS CRM COLLECTION ---
+    match /customers/{customerId} {
+      allow read: if isOwner(customerId) || isSupportManager() || isOrderManager() || isAdmin();
+      allow create: if isSignedIn() || isSupportManager() || isAdmin();
+      allow update: if isOwner(customerId)
+        ? (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['customerStatus', 'internalNotes', 'totalSpend']))
+        : (isSupportManager() || isAdmin());
+      allow delete: if isSuperAdmin();
+
+      // Protected CRM Internal Notes Subcollection (Customers CANNOT read/write notes)
+      match /crmNotes/{noteId} {
+        allow read, write: if isSupportManager() || isAdmin();
+      }
+    }
+
+    // --- PRODUCTS COLLECTION ---
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isCatalogManager();
+    }
+
+    // --- CATEGORIES COLLECTION ---
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isCatalogManager();
+    }
+
+    // --- COLLECTIONS COLLECTION ---
+    match /collections/{collectionId} {
+      allow read: if true;
+      allow write: if isCatalogManager();
+    }
+
+    // --- ORDERS COLLECTION ---
+    match /orders/{orderId} {
+      allow read: if isOrderManager() || isSupportManager() || (isSignedIn() && resource.data.customerId == request.auth.uid);
+      allow create: if true; // Public checkout creation
+      allow update: if isOrderManager() || isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // --- CARTS COLLECTION ---
+    match /carts/{customerId} {
+      allow read, write: if isOwner(customerId) || isOrderManager();
+    }
+
+    // --- WISHLISTS COLLECTION ---
+    match /wishlists/{customerId} {
+      allow read, write: if isOwner(customerId) || isSupportManager();
+    }
+
+    // --- COUPONS COLLECTION ---
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- REVIEWS COLLECTION ---
     match /reviews/{reviewId} {
       allow read: if true;
       allow create: if true;
-      allow update, delete: if isSupportAgent();
+      allow update, delete: if isSupportManager();
     }
 
-    // Inquiries Collection
+    // --- INQUIRIES COLLECTION ---
     match /inquiries/{inquiryId} {
-      allow create: if true; // Public contact form submission
-      allow read, update, delete: if isSupportAgent();
+      allow create: if true; // Public inquiry/contact submission
+      allow read, update, delete: if isSupportManager();
+    }
+
+    // --- AUDIT LOGS COLLECTION (IMMUTABLE RECORD) ---
+    match /adminAuditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() || isCatalogManager() || isOrderManager() || isSupportManager();
+      allow update, delete: if false; // Immutable audit log
+    }
+
+    // --- STORE & SHIPPING SETTINGS ---
+    match /storeSettings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /shippingSettings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- POLICY DOCUMENTS ---
+    match /policyDocuments/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- NOTIFICATIONS ---
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (resource.data.recipientUid == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // --- INVENTORY TRANSACTIONS ---
+    match /inventoryTransactions/{transactionId} {
+      allow read: if isCatalogManager() || isOrderManager() || isAdmin();
+      allow create: if isCatalogManager() || isOrderManager() || isAdmin();
+      allow update, delete: if false; // Immutable inventory log
+    }
+
+    // --- PRODUCT & CUSTOMER ACTIVITY ---
+    match /productActivity/{activityId} {
+      allow read: if isCatalogManager() || isAdmin();
+      allow create: if isCatalogManager() || isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /customerActivity/{activityId} {
+      allow read: if isSupportManager() || isAdmin();
+      allow create: if isSupportManager() || isAdmin();
+      allow update, delete: if false;
     }
   }
 }

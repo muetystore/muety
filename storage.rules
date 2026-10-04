@@ -1,7 +1,3 @@
-// MUETYSTORE — Firebase Storage Rules (OBSOLETE & DEPRECATED)
-// ARCHITECTURAL DIRECTIVE (Stage 02D.1):
-// Firebase Storage is NOT initialized or used for application product, category, or gallery media.
-// All application assets are strictly processed via Cloudinary signed upload and deletion endpoints.
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
@@ -26,22 +22,36 @@ service firebase.storage {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Product images public read, catalog manager write
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isValidSize() {
+      return request.resource.size < 5 * 1024 * 1024; // Maximum 5 MB limit
+    }
+
+    // Product media: public read, authorized catalog manager write with MIME & size validation
     match /products/{allPaths=**} {
       allow read: if true;
-      allow write: if isCatalogManager();
+      allow write: if isCatalogManager() && isImage() && isValidSize();
     }
 
-    // User avatar/profile media public read, owner write
+    // Category media: public read, authorized catalog manager write with MIME & size validation
+    match /categories/{allPaths=**} {
+      allow read: if true;
+      allow write: if isCatalogManager() && isImage() && isValidSize();
+    }
+
+    // User avatar/profile media: public read, owner or catalog manager write with MIME & size validation
     match /users/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isOwner(userId) || isCatalogManager();
+      allow write: if (isOwner(userId) || isCatalogManager()) && isImage() && isValidSize();
     }
 
-    // Default match: read public, write admin/catalog manager
+    // Default catch-all: strict write controls
     match /{allPaths=**} {
       allow read: if true;
-      allow write: if isCatalogManager();
+      allow write: if isCatalogManager() && isImage() && isValidSize();
     }
   }
 }

@@ -41,6 +41,8 @@ const AdminReviews = lazy(() => import('@/features/admin/pages/AdminReviews').th
 const AdminSettings = lazy(() => import('@/features/admin/pages/AdminSettings').then(m => ({ default: m.AdminSettings })));
 const AdminInquiries = lazy(() => import('@/features/admin/pages/AdminInquiries').then(m => ({ default: m.AdminInquiries })));
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin').then(m => ({ default: m.AdminLogin })));
+const AdminUsers = lazy(() => import('@/features/admin/pages/AdminUsers').then(m => ({ default: m.AdminUsers })));
+const AdminAuditLogs = lazy(() => import('@/features/admin/pages/AdminAuditLogs').then(m => ({ default: m.AdminAuditLogs })));
 
 const LoadingFallback: React.FC = () => (
   <div style={{
@@ -109,6 +111,8 @@ export const AppRouter: React.FC = () => {
             <Route path="categories" element={<AdminCategories />} />
             <Route path="coupons" element={<AdminCoupons />} />
             <Route path="settings" element={<AdminSettings />} />
+            <Route path="admins" element={<ProtectedRoute requiredRoles={['super_admin']}><AdminUsers /></ProtectedRoute>} />
+            <Route path="audit-logs" element={<ProtectedRoute requiredRoles={['super_admin', 'admin']}><AdminAuditLogs /></ProtectedRoute>} />
           </Route>
 
           {/* Customer Storefront */}

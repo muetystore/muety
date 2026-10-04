@@ -125,20 +125,19 @@ export class AuthService {
       }
     }
 
-    const existingLocal = storageService.getUserById(fbUser.uid);
-    const combinedRoles: AppRole[] = roles.length > 0 && !roles.includes('customer') || roles.length > 1
+    const combinedRoles: AppRole[] = (roles.length > 0 && (!roles.includes('customer') || roles.length > 1))
       ? roles
-      : (firestoreProfile.roles || existingLocal?.roles || (firestoreProfile.role ? [firestoreProfile.role] : existingLocal?.role ? [existingLocal.role] : ['customer']));
+      : (firestoreProfile.roles || (firestoreProfile.role ? [firestoreProfile.role] : ['customer']));
 
     const profile: UserProfile = {
       uid: fbUser.uid,
-      email: fbUser.email || firestoreProfile.email || existingLocal?.email || '',
-      displayName: fbUser.displayName || firestoreProfile.displayName || existingLocal?.displayName || fbUser.email?.split('@')[0] || 'MUETY Patron',
-      photoURL: fbUser.photoURL || firestoreProfile.photoURL || existingLocal?.photoURL,
+      email: fbUser.email || firestoreProfile.email || '',
+      displayName: fbUser.displayName || firestoreProfile.displayName || fbUser.email?.split('@')[0] || 'MUETY Patron',
+      photoURL: fbUser.photoURL || firestoreProfile.photoURL,
       roles: combinedRoles,
       role: combinedRoles[0] || 'customer',
-      phoneNumber: fbUser.phoneNumber || firestoreProfile.phoneNumber || existingLocal?.phoneNumber,
-      createdAt: firestoreProfile.createdAt || existingLocal?.createdAt || new Date().toISOString()
+      phoneNumber: fbUser.phoneNumber || firestoreProfile.phoneNumber,
+      createdAt: firestoreProfile.createdAt || new Date().toISOString()
     };
 
     delete (profile as any).password;

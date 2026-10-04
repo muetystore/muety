@@ -16,38 +16,11 @@ const withTimeout = <T>(promise: Promise<T>, ms = 3000): Promise<T> => {
   ]);
 };
 
-const SEED_INQUIRIES: ContactInquiry[] = [
-  {
-    id: 'inq-sample-1',
-    inquiryNumber: 'MUET-INQ-892101',
-    name: 'Priyanka Sharma',
-    email: 'priyanka.s@example.com',
-    phone: '+91 98450 12345',
-    category: 'custom_order',
-    subject: 'Bridal Kanchipuram Pure Silk Saree Custom Color Request',
-    message: 'Hello MUETY Concierge, I am looking for a custom bridal Kanchipuram silk saree in deep crimson with pure 24K gold zari weave for my wedding in December. Could you provide details on custom weaving timelines and swatches?',
-    status: 'unread',
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 2).toISOString()
-  },
-  {
-    id: 'inq-sample-2',
-    inquiryNumber: 'MUET-INQ-889452',
-    name: 'Rajesh Kumar',
-    email: 'rajesh.k@example.com',
-    phone: '+91 97123 45678',
-    category: 'order',
-    subject: 'Tracking Update for Order #MT-882109',
-    message: 'Hi team, could you please provide an update on the express airway bill dispatch for my recent festival order? Thank you!',
-    status: 'replied',
-    adminNotes: 'Airway bill tracking link sent via WhatsApp and Email on 16 Sep.',
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 18).toISOString()
-  }
-];
+
 
 class InquiryService {
   private channel: BroadcastChannel | null = null;
+  private inquiriesCache: ContactInquiry[] = [];
 
   constructor() {
     this.initStorage();
@@ -61,11 +34,13 @@ class InquiryService {
   }
 
   private initStorage() {
-    if (typeof window === 'undefined') return;
+    if (typeof localStorage === 'undefined') return;
     try {
       const existing = localStorage.getItem(STORAGE_KEY);
       if (!existing) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      } else {
+        this.inquiriesCache = JSON.parse(existing);
       }
     } catch {
       // LocalStorage error fallback
@@ -74,19 +49,22 @@ class InquiryService {
 
   getInquiries(): ContactInquiry[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return SEED_INQUIRIES;
-      return JSON.parse(raw);
-    } catch {
-      return SEED_INQUIRIES;
-    }
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return JSON.parse(raw);
+      }
+    } catch {}
+    return this.inquiriesCache;
   }
 
   private saveInquiries(inquiries: ContactInquiry[]) {
+    this.inquiriesCache = inquiries;
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
+      if (typeof localStorage !== 'undefined') {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(inquiries));
-        window.dispatchEvent(new Event('muety_inquiries_updated'));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('muety_inquiries_updated'));
+        }
       }
       if (this.channel) {
         this.channel.postMessage({ type: 'INQUIRIES_UPDATED' });

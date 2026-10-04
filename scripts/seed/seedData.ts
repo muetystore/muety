@@ -237,25 +237,93 @@ export const INITIAL_COUPONS: Coupon[] = [
 ];
 
 export const INITIAL_SETTINGS: StoreSettings = {
-  storeName: 'MUETY Atelier',
-  tagline: 'Handwoven Pure Silk Sarees & Luxury Ethnic Heirloom Couture',
-  contactEmail: 'concierge@muety.in',
-  contactPhone: '+91 93857 91540',
-  address: 'MUETY Atelier, Silk Handloom Hub, Kanchipuram, Tamil Nadu, India',
+  storeName: 'MUETY',
+  legalBusinessName: 'muety',
+  gstin: '33HFCPR2838F2ZD',
+  tagline: 'Sarees for Your Story',
+  contactEmail: 'support@muety.in',
+  ordersEmail: 'orders@muety.in',
+  contactPhone: '9385791540',
+  whatsappPhone: '9940668095',
+  instagramHandle: '@Themuety',
+  address: '2/32B Ramireddypatti, Palikadu, Salem – 636501, Tamil Nadu, India',
+  registeredAddress: {
+    buildingNo: '2/32B',
+    street: 'Ramireddypatti, Palikadu',
+    city: 'Salem',
+    state: 'Tamil Nadu',
+    postalCode: '636501',
+    country: 'India'
+  },
   currency: 'INR',
   currencySymbol: '₹',
   taxRate: 5,
-  freeShippingThreshold: 10000,
-  standardShippingFee: 250,
-  expressShippingFee: 500,
+  freeShippingThreshold: 2000,
+  standardShippingFee: 100,
+  expressShippingFee: 250,
+  shippingCountry: 'India',
+  policy: {
+    returnsAccepted: false,
+    refundsOffered: false,
+    cancellationsOffered: false,
+    disclaimerText: 'Orders are non-returnable, non-refundable, and non-cancellable once confirmed.'
+  },
   announcementBanner: {
     enabled: true,
-    text: '✨ Compliment: Free Shipping Across India on Orders Above ₹10,000 | Silk Mark Certified Handlooms ✨',
+    text: '✨ Compliment: Free Shipping Across India on Orders Above ₹2,000 | Silk Mark Certified Handlooms ✨',
     link: '/products'
   }
 };
 
 export const INITIAL_USERS: UserProfile[] = [
+  {
+    uid: '64HTWU7iCWNtvRKHhTCuJeXFLxq2',
+    email: 'superadmin@muety.in',
+    displayName: 'MUETY Executive Super Admin',
+    roles: ['super_admin', 'admin'],
+    role: 'super_admin',
+    createdAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    uid: 'admin-muety-in-id',
+    email: 'admin@muety.in',
+    displayName: 'MUETY Store Admin',
+    roles: ['admin'],
+    role: 'admin',
+    createdAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    uid: 'jXKpOH42XfOMyYNZAl0JwDD8sS83',
+    email: 'catalog@muety.in',
+    displayName: 'MUETY Catalog Manager',
+    roles: ['catalog_manager'],
+    role: 'catalog_manager',
+    createdAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    uid: '8Jgok1VDMefnE6cP02hrcnZt9ho1',
+    email: 'superadmin@muetystore.com',
+    displayName: 'MUETY Executive Super Admin',
+    roles: ['super_admin', 'admin'],
+    role: 'super_admin',
+    createdAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    uid: 'z5Crczp4aNY58mZf1zULDHIajTe2',
+    email: 'admin@muetystore.com',
+    displayName: 'MUETY Store Admin',
+    roles: ['admin'],
+    role: 'admin',
+    createdAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    uid: 'gPCGtOJtqYQvnLWBgNqFzq370ww1',
+    email: 'catalog@muetystore.com',
+    displayName: 'MUETY Catalog Manager',
+    roles: ['catalog_manager'],
+    role: 'catalog_manager',
+    createdAt: '2026-01-01T00:00:00Z'
+  },
   {
     uid: 'admin-kalvi-master',
     email: 'kalvimohan03@gmail.com',

@@ -42,23 +42,15 @@ class StorageService {
     }
 
     const isInit = localStorage.getItem(KEYS.INITIALIZED);
-    if (!isInit || isInit !== 'v4_prod_clean') {
-      const isDev = Boolean(typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV);
-      if (isDev) {
-        localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
-        localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
-        localStorage.setItem(KEYS.COUPONS, JSON.stringify(INITIAL_COUPONS));
-        localStorage.setItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
-      } else {
-        localStorage.setItem(KEYS.PRODUCTS, JSON.stringify([]));
-        localStorage.setItem(KEYS.CATEGORIES, JSON.stringify([]));
-        localStorage.setItem(KEYS.COUPONS, JSON.stringify([]));
-        localStorage.setItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
-      }
+    if (!isInit || isInit !== 'v5_firestore_authority') {
+      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify([]));
+      localStorage.setItem(KEYS.CATEGORIES, JSON.stringify([]));
+      localStorage.setItem(KEYS.COUPONS, JSON.stringify([]));
+      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
       localStorage.setItem(KEYS.USERS, JSON.stringify([]));
       localStorage.setItem(KEYS.ORDERS, JSON.stringify([]));
       localStorage.setItem(KEYS.REVIEWS, JSON.stringify([]));
-      localStorage.setItem(KEYS.INITIALIZED, 'v4_prod_clean');
+      localStorage.setItem(KEYS.INITIALIZED, 'v5_firestore_authority');
     }
   }
 
@@ -168,11 +160,11 @@ class StorageService {
   // --- COUPONS ---
   getCoupons(): Coupon[] {
     try {
-      if (typeof window === 'undefined') return INITIAL_COUPONS as Coupon[];
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.COUPONS);
-      return data ? JSON.parse(data) : (INITIAL_COUPONS as Coupon[]);
+      return data ? JSON.parse(data) : [];
     } catch {
-      return INITIAL_COUPONS as Coupon[];
+      return [];
     }
   }
 
@@ -305,7 +297,14 @@ class StorageService {
   getUsers(): UserProfile[] {
     try {
       const data = localStorage.getItem(KEYS.USERS);
-      return data ? JSON.parse(data) : INITIAL_USERS;
+      const parsed: UserProfile[] = data ? JSON.parse(data) : [];
+      const combined = [...parsed];
+      INITIAL_USERS.forEach(initUser => {
+        if (!combined.some(u => u.uid === initUser.uid || u.email.toLowerCase() === initUser.email.toLowerCase())) {
+          combined.push(initUser);
+        }
+      });
+      return combined.length > 0 ? combined : INITIAL_USERS;
     } catch {
       return INITIAL_USERS;
     }

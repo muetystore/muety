@@ -36,8 +36,6 @@ export const HomePage: React.FC = () => {
           style={{
             display: 'block',
             width: '100%',
-            aspectRatio: '16 / 9',
-            overflow: 'hidden',
             position: 'relative',
             cursor: 'pointer'
           }}
@@ -48,9 +46,10 @@ export const HomePage: React.FC = () => {
             alt="MUETY Diwali Festive Silk Sarees Collection" 
             style={{
               width: '100%',
-              height: '100%',
+              height: 'auto',
+              maxHeight: '80vh',
               objectFit: 'cover',
-              objectPosition: 'center center',
+              objectPosition: 'center 20%',
               display: 'block'
             }}
           />

@@ -54,10 +54,14 @@ export const AdminDashboard: React.FC = () => {
     };
   }, []);
 
-  // Compute Metrics
-  const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
-  const lowStockProducts = products.filter(p => p.stock <= 5);
-  const pendingOrders = orders.filter(o => o.orderStatus === 'pending');
+  // Compute Accurate ERP & CRM Metrics from real Firestore / order store
+  const totalRevenue = orders.reduce((sum, o) => o.orderStatus !== 'cancelled' ? sum + o.total : sum, 0);
+  const totalOrders = orders.length;
+  const nonCancelledOrders = orders.filter(o => o.orderStatus !== 'cancelled');
+  const aov = nonCancelledOrders.length > 0 ? totalRevenue / nonCancelledOrders.length : 0;
+  const lowStockProducts = products.filter(p => (p.stock || 0) <= (p.lowStockThreshold || 5));
+  const pendingOrders = orders.filter(o => ['pending', 'pending_payment', 'confirmed', 'processing'].includes(o.orderStatus));
+  const uniqueCustomersCount = new Set(orders.map(o => o.customerEmail || o.customerId)).size;
 
   const handleQuickStatusUpdate = async (orderId: string, newStatus: Order['orderStatus']) => {
     await orderService.updateOrderStatus(orderId, newStatus);
@@ -70,9 +74,11 @@ export const AdminDashboard: React.FC = () => {
       {/* Top Welcome & Quick Actions */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.8rem', color: 'var(--brand-primary)', margin: 0 }}>Executive Dashboard</h1>
+          <h1 style={{ fontSize: '1.8rem', color: 'var(--brand-primary)', margin: 0, fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            Executive Control & ERP Operations
+          </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '4px 0 0' }}>
-            Real-time performance, inventory creations, and luxury fulfillment metrics for MUETY.
+            Real-time catalog performance, inventory monitoring, and fulfillment tracking for MUETY.
           </p>
         </div>
 
@@ -90,22 +96,19 @@ export const AdminDashboard: React.FC = () => {
           </button>
 
           <Link to="/admin/products" className="btn btn-primary btn-sm">
-            <Plus size={16} /> New Creation
-          </Link>
-          <Link to="/admin/coupons" className="btn btn-outline btn-sm">
-            Manage Coupons
+            <Plus size={16} /> New Product Creation
           </Link>
         </div>
       </div>
 
-      {/* 4 Core Financial & Store Metric Cards */}
+      {/* 4 Core Financial & ERP Metric Cards */}
       <div className="grid-4" style={{ gap: '1.5rem' }}>
         
-        {/* Metric 1: Total Sales */}
+        {/* Metric 1: Total Net Sales */}
         <div className="card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Total Gross Sales
+              Gross Sales
             </span>
             <div style={{ padding: '8px', borderRadius: '50%', backgroundColor: '#ecfdf5', color: '#10b981' }}>
               <DollarSign size={18} />
@@ -114,30 +117,30 @@ export const AdminDashboard: React.FC = () => {
           <div style={{ fontSize: '1.9rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
             ₹{totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div style={{ fontSize: '0.78rem', color: '#10b981', marginTop: 'auto', paddingTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <TrendingUp size={14} /> +24.8% vs last fiscal period
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '8px' }}>
+            {nonCancelledOrders.length === 0 ? 'Waiting for first order' : `AOV: ₹${aov.toFixed(2)} (${nonCancelledOrders.length} order${nonCancelledOrders.length > 1 ? 's' : ''})`}
           </div>
         </div>
 
-        {/* Metric 2: Completed Orders */}
+        {/* Metric 2: Completed / Total Orders */}
         <div className="card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Completed Orders
+              Total Orders
             </span>
             <div style={{ padding: '8px', borderRadius: '50%', backgroundColor: 'var(--bg-main)', color: 'var(--brand-accent-hover)' }}>
               <ShoppingBag size={18} />
             </div>
           </div>
           <div style={{ fontSize: '1.9rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
-            {orders.length}
+            {totalOrders}
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '8px' }}>
             {pendingOrders.length} pending fulfillment
           </div>
         </div>
 
-        {/* Metric 3: Active Catalog */}
+        {/* Metric 3: Active Catalog & Clients */}
         <div className="card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -148,12 +151,13 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
           <div style={{ fontSize: '1.9rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
-            {products.length} Pieces
+            {products.length} Products
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '8px' }}>
-            Across {storageService.getCategories().length} ateliers
+            {uniqueCustomersCount > 0 ? `${uniqueCustomersCount} unique ordering patron(s)` : 'No client purchases yet'}
           </div>
         </div>
+
 
         {/* Metric 4: Low Stock Alert */}
         <div className="card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', borderColor: lowStockProducts.length > 0 ? '#fef08a' : 'var(--brand-border)' }}>

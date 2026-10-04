@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Muety — Sarees For Your Story | Grand Launch October 18</title>
+  <meta name="description" content="Discover handcrafted luxury sarees, pure Kanjivaram heirlooms, and regal Banarasi silk. Muety launches October 18, 2026. Join the VIP waitlist for exclusive 15% launch privilege.">
+  <meta name="keywords" content="Muety, Sarees For Your Story, Luxury Sarees, Kanjivaram Silk, Banarasi Silk, Indian Ethnic Wear, Grand Launch Countdown">
+  
+  <!-- Open Graph / Social Meta Tags -->
+  <meta property="og:title" content="Muety — Sarees For Your Story | Launching October 18">
+  <meta property="og:description" content="Tradition Meets You. Experience timeless Indian handlooms and silk sarees. Register for VIP Early Access.">
+  <meta property="og:image" content="assets/images/hero.jpg">
+  <meta property="og:type" content="website">
+
+  <!-- Favicon / Tab Icon -->
+  <link rel="icon" type="image/jpeg" href="assets/images/muety_logo.jpg">
+  <link rel="apple-touch-icon" href="assets/images/muety_logo.jpg">
+  <link rel="shortcut icon" href="assets/images/muety_logo.jpg">
+
+  <!-- Google Fonts: Cormorant Garamond, Cinzel, Montserrat, Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Montserrat:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="luxury-theme">
+  <!-- Interactive Golden Dust Canvas & Fireworks Layer -->
+  <canvas id="particleCanvas"></canvas>
+  <canvas id="fireworksCanvas"></canvas>
+  
+
+
+  <!-- Announcement Bar (Smooth Infinite Marquee on Mobile, Centered on Desktop) -->
+  <header class="top-announcement">
+    <div class="announcement-track">
+      <div class="announcement-content">
+        <span class="sparkle">🪔</span>
+        <span class="announcement-text">GRAND DIWALI FESTIVE LAUNCH • <strong>FLAT 50% OFFER FOR DIWALI SALE</strong> • OCTOBER 18, 2026</span>
+        <span class="sparkle">🪔</span>
+      </div>
+      <div class="announcement-content marquee-clone" aria-hidden="true">
+        <span class="sparkle">🪔</span>
+        <span class="announcement-text">GRAND DIWALI FESTIVE LAUNCH • <strong>FLAT 50% OFFER FOR DIWALI SALE</strong> • OCTOBER 18, 2026</span>
+        <span class="sparkle">🪔</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation / Brand Bar -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-container">
+      <div class="nav-left">
+        <span class="heritage-pill">Est. 2026 • Royal Weaves</span>
+      </div>
+
+      <div class="nav-brand">
+        <a href="#hero" class="brand-logo-link">
+          <img src="assets/images/muety_logo.jpg" alt="Muety Logo" class="nav-brand-logo-img" />
+          <div class="brand-insignia">
+            <span class="brand-title">Muety</span>
+            <span class="brand-sub">SAREES FOR YOUR STORY</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="nav-right">
+        <a href="#lookbook" class="vip-cta-btn">
+          <span>Explore Lookbook</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Hero Section -->
+  <main>
+    <section class="hero-section" id="hero">
+      <div class="hero-background-glow"></div>
+
+      <div class="hero-container">
+        <!-- Top Row: Logo on Left + Offer Container near Logo on Right -->
+        <div class="hero-top-row">
+          <!-- Brand Emblem Display -->
+          <div class="emblem-wrapper animate-fade-in">
+            <div class="emblem-card">
+              <div class="emblem-glow-backdrop"></div>
+              <img src="assets/images/muety_logo.jpg" alt="Muety — Sarees For Your Story" class="official-logo-img" />
+            </div>
+          </div>
+
+          <!-- Grand Diwali Sale 50% Offer Banner (Near the Logo) -->
+          <div class="diwali-sale-card animate-slide-up">
+            <div class="diwali-offer-body">
+              <div class="diwali-pill">
+                <span class="sparkle-icon">✨</span>
+                <span>GRAND DIWALI FESTIVE SALE</span>
+                <span class="sparkle-icon">✨</span>
+              </div>
+              <h2 class="diwali-heading">
+                <span class="discount-gold-badge">FLAT 50% OFFER</span>
+                <span class="diwali-title-sub">FOR DIWALI SALE</span>
+              </h2>
+              <p class="diwali-caption">Celebrate the festival of elegance with 50% off pure silk Kanjivaram, Banarasi & handcrafted ethnic weaves on October 18 launch.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- THE COUNTDOWN CLOCK CONTAINER -->
+        <div class="countdown-wrapper animate-slide-up" id="countdown">
+          <div class="countdown-grid">
+            
+            <!-- Days -->
+            <div class="time-card" id="card-days">
+              <div class="card-glow"></div>
+              <div class="ring-container">
+                <svg class="progress-ring" viewBox="0 0 130 130" width="130" height="130">
+                  <circle class="ring-bg" stroke="rgba(212, 175, 55, 0.15)" stroke-width="5" fill="transparent" r="54" cx="65" cy="65"/>
+                  <circle class="ring-bar" id="ringDays" stroke="url(#goldGradientFill)" stroke-width="6" stroke-linecap="round" fill="transparent" r="54" cx="65" cy="65"/>
+                </svg>
+                <div class="time-number-box">
+                  <span class="time-val" id="days">00</span>
+                </div>
+              </div>
+              <div class="time-label">DAYS</div>
+              <div class="time-sublabel">Awaited Moments</div>
+            </div>
+
+            <!-- Hours -->
+            <div class="time-card" id="card-hours">
+              <div class="card-glow"></div>
+              <div class="ring-container">
+                <svg class="progress-ring" viewBox="0 0 130 130" width="130" height="130">
+                  <circle class="ring-bg" stroke="rgba(212, 175, 55, 0.15)" stroke-width="5" fill="transparent" r="54" cx="65" cy="65"/>
+                  <circle class="ring-bar" id="ringHours" stroke="url(#goldGradientFill)" stroke-width="6" stroke-linecap="round" fill="transparent" r="54" cx="65" cy="65"/>
+                </svg>
+                <div class="time-number-box">
+                  <span class="time-val" id="hours">00</span>
+                </div>
+              </div>
+              <div class="time-label">HOURS</div>
+              <div class="time-sublabel">Anticipation Builds</div>
+            </div>
+
+            <!-- Minutes -->
+            <div class="time-card" id="card-minutes">
+              <div class="card-glow"></div>
+              <div class="ring-container">
+                <svg class="progress-ring" viewBox="0 0 130 130" width="130" height="130">
+                  <circle class="ring-bg" stroke="rgba(212, 175, 55, 0.15)" stroke-width="5" fill="transparent" r="54" cx="65" cy="65"/>
+                  <circle class="ring-bar" id="ringMinutes" stroke="url(#goldGradientFill)" stroke-width="6" stroke-linecap="round" fill="transparent" r="54" cx="65" cy="65"/>
+                </svg>
+                <div class="time-number-box">
+                  <span class="time-val" id="minutes">00</span>
+                </div>
+              </div>
+              <div class="time-label">MINUTES</div>
+              <div class="time-sublabel">Crafting Perfection</div>
+            </div>
+
+            <!-- Seconds -->
+            <div class="time-card pulse-accent" id="card-seconds">
+              <div class="card-glow"></div>
+              <div class="ring-container">
+                <svg class="progress-ring" viewBox="0 0 130 130" width="130" height="130">
+                  <circle class="ring-bg" stroke="rgba(212, 175, 55, 0.15)" stroke-width="5" fill="transparent" r="54" cx="65" cy="65"/>
+                  <circle class="ring-bar" id="ringSeconds" stroke="url(#goldGradientFill)" stroke-width="6" stroke-linecap="round" fill="transparent" r="54" cx="65" cy="65"/>
+                </svg>
+                <div class="time-number-box">
+                  <span class="time-val glow-val" id="seconds">00</span>
+                </div>
+              </div>
+              <div class="time-label">SECONDS</div>
+              <div class="time-sublabel">Every Heartbeat</div>
+            </div>
+
+          </div>
+
+          <!-- SVG Gradient Definition for Rings -->
+          <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true" focusable="false">
+            <linearGradient id="goldGradientFill" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#FCEBA7" />
+              <stop offset="50%" stop-color="#D4AF37" />
+              <stop offset="100%" stop-color="#9C7514" />
+            </linearGradient>
+          </svg>
+
+          <!-- Countdown Completion Celebration Banner (Active when countdown ends or on fireworks trigger) -->
+          <div class="countdown-end-banner hidden" id="countdownEndCelebration">
+            <div class="end-fireworks-emojis">🎆 🪔 🎆</div>
+            <h3 class="end-launch-title">✨ GRAND LAUNCH IS NOW LIVE! ✨</h3>
+            <p class="end-launch-text">Muety — Sarees For Your Story has officially opened. Discover pure silk heirlooms with 50% Diwali Launch Privilege!</p>
+          </div>
+
+          <!-- Target Date Ribbon with Centered Actions & Timezone Picker -->
+          <div class="launch-meta-row">
+            <!-- Left: Launch Date Pill -->
+            <div class="launch-date-pill" id="launchDatePill">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              <span id="launchDateText">Grand Launch: <strong>Sunday, October 18, 2026 • 8:00 AM IST</strong></span>
+            </div>
+
+            <!-- Center: Add to Calendar & Audio Toggle -->
+            <div class="meta-center-actions">
+              <button class="countdown-tool-btn cal-tool-btn" id="btnCalendar" title="Add Grand Launch to Calendar">
+                <span class="tool-btn-icon">⏰</span>
+                <span>Add to Calendar</span>
+              </button>
+
+              <button class="countdown-tool-btn sound-tool-btn" id="btnSoundToggle" title="Toggle Countdown Audio Ticks">
+                <span class="tool-btn-icon" id="soundIcon">🔇</span>
+                <span id="soundLabel">Audio Off</span>
+              </button>
+            </div>
+
+            <!-- Right: Timezone Picker -->
+            <div class="timezone-picker-wrap">
+              <label for="tzSelect" class="tz-label">Timezone:</label>
+              <select id="tzSelect" class="tz-select" title="Choose display timezone">
+                <option value="IST" selected>IST (India • GMT+5:30)</option>
+                <option value="LOCAL">Local Device Timezone</option>
+                <option value="UTC">UTC / GMT</option>
+                <option value="EST">EST (US Eastern • GMT-5)</option>
+                <option value="PST">PST (US Pacific • GMT-8)</option>
+              </select>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Quick Action CTA Buttons -->
+        <div class="hero-cta-row animate-slide-up">
+          <div class="hero-cta-group">
+            <a href="#lookbook" class="btn-royal-primary">
+              <span class="btn-sparkle">✨</span>
+              <span>Explore Collection Teaser</span>
+              <span class="btn-arrow">→</span>
+            </a>
+            <a href="#drape-finder" class="btn-royal-secondary">
+              <span>Find Your Signature Drape</span>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polygon points="10 8 16 12 10 16 10 8"></polygon>
+              </svg>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Lookbook / Teaser Collection Showcase -->
+    <section class="lookbook-section" id="lookbook">
+      <div class="section-container">
+        <div class="section-header text-center">
+          <span class="sub-title">OCTOBER 18 UNVEILING</span>
+          <h2 class="section-heading">A Glimpse into the Curated Collections</h2>
+          <p class="section-subtext">Each piece is handwoven by generational master weavers across Kanchipuram, Varanasi, and Chanderi.</p>
+        </div>
+
+        <div class="collection-grid">
+          <!-- Card 1: Kanjivaram Heirlooms -->
+          <article class="collection-card">
+            <div class="card-image-wrap">
+              <img src="assets/images/kanjivaram.jpg" alt="Pure Kanjivaram Silk Saree" loading="lazy">
+              <div class="card-badge">Pure Gold Zari</div>
+              <div class="card-overlay">
+                <button class="quick-view-btn" data-collection="kanjivaram">Explore Silhouette</button>
+              </div>
+            </div>
+            <div class="card-details">
+              <span class="collection-tag">Heritage Masterpiece</span>
+              <h3 class="collection-title">The Royal Kanjivaram Heirlooms</h3>
+              <p class="collection-desc">Heavy mulberry silk woven with authentic korvai temple borders and mythological peacock motifs.</p>
+              <div class="card-footer">
+                <span class="launch-note">Launching Oct 18</span>
+                <span class="exclusive-pill">Limited Edition</span>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 2: Regal Bridal Banarasi -->
+          <article class="collection-card featured">
+            <div class="card-image-wrap">
+              <img src="assets/images/hero.jpg" alt="Regal Crimson Bridal Banarasi Saree" loading="lazy">
+              <div class="card-badge gold">Signature Debut</div>
+              <div class="card-overlay">
+                <button class="quick-view-btn" data-collection="banarasi">Explore Silhouette</button>
+              </div>
+            </div>
+            <div class="card-details">
+              <span class="collection-tag">Couture Bridal</span>
+              <h3 class="collection-title">The Crimson Empress Banarasi</h3>
+              <p class="collection-desc">Handcrafted katan silk drenched in opulent zardozi jaal work, celebrating the eternal sacred bond.</p>
+              <div class="card-footer">
+                <span class="launch-note">Launching Oct 18</span>
+                <span class="exclusive-pill">Handloom Certified</span>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 3: Festive Organza Sheen -->
+          <article class="collection-card">
+            <div class="card-image-wrap">
+              <img src="assets/images/organza.jpg" alt="Blush Pink Organza & Tissue Silk Saree" loading="lazy">
+              <div class="card-badge">Modern Grace</div>
+              <div class="card-overlay">
+                <button class="quick-view-btn" data-collection="organza">Explore Silhouette</button>
+              </div>
+            </div>
+            <div class="card-details">
+              <span class="collection-tag">Contemporary Luxe</span>
+              <h3 class="collection-title">Rose Whisper Tissue Organza</h3>
+              <p class="collection-desc">Featherlight translucent organza detailed with delicate scalloped sequin and mirror-work borders.</p>
+              <div class="card-footer">
+                <span class="launch-note">Launching Oct 18</span>
+                <span class="exclusive-pill">Festive Soiree</span>
+              </div>
+            </div>
+          </article>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Interactive Style Finder Quiz / Drape Match -->
+    <section class="quiz-section" id="drape-finder">
+      <div class="section-container">
+        <div class="quiz-card-wrapper">
+          <div class="quiz-header">
+            <span class="quiz-pill">✨ Interactive Stylist</span>
+            <h2>Find Your Signature Launch Drape</h2>
+            <p>Answer 3 quick questions to receive your tailored handloom recommendation for October 18.</p>
+          </div>
+
+          <div class="quiz-body" id="quizContainer">
+            <!-- Step 1 -->
+            <div class="quiz-step active" id="quizStep1">
+              <div class="step-indicator">Question 1 of 3: What occasion are you celebrating?</div>
+              <div class="quiz-options-grid">
+                <button class="quiz-option-btn" data-ans="wedding" onclick="selectQuizOption(1, 'wedding')">
+                  <span class="opt-emoji">👑</span>
+                  <span class="opt-title">Bridal & Grand Wedding</span>
+                  <span class="opt-sub">Opulent, majestic, heirloom prestige</span>
+                </button>
+                <button class="quiz-option-btn" data-ans="festive" onclick="selectQuizOption(1, 'festive')">
+                  <span class="opt-emoji">🪔</span>
+                  <span class="opt-title">Diwali & Festive Celebrations</span>
+                  <span class="opt-sub">Vibrant, traditional, timeless warmth</span>
+                </button>
+                <button class="quiz-option-btn" data-ans="cocktail" onclick="selectQuizOption(1, 'cocktail')">
+                  <span class="opt-emoji">🥂</span>
+                  <span class="opt-title">Evening Soirée / Reception</span>
+                  <span class="opt-sub">Modern chic, ethereal, lightweight sheen</span>
+                </button>
+                <button class="quiz-option-btn" data-ans="temple" onclick="selectQuizOption(1, 'temple')">
+                  <span class="opt-emoji">🪷</span>
+                  <span class="opt-title">Temple Visit & Sacred Puja</span>
+                  <span class="opt-sub">Pure traditional weaves, serene elegance</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="quiz-step" id="quizStep2">
+              <div class="step-indicator">Question 2 of 3: Which drape feel do you prefer?</div>
+              <div class="quiz-options-grid">
+                <button class="quiz-option-btn" data-ans="heavy" onclick="selectQuizOption(2, 'heavy')">
+                  <span class="opt-emoji">🏛️</span>
+                  <span class="opt-title">Rich, Structured & Substantial</span>
+                  <span class="opt-sub">Pure heavyweight silk with heavy zari pallu</span>
+                </button>
+                <button class="quiz-option-btn" data-ans="flowy" onclick="selectQuizOption(2, 'flowy')">
+                  <span class="opt-emoji">🕊️</span>
+                  <span class="opt-title">Soft, Flowy & Graceful</span>
+                  <span class="opt-sub">Buttery soft silks that drape naturally</span>
+                </button>
+                <button class="quiz-option-btn" data-ans="crisp" onclick="selectQuizOption(2, 'crisp')">
+                  <span class="opt-emoji">✨</span>
+                  <span class="opt-title">Lightweight, Crisp & Shimmering</span>
+                  <span class="opt-sub">Organza, tissue silk with delicate shimmer</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="quiz-step" id="quizStep3">
+              <div class="step-indicator">Question 3 of 3: Choose your dream color mood:</div>
+              <div class="quiz-options-grid">
+                <button class="quiz-option-btn" data-ans="royal_red" onclick="selectQuizOption(3, 'royal_red')">
+                  <span class="color-dot" style="background:#8E1633;"></span>
+                  <span class="opt-title">Regal Crimson & Maroon</span>
+                  <span class="opt-sub">Classic Indian royal hue</span>
+                </button>
+                <button class="quiz-option-btn" data-ans="emerald" onclick="selectQuizOption(3, 'emerald')">
+                  <span class="color-dot" style="background:#0F5238;"></span>
+                  <span class="opt-title">Emerald Green & Peacock Blue</span>
+                  <span class="opt-sub">Jewel-toned grandeur</span>
+                </button>
+                <button class="quiz-option-btn" data-ans="pastels" onclick="selectQuizOption(3, 'pastels')">
+                  <span class="color-dot" style="background:#E8B4B8;"></span>
+                  <span class="opt-title">Blush Rose & Champange Gold</span>
+                  <span class="opt-sub">Subtle modern luxury</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Result Box -->
+            <div class="quiz-result hidden" id="quizResult">
+              <div class="result-badge">✨ YOUR PERFECT DRAPE MATCH ✨</div>
+              <h3 class="result-title" id="resultTitle">The Imperial Kanjivaram Heirloom</h3>
+              <p class="result-desc" id="resultDesc">Based on your love for royal occasions and structured grandeur, our upcoming crimson and emerald pure gold zari collection is crafted especially for you.</p>
+              <div class="result-actions">
+                <a href="#lookbook" class="btn-royal-primary">Explore Handloom Collection</a>
+                <button class="btn-text-restart" onclick="restartQuiz()">↺ Retake Style Match</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Brand Heritage Pillars -->
+    <section class="pillars-section" id="pillars">
+      <div class="section-container">
+        <div class="pillars-grid">
+          <div class="pillar-box">
+            <div class="pillar-icon">🪡</div>
+            <h3>100% Authentic Handloom</h3>
+            <p>Every saree is certified with genuine Silk Mark standards and hand-woven by generational masters.</p>
+          </div>
+          <div class="pillar-box">
+            <div class="pillar-icon">⚜️</div>
+            <h3>Pure Gold & Silver Zari</h3>
+            <p>Tested real zari threads woven into motifs that endure as family heirlooms across decades.</p>
+          </div>
+          <div class="pillar-box">
+            <div class="pillar-icon">🌿</div>
+            <h3>Direct Artisan Guilds</h3>
+            <p>Empowering 250+ weaving families directly with fair wages and ethical craft preservation.</p>
+          </div>
+          <div class="pillar-box">
+            <div class="pillar-icon">🎀</div>
+            <h3>Complimentary Finishing</h3>
+            <p>Every saree arrives ready-to-wear with hand-sewn fall, pico borders, and customized tasseling.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Newsletter Signup Section -->
+    <section class="newsletter-section" id="newsletter">
+      <div class="section-container">
+        <div class="newsletter-card">
+          <div class="newsletter-header text-center">
+            <span class="sub-title">STAY CONNECTED</span>
+            <h2 class="newsletter-heading">Sign Up to Newsletter</h2>
+            <p class="newsletter-description">Subscribe for store updates and discounts.</p>
+          </div>
+
+          <form id="newsletterForm" class="newsletter-form" novalidate>
+            <div class="newsletter-input-group">
+              <label for="newsletterEmail" class="sr-only">Email address</label>
+              <input 
+                type="email" 
+                id="newsletterEmail" 
+                name="email" 
+                class="newsletter-input" 
+                placeholder="Enter your email..." 
+                aria-label="Email address"
+                required
+                autocomplete="email"
+              >
+              <button type="submit" id="newsletterSubmitBtn" class="newsletter-submit-btn">
+                <span>Sign Up</span>
+              </button>
+            </div>
+
+            <div id="newsletterStatus" class="newsletter-status-msg" aria-live="polite" role="status"></div>
+
+            <p class="newsletter-consent">
+              By entering the e-mail you accept the <a href="/terms-and-conditions" target="_blank" class="legal-inline-link">terms and conditions</a> and the <a href="/privacy-policy" target="_blank" class="legal-inline-link">privacy policy</a>.
+            </p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Lookbook Quick View Modal -->
+  <div class="modal-overlay hidden" id="lookbookModal">
+    <div class="modal-container modal-lookbook">
+      <button class="modal-close-btn" id="closeLookbookModal">✕</button>
+      <div class="lookbook-modal-content" id="lookbookModalDetails">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Add to Calendar Modal -->
+  <div class="modal-overlay hidden" id="calendarModal">
+    <div class="modal-container modal-calendar">
+      <button class="modal-close-btn" id="closeCalendarModal">✕</button>
+      <div class="modal-header-box">
+        <span class="modal-badge">⏰ Reminder</span>
+        <h3 class="modal-title">Add Muety Grand Launch to Calendar</h3>
+        <p class="modal-subtitle">Ensure you don't miss flat 50% Diwali discount & exclusive pure silk handloom unveils on Oct 18, 2026.</p>
+      </div>
+      <div class="calendar-options-grid">
+        <button class="cal-option-card" id="btnDownloadIcs">
+          <div class="cal-card-icon">📅</div>
+          <div class="cal-card-text">
+            <strong>Download iCal / Outlook (.ics)</strong>
+            <span>Compatible with Apple Calendar, Outlook, Thunderbird</span>
+          </div>
+        </button>
+        <button class="cal-option-card" id="btnGoogleCalendar">
+          <div class="cal-card-icon">🌐</div>
+          <div class="cal-card-text">
+            <strong>Google Calendar</strong>
+            <span>Add directly to your Google Calendar account</span>
+          </div>
+        </button>
+      </div>
+  </div>
+
+  <!-- Store Fallback Notice Modal (Shown if store transition fails after launch) -->
+  <div class="modal-overlay hidden" id="storeFallbackOverlay">
+    <div class="modal-container text-center" style="max-width: 480px; padding: 40px 24px; text-align: center;">
+      <img src="assets/images/muety_logo.jpg" alt="Muety Emblem" style="width: 70px; height: 70px; border-radius: 50%; margin: 0 auto 16px; border: 2px solid #D4AF37;">
+      <h2 style="font-family: 'Cinzel', serif; font-size: 2rem; color: #FCEBA7; margin-bottom: 12px; letter-spacing: 0.05em;">MUETY</h2>
+      <p style="font-size: 1.1rem; color: #E8D8C5; margin-bottom: 24px; line-height: 1.5;">Our collection is opening. Please refresh shortly.</p>
+      <button onclick="window.location.reload()" class="btn-royal-primary" style="margin: 0 auto; display: inline-flex; cursor: pointer;">
+        <span>Refresh Page</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-grid">
+        <!-- Column 1: MUETY Brand -->
+        <div class="footer-col footer-col-brand">
+          <div class="footer-brand-header">
+            <img src="assets/images/muety_logo.jpg" alt="Muety Emblem" class="footer-logo-img">
+            <div class="footer-brand-titles">
+              <h3 class="footer-brand-title">MUETY</h3>
+              <span class="footer-brand-sub">Sarees For Your Story</span>
+            </div>
+          </div>
+          <p class="footer-brand-desc">Crafted with reverence for Indian heritage.</p>
+        </div>
+
+        <!-- Column 2: CUSTOMER / LEGAL -->
+        <div class="footer-col footer-col-legal">
+          <h4 class="footer-col-title">CUSTOMER / LEGAL</h4>
+          <ul class="footer-links-list">
+            <li><a href="/terms-and-conditions" class="footer-link">Terms & Conditions</a></li>
+            <li><a href="/privacy-policy" class="footer-link">Privacy Policy</a></li>
+          </ul>
+        </div>
+
+        <!-- Column 3: CONTACT -->
+        <div class="footer-col footer-col-contact">
+          <h4 class="footer-col-title">CONTACT</h4>
+          <ul class="footer-contact-list">
+            <li>
+              <span class="contact-label">Support</span>
+              <a href="mailto:support@muety.in" class="footer-link">support@muety.in</a>
+            </li>
+            <li>
+              <span class="contact-label">Orders</span>
+              <a href="mailto:orders@muety.in" class="footer-link">orders@muety.in</a>
+            </li>
+            <li>
+              <span class="contact-label">Phone</span>
+              <a href="tel:+919385791540" class="footer-link">+91 93857 91540</a>
+            </li>
+            <li>
+              <span class="contact-label">WhatsApp</span>
+              <a href="https://wa.me/919940668095" target="_blank" rel="noopener noreferrer" class="footer-link">+91 99406 68095</a>
+            </li>
+            <li>
+              <span class="contact-label">Instagram</span>
+              <a href="https://instagram.com/Themuety" target="_blank" rel="noopener noreferrer" class="footer-link">@Themuety</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="footer-bottom-container">
+        <p>© 2026 Muety™. All Rights Reserved. Crafted with reverence for Indian heritage.</p>
+        <div class="footer-badges">
+          <span>🌿 Handcrafted in India</span>
+          <span>•</span>
+          <span>⚜️ Silk Mark Certified</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Canvas Confetti Library (Lightweight inline wrapper for celebration) -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- Application Logic -->
+  <script src="script.js"></script>
+</body>
+</html>

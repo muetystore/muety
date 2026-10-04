@@ -329,6 +329,117 @@ describe('MUETY Security & Authorization Matrix Integration Tests', () => {
       expect(delRes.success).toBe(true);
       expect(delRes.deleted).toHaveProperty('muety/products/prod_1/image_1');
     });
+
+    it('processes HTTP requests via handleCloudinaryApiRequest server router with 401, 403, 400, 405, 404 and 200 responses', async () => {
+      const { handleCloudinaryApiRequest } = await import('../../server/index');
+      const EventEmitter = (await import('events')).EventEmitter;
+
+      const runHttpTest = async (options: { method: string; url: string; headers?: Record<string, string>; body?: any }) => {
+        const req: any = new EventEmitter();
+        req.method = options.method;
+        req.url = options.url;
+        req.headers = options.headers || {};
+
+        let resData = '';
+        const resHeaders: Record<string, string> = {};
+        const res: any = {
+          req,
+          statusCode: 200,
+          setHeader: (k: string, v: string) => { resHeaders[k.toLowerCase()] = v; },
+          end: (chunk?: string) => { if (chunk) resData += chunk; }
+        };
+
+        const handledPromise = handleCloudinaryApiRequest(req, res);
+
+        if (options.body !== undefined) {
+          req.emit('data', Buffer.from(JSON.stringify(options.body)));
+        }
+        req.emit('end');
+
+        const handled = await handledPromise;
+        let parsedBody: any = null;
+        try {
+          if (resData) parsedBody = JSON.parse(resData);
+        } catch {}
+
+        return { handled, statusCode: res.statusCode, headers: resHeaders, body: parsedBody };
+      };
+
+      // 401 Unauthenticated Sign
+      const unauthSign = await runHttpTest({
+        method: 'POST',
+        url: '/api/cloudinary/sign',
+        headers: { 'content-type': 'application/json' },
+        body: { folder: 'muety/products/test' }
+      });
+      expect(unauthSign.handled).toBe(true);
+      expect(unauthSign.statusCode).toBe(401);
+      expect(unauthSign.body.success).toBe(false);
+      expect(unauthSign.body.error.code).toBe('UNAUTHENTICATED');
+
+      // 403 Unauthorized Role Sign
+      const forbiddenSign = await runHttpTest({
+        method: 'POST',
+        url: '/api/cloudinary/sign',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer test_mock_unauthorized_token' },
+        body: { folder: 'muety/products/test' }
+      });
+      expect(forbiddenSign.statusCode).toBe(403);
+      expect(forbiddenSign.body.success).toBe(false);
+      expect(forbiddenSign.body.error.code).toBe('PERMISSION_DENIED');
+
+      // 200 Allowed Admin Role Sign
+      const okSign = await runHttpTest({
+        method: 'POST',
+        url: '/api/cloudinary/sign',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer test_mock_token' },
+        body: { folder: 'muety/products/test_prod' }
+      });
+      expect(okSign.statusCode).toBe(200);
+      expect(okSign.body.success).toBe(true);
+      expect(okSign.body.signature).toBeTruthy();
+      expect(okSign.body.apiKey).toBeTruthy();
+      expect(okSign.body.apiSecret).toBeUndefined();
+
+      // 400 Bad Input Delete
+      const badInputDel = await runHttpTest({
+        method: 'POST',
+        url: '/api/cloudinary/delete',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer test_mock_token' },
+        body: { publicIds: 'invalid_not_an_array' }
+      });
+      expect(badInputDel.statusCode).toBe(400);
+      expect(badInputDel.body.error.code).toBe('INVALID_ARGUMENT');
+
+      // 200 Allowed Admin Role Delete
+      const okDel = await runHttpTest({
+        method: 'POST',
+        url: '/api/cloudinary/delete',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer test_mock_token' },
+        body: { publicIds: ['muety/products/test_prod/img1'] }
+      });
+      expect(okDel.statusCode).toBe(200);
+      expect(okDel.body.success).toBe(true);
+      expect(okDel.body.deleted).toHaveProperty('muety/products/test_prod/img1');
+
+      // 405 Method Not Allowed
+      const getMethod = await runHttpTest({
+        method: 'GET',
+        url: '/api/cloudinary/sign',
+        headers: { 'content-type': 'application/json' }
+      });
+      expect(getMethod.statusCode).toBe(405);
+      expect(getMethod.body.error.code).toBe('METHOD_NOT_ALLOWED');
+
+      // 404 Not Found
+      const notFound = await runHttpTest({
+        method: 'POST',
+        url: '/api/cloudinary/unknown',
+        headers: { 'content-type': 'application/json' }
+      });
+      expect(notFound.statusCode).toBe(404);
+      expect(notFound.body.error.code).toBe('NOT_FOUND');
+    });
   });
 
 });

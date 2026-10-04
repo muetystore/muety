@@ -30,8 +30,8 @@ export const Footer: React.FC = () => {
                 <Truck size={24} />
               </div>
               <div>
-                <h6 style={{ color: '#ffffff', fontSize: '0.95rem', fontWeight: 600 }}>Complimentary Express</h6>
-                <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Free worldwide express on orders over ₹2,000</p>
+                <h6 style={{ color: '#ffffff', fontSize: '0.95rem', fontWeight: 600 }}>Insured Express Delivery</h6>
+                <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Flat-rate insured delivery across India (₹100)</p>
               </div>
             </div>
 
@@ -91,15 +91,15 @@ export const Footer: React.FC = () => {
             <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem', color: '#cbd5e1' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <MapPin size={16} color="#d4af37" />
-                <span>2/32 Ramireddypatti, Salem, Tamil Nadu, 636501</span>
+                <span>2/32B Ramireddypatti, Palikadu, Salem – 636501</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Phone size={16} color="#d4af37" />
-                <span>+91 9385791540</span>
+                <span>+91 9385791540 / WhatsApp: 9940668095</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Mail size={16} color="#d4af37" />
-                <span>muetystore@gmail.com</span>
+                <span>support@muety.in | orders@muety.in</span>
               </div>
             </div>
           </div>
@@ -111,12 +111,12 @@ export const Footer: React.FC = () => {
             <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.9rem', color: '#94a3b8' }}>
               <li>
                 <Link to="/about" style={{ transition: 'color var(--transition-fast)' }} onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
-                  About MUETY
+                  About MUETY & Leadership
                 </Link>
               </li>
               <li>
                 <Link to="/contact" style={{ transition: 'color var(--transition-fast)' }} onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
-                  Contact
+                  Contact Concierge
                 </Link>
               </li>
               <li>
@@ -126,7 +126,7 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <Link to="/categories" style={{ transition: 'color var(--transition-fast)' }} onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
-                  Categories
+                  Saree Categories
                 </Link>
               </li>
             </ul>
@@ -155,6 +155,11 @@ export const Footer: React.FC = () => {
               <li>
                 <Link to="/terms-conditions" style={{ transition: 'color var(--transition-fast)' }} onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
                   Terms & Conditions
+                </Link>
+              </li>
+              <li>
+                <Link to="/shipping-policy" style={{ transition: 'color var(--transition-fast)' }} onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
+                  Return, Refund & Cancellation Policy
                 </Link>
               </li>
             </ul>

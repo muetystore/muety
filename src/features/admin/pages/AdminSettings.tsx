@@ -1,406 +1,358 @@
 import React, { useState, useEffect } from 'react';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { storageService } from '@/lib/storage/storageService';
+import { auditService } from '@/shared/services/auditService';
+import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
-import { isLiveFirebase, firebaseConfig, db } from '@/lib/firebase/firebase';
+import { isLiveFirebase, db } from '@/lib/firebase/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { razorpayService } from '@/lib/payments/razorpayService';
-import { productService } from '@/features/catalog/services/productService';
-import { orderService } from '@/features/orders/services/orderService';
-import { customerService } from '@/features/customers/services/customerService';
-import { couponService } from '@/features/coupons/services/couponService';
 import { StoreSettings } from '@/shared/types';
+import { getUserRoles } from '@/shared/utils/permissions';
 import { 
-  Globe, 
-  DollarSign, 
-  Megaphone, 
+  Building2, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Truck, 
   ShieldCheck, 
-  Database, 
-  CreditCard, 
-  Zap, 
-  Key, 
   RefreshCw, 
   Save, 
-  RotateCcw 
+  Megaphone, 
+  CreditCard, 
+  FileText
 } from 'lucide-react';
 
 export const AdminSettings: React.FC = () => {
-  useDocumentTitle('MUETY Admin | Settings');
+  useDocumentTitle('Store Settings & ERP Config');
+  const { user } = useAuth();
   const { success, error: notifyError } = useNotification();
 
-  const [settings, setSettings] = useState<StoreSettings>(() => storageService.getSettings());
-  const [razorpayKey, setRazorpayKey] = useState<string>(() => razorpayService.getKeyId());
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [settings, setSettings] = useState<StoreSettings>(() => {
+    const s = storageService.getSettings();
+    return {
+      storeName: s.storeName || 'MUETY',
+      legalBusinessName: (s as any).legalBusinessName || 'muety',
+      gstin: (s as any).gstin || '33HFCPR2838F2ZD',
+      tagline: s.tagline || 'Sarees for Your Story',
+      contactEmail: (s as any).contactEmail || 'support@muety.in',
+      ordersEmail: (s as any).ordersEmail || 'orders@muety.in',
+      contactPhone: (s as any).contactPhone || '9385791540',
+      whatsappPhone: (s as any).whatsappPhone || '9940668095',
+      instagramHandle: (s as any).instagramHandle || '@Themuety',
+      registeredAddress: (s as any).registeredAddress || {
+        buildingNo: '2/32B',
+        street: 'Ramireddypatti, Palikadu',
+        city: 'Salem',
+        state: 'Tamil Nadu',
+        postalCode: '636501',
+        country: 'India'
+      },
+      currency: 'INR',
+      currencySymbol: '₹',
+      taxRate: s.taxRate || 5,
+      freeShippingThreshold: s.freeShippingThreshold || 2000,
+      standardShippingFee: s.standardShippingFee || 100,
+      expressShippingFee: s.expressShippingFee || 250,
+      shippingCountry: (s as any).shippingCountry || 'India',
+      policy: (s as any).policy || {
+        returnsAccepted: false,
+        refundsOffered: false,
+        cancellationsOffered: false,
+        disclaimerText: 'Orders are non-returnable, non-refundable, and non-cancellable, subject to mandatory consumer protection laws.'
+      },
+      announcementBanner: s.announcementBanner || {
+        enabled: true,
+        text: 'Complimentary Pan-India Express Delivery on orders over ₹2,000'
+      }
+    };
+  });
+
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (db) {
-      getDoc(doc(db, 'settings', 'store_settings')).then(snap => {
+    if (db && isLiveFirebase) {
+      getDoc(doc(db, 'storeSettings', 'config')).then(snap => {
         if (snap.exists()) {
-          const cloudSettings = snap.data() as StoreSettings;
-          setSettings(cloudSettings);
-          storageService.saveSettings(cloudSettings);
+          const cloud = snap.data() as StoreSettings;
+          setSettings(prev => ({ ...prev, ...cloud }));
         }
       }).catch(() => {});
     }
   }, []);
 
-  const handleChange = (field: keyof StoreSettings, val: any) => {
-    setSettings(prev => ({ ...prev, [field]: val }));
-  };
-
-  const handleBannerChange = (field: string, val: any) => {
-    setSettings(prev => ({
-      ...prev,
-      announcementBanner: {
-        ...prev.announcementBanner,
-        [field]: val
-      }
-    }));
-  };
-
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    storageService.saveSettings(settings);
-    if (razorpayKey.trim()) {
-      razorpayService.setKeyId(razorpayKey.trim());
-    }
+    setIsSaving(true);
 
-    if (db) {
-      try {
-        await setDoc(doc(db, 'settings', 'store_settings'), settings, { merge: true });
-        console.log('MUETY Cloud: Store settings saved to Firestore doc "settings/store_settings"');
-      } catch (err) {
-        console.warn('Firestore settings save warning:', err);
-      }
-    }
-
-    success('MUETY Store settings and Razorpay configuration saved to Cloud Firebase.', 'Configuration Updated');
-  };
-
-  const handleSyncAllToFirebase = async () => {
-    if (!db) {
-      notifyError('Firebase database connection is not initialized. Check your credentials in .env');
-      return;
-    }
-
-    setIsSyncing(true);
     try {
-      // 1. Sync Settings
-      await setDoc(doc(db, 'settings', 'store_settings'), settings, { merge: true });
+      storageService.saveSettings(settings);
 
-      // 2. Sync Products
-      const prodRes = await productService.syncAllToFirebase();
+      if (db && isLiveFirebase) {
+        await setDoc(doc(db, 'storeSettings', 'config'), settings, { merge: true });
+        await setDoc(doc(db, 'settings', 'store_settings'), settings, { merge: true });
+      }
 
-      // 3. Sync Categories
-      const catRes = await productService.pushAllCategoriesToFirestore();
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'admin',
+        actorRole: getUserRoles(user)[0] || 'admin',
+        action: 'SETTINGS_UPDATED',
+        entityType: 'SETTINGS',
+        entityId: 'storeSettings/config',
+        reason: 'Updated store business info, GSTIN, and policy configurations'
+      });
 
-      // 4. Sync Customers
-      const custRes = await customerService.pushAllCustomersToFirestore();
-
-      // 5. Sync Coupons
-      const coupRes = await couponService.pushAllCouponsToFirestore();
-
-      // 6. Sync Orders
-      const ordRes = await orderService.pushAllOrdersToFirestore();
-
-      success(
-        `Firebase Cloud Database Synchronized! Pushed ${prodRes.count} products, ${catRes.count} categories, ${custRes.count} patrons, ${coupRes.count} coupons, and ${ordRes.count} orders.`,
-        'Database Sync Complete'
-      );
+      success('MUETY Store ERP settings saved and synced with Cloud Firestore!');
     } catch (err: any) {
-      notifyError(`Firebase sync error: ${err?.message || err}`, 'Sync Failed');
+      notifyError(err?.message || 'Failed to save store settings.');
     } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleResetDemoData = () => {
-    if (window.confirm('Reset catalog, orders, and users back to initial factory demo seed state?')) {
-      storageService.resetToSeedData();
+      setIsSaving(false);
     }
   };
 
   return (
     <div className="admin-settings animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem', paddingBottom: '4rem' }}>
       
-      <div>
-        <h1 style={{ fontSize: '1.8rem', color: 'var(--brand-primary)' }}>Store Configuration & Branding</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          Global parameters, tax policies, shipping thresholds, and Firebase security status.
-        </p>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--brand-primary)', margin: 0, fontFamily: 'var(--font-heading)' }}>
+            Store Configuration & Business Registry
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '4px 0 0' }}>
+            Official business entity details, GSTIN, registered address, and customer policy declarations.
+          </p>
+        </div>
+
+        <button 
+          type="submit" 
+          form="store-settings-form"
+          className="btn btn-primary" 
+          disabled={isSaving}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}
+        >
+          <Save size={18} />
+          <span>{isSaving ? 'Saving Config...' : 'Save Settings'}</span>
+        </button>
       </div>
 
-      <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: '850px' }}>
+      <form id="store-settings-form" onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         
-        {/* 1. Brand Identity */}
+        {/* Section 1: Business Entity & Tax Identity */}
         <div className="card" style={{ padding: '2rem' }}>
-          <h3 style={{ fontSize: '1.2rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Globe size={18} color="var(--brand-accent)" />
-            Brand Identity & Concierge
+          <h3 style={{ fontSize: '1.25rem', color: 'var(--brand-primary)', margin: '0 0 1.25rem', fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Building2 size={22} color="var(--brand-accent)" /> Legal Business Entity & GSTIN
           </h3>
 
-          <div className="grid-2">
-            <div className="form-group">
-              <label className="form-label">Store Brand Name (Strict)</label>
+          <div className="grid-2" style={{ gap: '1.25rem' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Legal Business Name *</label>
               <input 
                 type="text" 
                 required 
-                value={settings.storeName} 
-                onChange={e => handleChange('storeName', e.target.value)} 
+                value={settings.legalBusinessName} 
+                onChange={e => setSettings({ ...settings, legalBusinessName: e.target.value })} 
                 className="form-input" 
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">GSTIN Registration Number *</label>
+              <input 
+                type="text" 
+                required 
+                value={settings.gstin} 
+                onChange={e => setSettings({ ...settings, gstin: e.target.value })} 
+                className="form-input" 
+                style={{ fontFamily: 'monospace', fontWeight: 700 }}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Brand Display Name</label>
+              <input 
+                type="text" 
+                value={settings.storeName} 
+                onChange={e => setSettings({ ...settings, storeName: e.target.value })} 
+                className="form-input" 
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Brand Tagline</label>
               <input 
                 type="text" 
                 value={settings.tagline} 
-                onChange={e => handleChange('tagline', e.target.value)} 
+                onChange={e => setSettings({ ...settings, tagline: e.target.value })} 
                 className="form-input" 
               />
             </div>
           </div>
+        </div>
 
-          <div className="grid-2">
-            <div className="form-group">
-              <label className="form-label">Concierge Email</label>
+        {/* Section 2: Contact Channels & Support Emails */}
+        <div className="card" style={{ padding: '2rem' }}>
+          <h3 style={{ fontSize: '1.25rem', color: 'var(--brand-primary)', margin: '0 0 1.25rem', fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Mail size={22} color="var(--brand-accent)" /> Official Support & Contact Channels
+          </h3>
+
+          <div className="grid-2" style={{ gap: '1.25rem' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Customer Support Email *</label>
               <input 
                 type="email" 
                 required 
                 value={settings.contactEmail} 
-                onChange={e => handleChange('contactEmail', e.target.value)} 
+                onChange={e => setSettings({ ...settings, contactEmail: e.target.value })} 
                 className="form-input" 
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Concierge Phone</label>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Orders Dispatch Email *</label>
               <input 
-                type="text" 
+                type="email" 
+                required 
+                value={settings.ordersEmail} 
+                onChange={e => setSettings({ ...settings, ordersEmail: e.target.value })} 
+                className="form-input" 
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Direct Phone Line *</label>
+              <input 
+                type="tel" 
+                required 
                 value={settings.contactPhone} 
-                onChange={e => handleChange('contactPhone', e.target.value)} 
-                className="form-input" 
-              />
-            </div>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Flagship Showroom Address</label>
-            <input 
-              type="text" 
-              value={settings.address} 
-              onChange={e => handleChange('address', e.target.value)} 
-              className="form-input" 
-            />
-          </div>
-        </div>
-
-        {/* 2. Financial & Shipping Rules */}
-        <div className="card" style={{ padding: '2rem' }}>
-          <h3 style={{ fontSize: '1.2rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <DollarSign size={18} color="var(--brand-accent)" />
-            Currency, Tax & Logistics Policies
-          </h3>
-
-          <div className="grid-3">
-            <div className="form-group">
-              <label className="form-label">Currency Symbol</label>
-              <input 
-                type="text" 
-                value={settings.currencySymbol} 
-                onChange={e => handleChange('currencySymbol', e.target.value)} 
-                className="form-input" 
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Sales Tax Rate (%)</label>
-              <input 
-                type="number" 
-                step="0.1" 
-                value={settings.taxRate} 
-                onChange={e => handleChange('taxRate', Number(e.target.value))} 
-                className="form-input" 
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Free Shipping Threshold (₹)</label>
-              <input 
-                type="number" 
-                value={settings.freeShippingThreshold} 
-                onChange={e => handleChange('freeShippingThreshold', Number(e.target.value))} 
-                className="form-input" 
-              />
-            </div>
-          </div>
-
-          <div className="grid-2">
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Standard Express Shipping Fee (₹)</label>
-              <input 
-                type="number" 
-                value={settings.standardShippingFee} 
-                onChange={e => handleChange('standardShippingFee', Number(e.target.value))} 
+                onChange={e => setSettings({ ...settings, contactPhone: e.target.value })} 
                 className="form-input" 
               />
             </div>
 
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Priority Overnight Delivery Fee (₹)</label>
+              <label className="form-label">WhatsApp Concierge Phone *</label>
               <input 
-                type="number" 
-                value={settings.expressShippingFee} 
-                onChange={e => handleChange('expressShippingFee', Number(e.target.value))} 
+                type="tel" 
+                required 
+                value={settings.whatsappPhone} 
+                onChange={e => setSettings({ ...settings, whatsappPhone: e.target.value })} 
                 className="form-input" 
               />
             </div>
-          </div>
-        </div>
 
-        {/* 3. Top Promotional Announcement Banner */}
-        <div className="card" style={{ padding: '2rem' }}>
-          <h3 style={{ fontSize: '1.2rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Megaphone size={18} color="var(--brand-accent)" />
-            Top Announcement Bar
-          </h3>
-
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600 }}>
-              <input 
-                type="checkbox" 
-                checked={settings.announcementBanner.enabled} 
-                onChange={e => handleBannerChange('enabled', e.target.checked)} 
-                style={{ width: '18px', height: '18px', accentColor: '#0f172a' }} 
-              />
-              Display Announcement Banner across Customer Storefront
-            </label>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Announcement Banner Text</label>
-            <input 
-              type="text" 
-              value={settings.announcementBanner.text} 
-              onChange={e => handleBannerChange('text', e.target.value)} 
-              className="form-input" 
-            />
-          </div>
-        </div>
-
-        {/* 4. Razorpay Payment Gateway Configuration */}
-        <div className="card" style={{ padding: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '8px' }}>
-            <h3 style={{ fontSize: '1.2rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Zap size={18} color="#2563eb" />
-              Razorpay Payment Gateway Integration
-            </h3>
-            <span className="badge badge-gold" style={{ fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <CreditCard size={12} /> UPI • CARDS • NETBANKING • WALLETS
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Key size={14} color="var(--brand-muted)" />
-                Razorpay Key ID (Test or Live)
-              </label>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Instagram Handle</label>
               <input 
                 type="text" 
-                value={razorpayKey} 
-                onChange={e => setRazorpayKey(e.target.value)} 
-                placeholder="e.g. rzp_test_yourTestKeyHere or rzp_live_yourLiveKeyHere"
+                value={settings.instagramHandle} 
+                onChange={e => setSettings({ ...settings, instagramHandle: e.target.value })} 
                 className="form-input" 
-                style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}
               />
-              <span style={{ fontSize: '0.78rem', color: 'var(--brand-muted)', marginTop: '4px', display: 'block' }}>
-                Find your Key ID in the <a href="https://dashboard.razorpay.com/#/app/keys" target="_blank" rel="noreferrer" style={{ color: '#2563eb', textDecoration: 'underline' }}>Razorpay Dashboard</a>. You can also define it in your <code>.env</code> file via <code>VITE_RAZORPAY_KEY_ID</code>.
-              </span>
-            </div>
-
-            <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 'var(--radius-md)', padding: '12px 16px', fontSize: '0.82rem', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ShieldCheck size={18} color="#2563eb" style={{ flexShrink: 0 }} />
-              <div>
-                <strong>Active Channels:</strong> Instant UPI (GPay, PhonePe, Paytm), Visa/MasterCard/RuPay, 50+ NetBanking Institutions, and Digital Wallets.
-              </div>
             </div>
           </div>
         </div>
 
-        {/* 5. Firebase Architecture & Security Status */}
+        {/* Section 3: Registered Address */}
         <div className="card" style={{ padding: '2rem' }}>
-          <h3 style={{ fontSize: '1.2rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Database size={18} color="var(--brand-accent)" />
-            Firebase Security & Engine State
+          <h3 style={{ fontSize: '1.25rem', color: 'var(--brand-primary)', margin: '0 0 1.25rem', fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MapPin size={22} color="var(--brand-accent)" /> Registered Atelier Office Address
           </h3>
 
-          <div style={{
-            backgroundColor: 'var(--bg-main)',
-            padding: '1.25rem',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--brand-border)',
-            fontSize: '0.88rem',
-            lineHeight: 1.6
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <span className={`badge badge-${isLiveFirebase ? 'success' : 'gold'}`}>
-                {isLiveFirebase ? 'CLOUD DATABASE ONLINE' : 'LOCAL DATABASE ACTIVE'}
-              </span>
-            </div>
-            <div><strong>Project ID:</strong> {firebaseConfig.projectId}</div>
-            <div><strong>Auth Domain:</strong> {firebaseConfig.authDomain}</div>
-            <div><strong>Admin Role Guard:</strong> <span style={{ color: '#10b981', fontWeight: 700 }}>role: "admin" enforced</span></div>
-            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--brand-border)' }}>
-              <strong>Connected Firestore Collections:</strong>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
-                {['products', 'categories', 'orders', 'users', 'coupons', 'settings'].map(col => (
-                  <span key={col} className="badge badge-dark" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                    ✓ {col}
-                  </span>
-                ))}
-              </div>
+          <div className="grid-2" style={{ gap: '1.25rem' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Building / Flat / Door No. *</label>
+              <input 
+                type="text" 
+                required 
+                value={settings.registeredAddress.buildingNo} 
+                onChange={e => setSettings({ ...settings, registeredAddress: { ...settings.registeredAddress, buildingNo: e.target.value } })} 
+                className="form-input" 
+              />
             </div>
 
-            <div style={{ marginTop: '1.25rem', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={handleSyncAllToFirebase}
-                disabled={isSyncing}
-                className="btn btn-accent btn-sm"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontWeight: 700
-                }}
-              >
-                <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }} />
-                <span>{isSyncing ? 'Syncing to Firebase...' : 'Push All Local Data to Firebase Cloud'}</span>
-              </button>
-              <span style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>
-                Uploads all products, categories, coupons, patrons & orders into Firestore.
-              </span>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Road / Street / Village *</label>
+              <input 
+                type="text" 
+                required 
+                value={settings.registeredAddress.street} 
+                onChange={e => setSettings({ ...settings, registeredAddress: { ...settings.registeredAddress, street: e.target.value } })} 
+                className="form-input" 
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">City *</label>
+              <input 
+                type="text" 
+                required 
+                value={settings.registeredAddress.city} 
+                onChange={e => setSettings({ ...settings, registeredAddress: { ...settings.registeredAddress, city: e.target.value } })} 
+                className="form-input" 
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">State & Postal Code *</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input 
+                  type="text" 
+                  required 
+                  value={settings.registeredAddress.state} 
+                  onChange={e => setSettings({ ...settings, registeredAddress: { ...settings.registeredAddress, state: e.target.value } })} 
+                  className="form-input" 
+                  style={{ flex: 1 }}
+                />
+                <input 
+                  type="text" 
+                  required 
+                  value={settings.registeredAddress.postalCode} 
+                  onChange={e => setSettings({ ...settings, registeredAddress: { ...settings.registeredAddress, postalCode: e.target.value } })} 
+                  className="form-input" 
+                  style={{ width: '120px' }}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          <button type="submit" className="btn btn-primary btn-lg">
-            <Save size={18} /> Save MUETY Settings
-          </button>
+        {/* Section 4: Shipping & Policy Declarations */}
+        <div className="card" style={{ padding: '2rem' }}>
+          <h3 style={{ fontSize: '1.25rem', color: 'var(--brand-primary)', margin: '0 0 1.25rem', fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Truck size={22} color="var(--brand-accent)" /> Shipping & Customer Policy Declarations
+          </h3>
 
-          <button 
-            type="button" 
-            onClick={handleResetDemoData} 
-            className="btn btn-outline"
-            style={{ color: '#ef4444', borderColor: '#fca5a5' }}
-          >
-            <RotateCcw size={16} /> Reset All Database to Factory Seed
-          </button>
+          <div className="grid-3" style={{ gap: '1.25rem', marginBottom: '1.5rem' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Shipping Coverage Region</label>
+              <input type="text" value={settings.shippingCountry} onChange={e => setSettings({ ...settings, shippingCountry: e.target.value })} className="form-input" />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Standard Shipping Fee (₹) *</label>
+              <input type="number" required min={0} value={settings.standardShippingFee} onChange={e => setSettings({ ...settings, standardShippingFee: Number(e.target.value) })} className="form-input" />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Free Shipping Threshold (₹) *</label>
+              <input type="number" required min={0} value={settings.freeShippingThreshold} onChange={e => setSettings({ ...settings, freeShippingThreshold: Number(e.target.value) })} className="form-input" />
+            </div>
+          </div>
+
+          <div style={{ padding: '1.25rem', backgroundColor: '#fffdf5', border: '1px solid #fde68a', borderRadius: 'var(--radius-lg)' }}>
+            <h4 style={{ margin: '0 0 8px', color: '#92400e', fontSize: '0.95rem' }}>Official Customer Policy Position</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', fontSize: '0.88rem', color: '#b45309' }}>
+              <div>Returns: <strong>Not Accepted</strong></div>
+              <div>Refunds: <strong>Not Offered</strong></div>
+              <div>Cancellations: <strong>Not Offered</strong></div>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#78350f', marginTop: '8px', margin: 0 }}>
+              Client policy position is declared upfront across product pages, cart drawers, policy documents, and receipts.
+            </p>
+          </div>
         </div>
+
       </form>
     </div>
   );
