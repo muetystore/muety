@@ -2,6 +2,9 @@
   publish = "Countown"
   command = ""
 
+[build.environment]
+  NETLIFY_SKIP_NPM_INSTALL = "true"
+
 [[redirects]]
   from = "/terms-and-conditions"
   to = "/terms-and-conditions.html"
