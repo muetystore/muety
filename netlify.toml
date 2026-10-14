@@ -18,6 +18,26 @@
 # API Functions
 # ------------------------------------------------------------------------------
 [[redirects]]
+  from = "/api/media/cloudinary-signature"
+  to = "/.netlify/functions/cloudinary-signature"
+  status = 200
+
+[[redirects]]
+  from = "/api/cloudinary/sign"
+  to = "/.netlify/functions/cloudinary-signature"
+  status = 200
+
+[[redirects]]
+  from = "/api/media/cloudinary-delete"
+  to = "/.netlify/functions/cloudinary-delete"
+  status = 200
+
+[[redirects]]
+  from = "/api/cloudinary/delete"
+  to = "/.netlify/functions/cloudinary-delete"
+  status = 200
+
+[[redirects]]
   from = "/api/newsletter/subscribe"
   to = "/.netlify/functions/subscribe"
   status = 200
@@ -62,10 +82,72 @@
   status = 200
   force = true
 
+# Admin subdomain API routes (must precede wildcard)
+[[redirects]]
+  from = "https://admin.muety.in/api/media/cloudinary-signature"
+  to = "/.netlify/functions/cloudinary-signature"
+  status = 200
+
+[[redirects]]
+  from = "https://admin.muety.in/api/cloudinary/sign"
+  to = "/.netlify/functions/cloudinary-signature"
+  status = 200
+
+[[redirects]]
+  from = "https://admin.muety.in/api/media/cloudinary-delete"
+  to = "/.netlify/functions/cloudinary-delete"
+  status = 200
+
+[[redirects]]
+  from = "https://admin.muety.in/api/cloudinary/delete"
+  to = "/.netlify/functions/cloudinary-delete"
+  status = 200
+
+[[redirects]]
+  from = "https://admin.muety.in/api/newsletter/subscribe"
+  to = "/.netlify/functions/subscribe"
+  status = 200
+
+[[redirects]]
+  from = "https://admin.muety.in/api/launch-status"
+  to = "/.netlify/functions/launch-status"
+  status = 200
+
 # Admin subdomain: serves SPA Admin entry point
 [[redirects]]
   from = "https://admin.muety.in/*"
   to = "/index.html"
+  status = 200
+
+# Storefront subdomain API routes
+[[redirects]]
+  from = "https://store.muety.in/api/media/cloudinary-signature"
+  to = "/.netlify/functions/cloudinary-signature"
+  status = 200
+
+[[redirects]]
+  from = "https://store.muety.in/api/cloudinary/sign"
+  to = "/.netlify/functions/cloudinary-signature"
+  status = 200
+
+[[redirects]]
+  from = "https://store.muety.in/api/media/cloudinary-delete"
+  to = "/.netlify/functions/cloudinary-delete"
+  status = 200
+
+[[redirects]]
+  from = "https://store.muety.in/api/cloudinary/delete"
+  to = "/.netlify/functions/cloudinary-delete"
+  status = 200
+
+[[redirects]]
+  from = "https://store.muety.in/api/newsletter/subscribe"
+  to = "/.netlify/functions/subscribe"
+  status = 200
+
+[[redirects]]
+  from = "https://store.muety.in/api/launch-status"
+  to = "/.netlify/functions/launch-status"
   status = 200
 
 # Storefront subdomain: serves SPA Storefront entry point

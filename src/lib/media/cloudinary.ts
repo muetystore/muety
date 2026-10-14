@@ -147,11 +147,14 @@ export async function getCloudinaryUploadSignature(
   }
 
   const authHeader = idToken ? `Bearer ${idToken}` : undefined;
-  const endpoint = env.cloudinary.signatureEndpoint || '/api/media/cloudinary-signature';
+  const primaryEndpoint = env.cloudinary.signatureEndpoint || '/api/media/cloudinary-signature';
+  const alternativeEndpoint = primaryEndpoint === '/api/cloudinary/sign' 
+    ? '/api/media/cloudinary-signature' 
+    : '/api/cloudinary/sign';
   const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
 
   try {
-    const res = await fetch(endpoint, {
+    let res = await fetch(primaryEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -159,6 +162,24 @@ export async function getCloudinaryUploadSignature(
       },
       body: JSON.stringify({ folder, publicId })
     });
+
+    if (res.status === 404 && primaryEndpoint !== alternativeEndpoint) {
+      try {
+        const altRes = await fetch(alternativeEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authHeader ? { Authorization: authHeader } : {})
+          },
+          body: JSON.stringify({ folder, publicId })
+        });
+        if (altRes.ok) {
+          res = altRes;
+        }
+      } catch {
+        // Retain original response
+      }
+    }
 
     if (res.ok) {
       const data = await res.json();
@@ -173,9 +194,13 @@ export async function getCloudinaryUploadSignature(
     try {
       const errJson = JSON.parse(errText);
       parseMsg = errJson?.error?.message || errJson?.message || '';
-    } catch {}
+    } catch {
+      if (errText.includes('<!DOCTYPE') || errText.includes('<html')) {
+        parseMsg = `Endpoint ${primaryEndpoint} returned 404 Page not found (HTML). Netlify function route missing or building.`;
+      }
+    }
 
-    throw new Error(`Cloudinary upload configuration is unavailable (${res.status}): ${parseMsg || errText || 'Signature endpoint failed'}.`);
+    throw new Error(`Cloudinary upload configuration is unavailable (${res.status}): ${parseMsg || errText.slice(0, 120) || 'Signature endpoint failed'}.`);
   } catch (err: any) {
     console.error('Cloudinary Signature Request Error:', err);
 

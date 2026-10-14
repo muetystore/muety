@@ -304,16 +304,21 @@ export const AdminCategories: React.FC = () => {
           }
         } catch (uploadErr: any) {
           console.error('[CATEGORY IMAGE] Cloudinary upload failed:', uploadErr);
-          const rawMsg = uploadErr?.message || '';
-          let uploadErrMsg = 'Category image upload failed. Please try again.';
-          if (rawMsg.includes('unavailable') || rawMsg.includes('FAILED_PRECONDITION') || rawMsg.includes('configuration is unavailable')) {
-            uploadErrMsg = 'Cloudinary upload configuration is unavailable.';
-          } else if (rawMsg.includes('Invalid Signature') || rawMsg.includes('401') || rawMsg.includes('403') || rawMsg.includes('failed')) {
-            uploadErrMsg = 'Category image upload failed. Please try again.';
+          if (rawImageUrl && (rawImageUrl.startsWith('https://') || rawImageUrl.startsWith('http://'))) {
+            finalImageUrl = rawImageUrl;
+            console.log('[CATEGORY IMAGE] Using provided HTTPS image URL fallback:', finalImageUrl);
+          } else {
+            const rawMsg = uploadErr?.message || '';
+            let uploadErrMsg = 'Category image upload failed. Please try again.';
+            if (rawMsg.includes('unavailable') || rawMsg.includes('FAILED_PRECONDITION') || rawMsg.includes('configuration is unavailable')) {
+              uploadErrMsg = 'Cloudinary upload configuration is unavailable. Please check that Cloudinary credentials are set or enter a direct HTTPS image URL.';
+            } else if (rawMsg.includes('Invalid Signature') || rawMsg.includes('401') || rawMsg.includes('403') || rawMsg.includes('failed')) {
+              uploadErrMsg = 'Category image upload failed: ' + (rawMsg.slice(0, 120) || 'Please try again.');
+            }
+            setFormError(uploadErrMsg);
+            error(uploadErrMsg, 'Cloudinary Upload Failure');
+            return;
           }
-          setFormError(uploadErrMsg);
-          error(uploadErrMsg, 'Cloudinary Upload Failure');
-          return;
         } finally {
           setUploading(false);
         }

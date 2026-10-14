@@ -7,8 +7,12 @@
 # ==============================================================================
 
 # 1. API & Netlify Functions
-/api/newsletter/subscribe    /.netlify/functions/subscribe    200
-/api/launch-status           /.netlify/functions/launch-status 200
+/api/newsletter/subscribe       /.netlify/functions/subscribe            200
+/api/launch-status              /.netlify/functions/launch-status         200
+/api/media/cloudinary-signature /.netlify/functions/cloudinary-signature 200
+/api/cloudinary/sign            /.netlify/functions/cloudinary-signature 200
+/api/media/cloudinary-delete    /.netlify/functions/cloudinary-delete    200
+/api/cloudinary/delete          /.netlify/functions/cloudinary-delete    200
 
 # 2. Countdown & Legal Document Rewrites
 /terms-and-conditions        /terms-and-conditions.html       200
@@ -21,8 +25,24 @@
 https://muety.in/            /countdown.html                  200!
 https://www.muety.in/        /countdown.html                  200!
 
+# Admin subdomain API routes (must precede Admin SPA wildcard)
+https://admin.muety.in/api/newsletter/subscribe       /.netlify/functions/subscribe            200
+https://admin.muety.in/api/launch-status              /.netlify/functions/launch-status         200
+https://admin.muety.in/api/media/cloudinary-signature /.netlify/functions/cloudinary-signature 200
+https://admin.muety.in/api/cloudinary/sign            /.netlify/functions/cloudinary-signature 200
+https://admin.muety.in/api/media/cloudinary-delete    /.netlify/functions/cloudinary-delete    200
+https://admin.muety.in/api/cloudinary/delete          /.netlify/functions/cloudinary-delete    200
+
 # Admin subdomain: serves Admin SPA entry point
 https://admin.muety.in/*     /index.html                      200
+
+# Storefront subdomain API routes
+https://store.muety.in/api/newsletter/subscribe       /.netlify/functions/subscribe            200
+https://store.muety.in/api/launch-status              /.netlify/functions/launch-status         200
+https://store.muety.in/api/media/cloudinary-signature /.netlify/functions/cloudinary-signature 200
+https://store.muety.in/api/cloudinary/sign            /.netlify/functions/cloudinary-signature 200
+https://store.muety.in/api/media/cloudinary-delete    /.netlify/functions/cloudinary-delete    200
+https://store.muety.in/api/cloudinary/delete          /.netlify/functions/cloudinary-delete    200
 
 # Storefront subdomain: serves Storefront SPA entry point
 https://store.muety.in/*     /index.html                      200
