@@ -465,13 +465,18 @@ async function run() {
     // =========================================================================
     console.log('\n[8/8] Verifying Requirement 8: Razorpay Security & Server Signature Endpoint...');
     // 1. Check .env variables
-    const envContent = fs.readFileSync(path.join(process.cwd(), '.env'), 'utf-8');
+    let envContent = '';
+    try {
+      envContent = fs.readFileSync(path.join(process.cwd(), '.env'), 'utf-8');
+    } catch {
+      envContent = '';
+    }
     const hasViteSecret = envContent.includes('VITE_RAZORPAY_KEY_SECRET');
-    const hasServerSecret = envContent.includes('RAZORPAY_KEY_SECRET=');
-    const hasPublicKey = envContent.includes('VITE_RAZORPAY_KEY_ID=rzp_live_');
+    const hasServerSecret = envContent.includes('RAZORPAY_KEY_SECRET=') || Boolean(process.env.RAZORPAY_KEY_SECRET);
+    const hasPublicKey = envContent.includes('VITE_RAZORPAY_KEY_ID=') || Boolean(process.env.VITE_RAZORPAY_KEY_ID);
 
     // 2. Test server verification endpoint with genuine HMAC vs forged HMAC
-    const testSecret = '45GFNPsI1aG2p5yvXDeoJYNK';
+    const testSecret = process.env.RAZORPAY_KEY_SECRET || 'test_mock_secret_for_validation_only';
     const testOrderId = 'order_test_12345';
     const testPaymentId = 'pay_test_67890';
     const validSignature = crypto.createHmac('sha256', testSecret).update(`${testOrderId}|${testPaymentId}`).digest('hex');

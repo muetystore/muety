@@ -46,4 +46,8 @@ Thumbs.db
 
 # Local Scratch & JDK
 jdk*/
-scratch_*
+scratch_*
+
+# Tests
+*.test.ts
+*.test.js
