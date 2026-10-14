@@ -34,6 +34,7 @@ https://admin.muety.in/api/media/cloudinary-delete    /.netlify/functions/cloudi
 https://admin.muety.in/api/cloudinary/delete          /.netlify/functions/cloudinary-delete    200
 
 # Admin subdomain: serves Admin SPA entry point
+https://admin.muety.in/      /index.html                      200
 https://admin.muety.in/*     /index.html                      200
 
 # Storefront subdomain API routes
@@ -44,11 +45,9 @@ https://store.muety.in/api/cloudinary/sign            /.netlify/functions/cloudi
 https://store.muety.in/api/media/cloudinary-delete    /.netlify/functions/cloudinary-delete    200
 https://store.muety.in/api/cloudinary/delete          /.netlify/functions/cloudinary-delete    200
 
-# Storefront subdomain: serves Storefront SPA entry point
+# Storefront subdomain: serves Storefront SPA entry point (dedicated storefront, never redirects to root)
+https://store.muety.in/      /index.html                      200
 https://store.muety.in/*     /index.html                      200
-
-# POST-LAUNCH MIGRATION RULE (Uncomment after launch if 301 redirecting store.muety.in to muety.in):
-# https://store.muety.in/*   https://muety.in/:splat          301!
 
 # 4. Global Single Page Application (SPA) Fallback
 /*                           /index.html                      200

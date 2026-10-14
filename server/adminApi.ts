@@ -1,7 +1,7 @@
 import { getAdminAuth, getAdminFirestore, verifyIdTokenAndGetClaims } from './firebaseAdmin';
 
 export function getAdminAppUrl(): string {
-  return process.env.ADMIN_APP_URL || process.env.VITE_ADMIN_APP_URL || 'https://www.admin.muety.in';
+  return process.env.ADMIN_APP_URL || process.env.VITE_ADMIN_APP_URL || 'https://admin.muety.in';
 }
 
 const ALLOWED_ROLES = [

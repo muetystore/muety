@@ -62,22 +62,16 @@ export const isLocalOrDev = (customHost?: string): boolean => {
 };
 
 /**
- * Checks whether store.muety.in should route/redirect to muety.in (post-launch).
- * Driven by VITE_LAUNCHED='true' or VITE_REDIRECT_STORE_TO_ROOT='true'.
+ * Checks whether store.muety.in should route/redirect to muety.in.
+ * As per architecture requirements, store.muety.in is dedicated only to the customer storefront
+ * and must never redirect to www.muety.in or muety.in. Always returns false.
  */
 export const shouldRedirectStoreToRoot = (): boolean => {
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    const launched = import.meta.env.VITE_LAUNCHED;
-    const redirectFlag = import.meta.env.VITE_REDIRECT_STORE_TO_ROOT;
-    if (launched === 'true' || launched === '1' || redirectFlag === 'true' || redirectFlag === '1') {
-      return true;
-    }
-  }
   return false;
 };
 
 /**
- * Resolves the absolute storefront URL based on current environment and launch state.
+ * Resolves the absolute storefront URL based on current environment.
  * Used for "View Storefront" links from Admin Panel and Countdown redirects.
  */
 export const getCanonicalStoreUrl = (path = '/'): string => {
@@ -85,9 +79,7 @@ export const getCanonicalStoreUrl = (path = '/'): string => {
   if (isLocalOrDev()) {
     return cleanPath;
   }
-  const isPostLaunch = shouldRedirectStoreToRoot();
-  const domain = isPostLaunch ? 'https://muety.in' : 'https://store.muety.in';
-  return `${domain}${cleanPath}`;
+  return `https://store.muety.in${cleanPath}`;
 };
 
 /**

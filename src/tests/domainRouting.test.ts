@@ -122,10 +122,64 @@ describe('Domain & Subdomain Routing Utilities Suite', () => {
       expect(getAdminPortalUrl('login')).toBe('https://admin.muety.in/login');
     });
 
-    it('generates pre-launch store.muety.in URL for storefront', () => {
+    it('generates store.muety.in URL for storefront in production', () => {
       setMockHostname('admin.muety.in');
       expect(getCanonicalStoreUrl('/')).toBe('https://store.muety.in/');
       expect(getCanonicalStoreUrl('/products')).toBe('https://store.muety.in/products');
+    });
+  });
+
+  describe('6. Multi-Domain Architecture Invariants (Validation Requirements)', () => {
+    it('1. store.muety.in selects the storefront and is not categorized as admin', () => {
+      expect(isStoreDomain('store.muety.in')).toBe(true);
+      expect(isAdminDomain('store.muety.in')).toBe(false);
+      expect(isApexDomain('store.muety.in')).toBe(false);
+    });
+
+    it('2. admin.muety.in selects the admin app and is not categorized as storefront', () => {
+      expect(isAdminDomain('admin.muety.in')).toBe(true);
+      expect(isStoreDomain('admin.muety.in')).toBe(false);
+      expect(isApexDomain('admin.muety.in')).toBe(false);
+    });
+
+    it('3. /admin/dashboard works when formed for direct loading', () => {
+      setMockHostname('store.muety.in');
+      expect(getAdminPortalUrl('/admin/dashboard')).toBe('https://admin.muety.in/admin/dashboard');
+    });
+
+    it('4. muety.in and www.muety.in retain apex classification for countdown', () => {
+      expect(isApexDomain('muety.in')).toBe(true);
+      expect(isApexDomain('www.muety.in')).toBe(true);
+      expect(isStoreDomain('muety.in')).toBe(false);
+      expect(isAdminDomain('muety.in')).toBe(false);
+    });
+
+    it('5. storefront requests do not navigate to www.muety.in (shouldRedirectStoreToRoot is false)', () => {
+      expect(shouldRedirectStoreToRoot()).toBe(false);
+      setMockHostname('store.muety.in');
+      expect(getCanonicalStoreUrl('/')).toBe('https://store.muety.in/');
+      expect(getCanonicalStoreUrl('/products')).toBe('https://store.muety.in/products');
+    });
+
+    it('6. redirects configuration in public/_redirects and netlify.toml has 200 rewrites for admin and store', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const redirectsContent = fs.readFileSync(path.resolve(process.cwd(), 'public/_redirects'), 'utf8');
+      const netlifyTomlContent = fs.readFileSync(path.resolve(process.cwd(), 'netlify.toml'), 'utf8');
+
+      // Verify no permanent 301/302 redirects from store.muety.in to www.muety.in
+      expect(redirectsContent).not.toMatch(/https:\/\/store\.muety\.in\/\*\s+https:\/\/www\.muety\.in/);
+      expect(redirectsContent).not.toMatch(/https:\/\/store\.muety\.in\/\*\s+https:\/\/muety\.in/);
+
+      // Verify 200 rewrites to /index.html for admin and store
+      expect(redirectsContent).toContain('https://admin.muety.in/      /index.html                      200');
+      expect(redirectsContent).toContain('https://admin.muety.in/*     /index.html                      200');
+      expect(redirectsContent).toContain('https://store.muety.in/      /index.html                      200');
+      expect(redirectsContent).toContain('https://store.muety.in/*     /index.html                      200');
+
+      // Verify netlify.toml has mirrored 200 rewrites
+      expect(netlifyTomlContent).toContain('from = "https://admin.muety.in/*"');
+      expect(netlifyTomlContent).toContain('from = "https://store.muety.in/*"');
     });
   });
 });

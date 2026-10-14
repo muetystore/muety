@@ -46,7 +46,7 @@ const cloudName = getEnvVar('VITE_CLOUDINARY_CLOUD_NAME', '');
 const cloudinaryApiKey = getEnvVar('VITE_CLOUDINARY_API_KEY', '');
 
 export const env: EnvConfig = {
-  adminAppUrl: getEnvVar('VITE_ADMIN_APP_URL', 'https://www.admin.muety.in'),
+  adminAppUrl: getEnvVar('VITE_ADMIN_APP_URL', 'https://admin.muety.in'),
   firebase: {
     apiKey,
     authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN', ''),

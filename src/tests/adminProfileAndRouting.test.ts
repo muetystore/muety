@@ -92,7 +92,7 @@ describe('MUETY Admin Production Domain Routing & Self-Service Profile Suite (Re
 
   describe('PART 1: Admin Production Domain & Setup URL Requirements', () => {
     it('10. Invitation setup URL uses ADMIN_APP_URL origin', async () => {
-      process.env.ADMIN_APP_URL = 'https://www.admin.muety.in';
+      process.env.ADMIN_APP_URL = 'https://admin.muety.in';
       const result = await handleCreateAdminUser('Bearer valid-superadmin-token', {
         fullName: 'Support Executive',
         personalEmail: 'personal.exec@gmail.com',
@@ -102,20 +102,22 @@ describe('MUETY Admin Production Domain Routing & Self-Service Profile Suite (Re
       });
 
       expect(result.success).toBe(true);
-      expect(result.invitationLink).toContain('https://www.admin.muety.in/admin/setup-password');
+      expect(result.invitationLink).toContain('https://admin.muety.in/admin/setup-password');
       expect(result.invitationLink).not.toContain('localhost:5173');
     });
 
-    it('11. Production configuration resolves to https://www.admin.muety.in', () => {
-      expect(env.adminAppUrl).toBe('https://www.admin.muety.in');
-      expect(getAdminAppUrl()).toBe('https://www.admin.muety.in');
+    it('11. Production configuration resolves to https://admin.muety.in', () => {
+      delete process.env.ADMIN_APP_URL;
+      delete process.env.VITE_ADMIN_APP_URL;
+      expect(env.adminAppUrl).toBe('https://admin.muety.in');
+      expect(getAdminAppUrl()).toBe('https://admin.muety.in');
     });
 
     it('12. Local configuration fallback functions correctly for development environments', () => {
       process.env.ADMIN_APP_URL = 'http://localhost:5173';
       expect(getAdminAppUrl()).toBe('http://localhost:5173');
       // Reset back for production tests
-      process.env.ADMIN_APP_URL = 'https://www.admin.muety.in';
+      process.env.ADMIN_APP_URL = 'https://admin.muety.in';
     });
   });
 

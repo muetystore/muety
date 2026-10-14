@@ -115,6 +115,11 @@
 
 # Admin subdomain: serves SPA Admin entry point
 [[redirects]]
+  from = "https://admin.muety.in/"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
   from = "https://admin.muety.in/*"
   to = "/index.html"
   status = 200
@@ -151,6 +156,11 @@
   status = 200
 
 # Storefront subdomain: serves SPA Storefront entry point
+[[redirects]]
+  from = "https://store.muety.in/"
+  to = "/index.html"
+  status = 200
+
 [[redirects]]
   from = "https://store.muety.in/*"
   to = "/index.html"

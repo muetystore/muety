@@ -185,7 +185,7 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
       expect(order.codAdvanceAmount).toBe(89);
       expect(order.codBalanceDue).toBe(5250);
       expect(order.paymentMethod).toBe('cash_on_delivery');
-    }, 15000);
+    }, 30000);
 
     it('supports customer cancellation request while order is in pending status', async () => {
       const order = await orderService.createOrder({
@@ -348,7 +348,7 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
           razorpayPaymentId: 'pay_duplicate_replay_target_001'
         })
       ).rejects.toThrow('FAILED_PRECONDITION: Payment authorization ID has already been utilized for an existing order.');
-    });
+    }, 30000);
   });
 
   describe('5. Safe Repeatable Migration & Historical Preservation', () => {

@@ -93,20 +93,6 @@ const AdminRedirectToSubdomain: React.FC = () => {
   return <LoadingFallback />;
 };
 
-/**
- * Handles redirecting store.muety.in to muety.in after official launch.
- */
-const StorefrontPostLaunchRedirect: React.FC = () => {
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const target = `https://muety.in${window.location.pathname}${window.location.search}`;
-      window.location.replace(target);
-    }
-  }, []);
-
-  return <LoadingFallback />;
-};
-
 const CustomerLayout: React.FC = () => {
   return (
     <div className="storefront-app" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -126,11 +112,6 @@ const CustomerLayout: React.FC = () => {
 
 export const AppRouter: React.FC = () => {
   const onAdminDomain = isAdminDomain();
-
-  // If on store subdomain after launch, redirect to apex domain muety.in
-  if (!onAdminDomain && isStoreDomain() && shouldRedirectStoreToRoot()) {
-    return <StorefrontPostLaunchRedirect />;
-  }
 
   // 1. DEDICATED ADMIN SUBDOMAIN ROUTING (admin.muety.in)
   if (onAdminDomain) {
