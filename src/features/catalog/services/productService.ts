@@ -164,8 +164,12 @@ export const productService = {
             categorySlug: raw.categorySlug || 'sarees',
             images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'],
             featured: Boolean(raw.featured),
-            isNewArrival: Boolean(raw.isNewArrival),
-            isBestSeller: Boolean(raw.isBestSeller),
+            isNewArrival: Boolean(raw.isNewArrival || raw.newArrival),
+            newArrival: Boolean(raw.isNewArrival || raw.newArrival),
+            isBestSeller: Boolean(raw.isBestSeller || raw.bestseller),
+            bestseller: Boolean(raw.isBestSeller || raw.bestseller),
+            isMostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
+            mostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
             status: raw.status || 'active',
             availability: raw.availability || 'available',
             tags: Array.isArray(raw.tags) ? raw.tags : [],
@@ -202,8 +206,12 @@ export const productService = {
             categorySlug: raw.categorySlug || 'sarees',
             images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'],
             featured: Boolean(raw.featured),
-            isNewArrival: Boolean(raw.isNewArrival),
-            isBestSeller: Boolean(raw.isBestSeller),
+            isNewArrival: Boolean(raw.isNewArrival || raw.newArrival),
+            newArrival: Boolean(raw.isNewArrival || raw.newArrival),
+            isBestSeller: Boolean(raw.isBestSeller || raw.bestseller),
+            bestseller: Boolean(raw.isBestSeller || raw.bestseller),
+            isMostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
+            mostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
             status: raw.status || 'active',
             availability: raw.availability || 'available',
             tags: Array.isArray(raw.tags) ? raw.tags : [],
@@ -227,11 +235,15 @@ export const productService = {
   },
 
   getNewArrivals(): Product[] {
-    return storageService.getProducts().filter(p => p.isNewArrival);
+    return storageService.getProducts().filter(p => p.isNewArrival || p.newArrival);
   },
 
   getBestSellers(): Product[] {
-    return storageService.getProducts().filter(p => p.isBestSeller);
+    return storageService.getProducts().filter(p => p.isBestSeller || p.bestseller);
+  },
+
+  getMostWantedProducts(): Product[] {
+    return storageService.getProducts().filter(p => p.isMostWanted || p.mostWanted);
   },
 
   async getSkuPreviewForCategory(primaryCategoryId: string): Promise<string> {
@@ -979,12 +991,18 @@ export const productService = {
                   sku: raw.sku || `MUETY-${Math.floor(100 + Math.random() * 900)}`,
                   category: raw.category || 'Festive Silk Sarees',
                   categorySlug: raw.categorySlug || (raw.category ? raw.category.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'sarees'),
+                  categoryIds: Array.isArray(raw.categoryIds) ? raw.categoryIds : (raw.categoryId ? [raw.categoryId] : (raw.primaryCategoryId ? [raw.primaryCategoryId] : [])),
+                  primaryCategoryId: raw.primaryCategoryId || (Array.isArray(raw.categoryIds) ? raw.categoryIds[0] : raw.categoryId) || '',
+                  categoryId: raw.primaryCategoryId || raw.categoryId || '',
                   images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'],
+                  media: Array.isArray(raw.media) ? raw.media : [],
                   featured: Boolean(raw.featured),
                   isNewArrival: Boolean(raw.isNewArrival || raw.newArrival),
                   newArrival: Boolean(raw.isNewArrival || raw.newArrival),
                   isBestSeller: Boolean(raw.isBestSeller || raw.bestseller),
                   bestseller: Boolean(raw.isBestSeller || raw.bestseller),
+                  isMostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
+                  mostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
                   published: isPub,
                   status: raw.status || (isPub ? 'active' : 'draft'),
                   availability: raw.availability || 'available',
@@ -1000,6 +1018,7 @@ export const productService = {
                   weaveTechnique: raw.weaveTechnique,
                   craftsmanship: raw.craftsmanship,
                   occasion: raw.occasion,
+                  occasions: Array.isArray(raw.occasions) ? raw.occasions : (raw.occasion ? [raw.occasion] : []),
                   careInstructions: raw.careInstructions,
                   authenticityInformation: raw.authenticityInformation,
                   createdAt: typeof raw.createdAt?.toDate === 'function' 
@@ -1452,6 +1471,7 @@ export const productService = {
         await setDoc(productRef, updatedFields, { merge: true });
       } catch (err: any) {
         console.warn('Firebase Firestore product flags update note:', err);
+        throw new Error(`Firestore flag update failed: ${err?.message || 'Update error'}`);
       }
     }
 
