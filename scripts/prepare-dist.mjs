@@ -37,17 +37,18 @@ function copyFile(src, dest) {
   fs.copyFileSync(src, dest);
 }
 
-// Helper: Recursive directory copy
-function copyDir(src, dest) {
+// Helper: Recursive directory copy with exclusion filter
+function copyDir(src, dest, ignoreFilter = () => false) {
   if (!fs.existsSync(dest)) {
     fs.mkdirSync(dest, { recursive: true });
   }
   const entries = fs.readdirSync(src, { withFileTypes: true });
   for (const entry of entries) {
+    if (ignoreFilter(entry.name)) continue;
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
     if (entry.isDirectory()) {
-      copyDir(srcPath, destPath);
+      copyDir(srcPath, destPath, ignoreFilter);
     } else {
       fs.copyFileSync(srcPath, destPath);
     }
@@ -60,9 +61,11 @@ const distCountdownHtml = path.join(distDir, 'countdown.html');
 copyFile(countownHtml, distCountdownHtml);
 console.log('✓ Packaged dist/countdown.html');
 
-// 2. Package complete Countown/ directory into dist/Countown/
+// 2. Package complete Countown/ directory into dist/Countown/ (excluding non-web source files)
 const distCountownDir = path.join(distDir, 'Countown');
-copyDir(countownDir, distCountownDir);
+copyDir(countownDir, distCountownDir, (name) => {
+  return name.startsWith('.env') || name.startsWith('.git') || name.endsWith('.md') || name === 'server.js';
+});
 console.log('✓ Packaged dist/Countown/ directory');
 
 // 3. Package root-level static assets required by countdown relative references
