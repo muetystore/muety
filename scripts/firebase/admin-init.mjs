@@ -19,11 +19,11 @@ export function hasValidCredentials() {
 export function initializeFirebaseAdmin() {
   if (getApps().length > 0) {
     adminApp = getApps()[0];
-    const projectId = adminApp.options?.projectId || process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'muetystore-fdad2';
+    const projectId = adminApp.options?.projectId || process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || '';
     return { app: adminApp, projectId, hasCreds: hasValidCredentials() };
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'muetystore-fdad2';
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || '';
   const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
   const rawCredJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 

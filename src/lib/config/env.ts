@@ -41,25 +41,25 @@ const getEnvVar = (key: string, defaultValue = ''): string => {
   return defaultValue;
 };
 
-const apiKey = getEnvVar('VITE_FIREBASE_API_KEY', 'AIzaSyDWB9sPanFfGUTHRuDCjt8V2mzZcLU-7Mg');
-const cloudName = getEnvVar('VITE_CLOUDINARY_CLOUD_NAME', 'cxivbion');
-const cloudinaryApiKey = getEnvVar('VITE_CLOUDINARY_API_KEY', '922177698232752');
+const apiKey = getEnvVar('VITE_FIREBASE_API_KEY', '');
+const cloudName = getEnvVar('VITE_CLOUDINARY_CLOUD_NAME', '');
+const cloudinaryApiKey = getEnvVar('VITE_CLOUDINARY_API_KEY', '');
 
 export const env: EnvConfig = {
   adminAppUrl: getEnvVar('VITE_ADMIN_APP_URL', 'https://www.admin.muety.in'),
   firebase: {
     apiKey,
-    authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN', 'muetystore-fdad2.firebaseapp.com'),
-    projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID', 'muetystore-fdad2'),
-    storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET', 'muetystore-fdad2.firebasestorage.app'),
-    messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID', '1067274231232'),
-    appId: getEnvVar('VITE_FIREBASE_APP_ID', '1:1067274231232:web:0827b0b7be3cc52dd57c25'),
-    measurementId: getEnvVar('VITE_FIREBASE_MEASUREMENT_ID', 'G-M2NQ3KXCEK'),
+    authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN', ''),
+    projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID', ''),
+    storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET', ''),
+    messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID', ''),
+    appId: getEnvVar('VITE_FIREBASE_APP_ID', ''),
+    measurementId: getEnvVar('VITE_FIREBASE_MEASUREMENT_ID', ''),
     databaseId: getEnvVar('VITE_FIREBASE_DATABASE_ID', 'default'),
     isConfigured: Boolean(apiKey && !apiKey.includes('Dummy'))
   },
   razorpay: {
-    keyId: getEnvVar('VITE_RAZORPAY_KEY_ID', 'rzp_test_TYe5hJ23uyUrno')
+    keyId: getEnvVar('VITE_RAZORPAY_KEY_ID', '')
   },
   cloudinary: {
     cloudName,

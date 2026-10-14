@@ -22,7 +22,7 @@ function logDiagnostic(app: App | null, clientEmail?: string, privateKey?: strin
 
   const clientEmailConfigured = !!(clientEmail || process.env.FIREBASE_CLIENT_EMAIL || process.env.GOOGLE_APPLICATION_CREDENTIALS);
   const privateKeyConfigured = !!(privateKey || process.env.FIREBASE_PRIVATE_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS);
-  const projectIdConfigured = !!(projectId || process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'muetystore-fdad2');
+  const projectIdConfigured = !!(projectId || process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID);
   const initialized = !!app;
 
   console.log(`[FirebaseAdmin] Configuration:
@@ -45,7 +45,7 @@ export function getFirebaseAdminApp(): App | null {
     return firebaseAdminApp;
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'muetystore-fdad2';
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || '';
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   let privateKey = process.env.FIREBASE_PRIVATE_KEY;
   const googleAppCreds = process.env.GOOGLE_APPLICATION_CREDENTIALS;

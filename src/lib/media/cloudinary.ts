@@ -182,10 +182,10 @@ export async function getCloudinaryUploadSignature(
     if (isTestEnv) {
       const timestamp = Math.floor(Date.now() / 1000);
       return {
-        apiKey: env.cloudinary.apiKey || '922177698232752',
+        apiKey: env.cloudinary.apiKey || 'mock_test_api_key',
         timestamp,
         signature: 'test_environment_signature_' + timestamp,
-        cloudName: env.cloudinary.cloudName || 'cxivbion',
+        cloudName: env.cloudinary.cloudName || 'mock_test_cloud_name',
         folder,
         publicId
       };

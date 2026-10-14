@@ -55,9 +55,7 @@ const ALLOWED_ORIGINS = [
   'https://store.muety.in',
   'https://www.store.muety.in',
   'https://muety.in',
-  'https://www.muety.in',
-  'https://muetystore-fdad2.web.app',
-  'https://muetystore-fdad2.firebaseapp.com'
+  'https://www.muety.in'
 ];
 
 export interface StructuredApiError {
@@ -80,10 +78,8 @@ function setCorsHeaders(req: any, res: any) {
      origin === 'https://muety.in')
   ) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-  } else if (!origin) {
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0]);
   } else {
-    res.setHeader('Access-Control-Allow-Origin', 'https://muetystore-fdad2.web.app');
+    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0]);
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');

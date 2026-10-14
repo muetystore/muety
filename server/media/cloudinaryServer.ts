@@ -17,7 +17,7 @@ import fs from 'fs';
 
 function getFirebaseAdminAuth() {
   if (!getApps().length) {
-    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'muetystore-fdad2';
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || '';
     const saPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
     const rawCredJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
@@ -160,8 +160,8 @@ export async function generateUploadSignatureServer(
 
   await verifyServerMediaAuthorization(authHeader, folder);
 
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME || process.env.VITE_CLOUDINARY_CLOUD_NAME || 'cxivbion';
-  const apiKey = process.env.CLOUDINARY_API_KEY || process.env.VITE_CLOUDINARY_API_KEY || '922177698232752';
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME || process.env.VITE_CLOUDINARY_CLOUD_NAME || '';
+  const apiKey = process.env.CLOUDINARY_API_KEY || process.env.VITE_CLOUDINARY_API_KEY || '';
   const isTest = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
   const apiSecret = process.env.CLOUDINARY_API_SECRET !== undefined
     ? process.env.CLOUDINARY_API_SECRET

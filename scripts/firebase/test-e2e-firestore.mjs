@@ -48,7 +48,7 @@ async function runLiveFirestoreVerification() {
   console.log('=============================================================\n');
 
   const env = loadEnvConfig();
-  const projectId = env.VITE_FIREBASE_PROJECT_ID || 'muetystore-fdad2';
+  const projectId = env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || '';
 
   const firebaseConfig = {
     apiKey: env.VITE_FIREBASE_API_KEY,

@@ -6,7 +6,7 @@
         "oAuthBrandDisplayName": "MUETY Atelier",
         "supportEmail": "concierge@muety.in",
         "authorizedRedirectUris": [
-          "https://muetystore-fdad2.firebaseapp.com/__/auth/handler",
+          "https://muety.in/__/auth/handler",
           "http://localhost"
         ]
       }
