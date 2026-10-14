@@ -92,7 +92,7 @@ export async function sendAdminInvitationEmail(
     return { success: true };
   }
 
-  const fromSender = process.env.RESEND_FROM_EMAIL || 'MUETY Admin <admin@muety.in>';
+  const fromSender = process.env.RESEND_FROM_EMAIL || '';
   const replyTo = inviterEmail || 'superadmin@muety.in';
   const adminAppUrl = getAdminAppUrl();
 
@@ -198,7 +198,7 @@ export async function sendAdminInvitationEmail(
 export async function handleGetConfigStatus() {
   const hasFirebaseAdmin = !!(process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY);
   const hasResend = !!(process.env.RESEND_API_KEY || process.env.RESEND_);
-  const resendSender = process.env.RESEND_FROM_EMAIL || 'MUETY Admin <admin@muety.in>';
+  const resendSender = process.env.RESEND_FROM_EMAIL || '';
 
   return {
     success: true,

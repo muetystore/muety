@@ -5,7 +5,7 @@
  * 1. POST /api/admin/set-role     (Assign custom claims & role via Firebase Admin SDK)
  * 2. POST /api/admin/create-user  (Provision admin user via Firebase Admin SDK)
  * 3. POST /api/orders/create      (Server-authoritative order creation & atomic inventory reservation)
- * 4. POST /api/cloudinary/sign    (Secure Cloudinary signature generation)
+ * 4. POST /api/media/signature    (Secure Cloudinary signature generation)
  * 5. POST /api/cloudinary/delete  (Secure Cloudinary asset deletion)
  */
 
@@ -305,8 +305,9 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
     return true;
   }
 
-  // ROUTE 4: POST /api/media/cloudinary-signature & POST /api/cloudinary/sign
-  if (urlPath === '/api/media/cloudinary-signature' || urlPath === '/api/cloudinary/sign') {
+  // ROUTE 4: POST media upload signature generation
+  const signatureEndpoint = process.env.VITE_CLOUDINARY_SIGNATURE_ENDPOINT;
+  if (urlPath === '/api/media/cloudinary-signature' || (signatureEndpoint && urlPath === signatureEndpoint) || urlPath.endsWith('/sign')) {
     const folder = typeof body?.folder === 'string' ? body.folder.trim() : 'muety/categories';
     const publicId = typeof body?.publicId === 'string' ? body.publicId.trim() : undefined;
 
