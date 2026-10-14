@@ -1,9 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from './Logo';
-import { Mail, Phone, MapPin, ShieldCheck, Truck, Award } from 'lucide-react';
+import { Mail, Phone, MapPin, ShieldCheck, Truck, Award, Instagram, MessageCircle } from 'lucide-react';
 
 export const Footer: React.FC = () => {
+
   return (
     <footer style={{
       backgroundColor: '#090d16',
@@ -31,7 +32,7 @@ export const Footer: React.FC = () => {
               </div>
               <div>
                 <h6 style={{ color: '#ffffff', fontSize: '0.95rem', fontWeight: 600 }}>Insured Express Delivery</h6>
-                <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Flat-rate insured delivery across India (₹100)</p>
+                <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Flat-rate insured delivery across India (₹89)</p>
               </div>
             </div>
 
@@ -88,20 +89,6 @@ export const Footer: React.FC = () => {
             }}>
               MUETY represents authentic Indian handloom luxury. We design and curate exceptional Kanchipuram & Banarasi pure silk sarees, bridal masterworks, and timeless ethnic elegance.
             </p>
-            <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem', color: '#cbd5e1' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <MapPin size={16} color="#d4af37" />
-                <span>2/32B Ramireddypatti, Palikadu, Salem – 636501</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Phone size={16} color="#d4af37" />
-                <span>+91 9385791540 / WhatsApp: 9940668095</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Mail size={16} color="#d4af37" />
-                <span>support@muety.in | orders@muety.in</span>
-              </div>
-            </div>
           </div>
 
           <div>
@@ -130,6 +117,190 @@ export const Footer: React.FC = () => {
                 </Link>
               </li>
             </ul>
+
+            {/* Contact channels (icons only) below Saree Categories */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginTop: '1.25rem',
+                paddingTop: '1rem',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+              }}
+              aria-label="MUETY Contact Channels"
+            >
+              <a
+                href="tel:+919385791540"
+                aria-label="Call MUETY Concierge"
+                title="Call: +91 9385791540"
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#cbd5e1',
+                  transition: 'all 0.2s ease',
+                  textDecoration: 'none'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(212, 175, 55, 0.15)';
+                  e.currentTarget.style.borderColor = '#d4af37';
+                  e.currentTarget.style.color = '#d4af37';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.color = '#cbd5e1';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                <Phone size={15} />
+              </a>
+
+              <a
+                href="https://wa.me/919940668095"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Chat with MUETY on WhatsApp"
+                title="WhatsApp: +91 9940668095"
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#cbd5e1',
+                  transition: 'all 0.2s ease',
+                  textDecoration: 'none'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(37, 211, 102, 0.15)';
+                  e.currentTarget.style.borderColor = '#25D366';
+                  e.currentTarget.style.color = '#25D366';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.color = '#cbd5e1';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                <MessageCircle size={15} />
+              </a>
+
+              <a
+                href="mailto:support@muety.in"
+                aria-label="Email MUETY Client Support"
+                title="Email: support@muety.in"
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#cbd5e1',
+                  transition: 'all 0.2s ease',
+                  textDecoration: 'none'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(212, 175, 55, 0.15)';
+                  e.currentTarget.style.borderColor = '#d4af37';
+                  e.currentTarget.style.color = '#d4af37';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.color = '#cbd5e1';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                <Mail size={15} />
+              </a>
+
+              <a
+                href="https://instagram.com/Themuety"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Follow MUETY on Instagram"
+                title="Instagram: @Themuety"
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#cbd5e1',
+                  transition: 'all 0.2s ease',
+                  textDecoration: 'none'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(225, 48, 108, 0.15)';
+                  e.currentTarget.style.borderColor = '#E1306C';
+                  e.currentTarget.style.color = '#E1306C';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.color = '#cbd5e1';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                <Instagram size={15} />
+              </a>
+
+              <a
+                href="https://maps.google.com/?q=2/32B+Ramireddypatti,+Palikadu,+Salem+-+636501"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="View Salem Atelier Studio on Google Maps"
+                title="Salem Studio: 2/32B Ramireddypatti, Salem"
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#cbd5e1',
+                  transition: 'all 0.2s ease',
+                  textDecoration: 'none'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(212, 175, 55, 0.15)';
+                  e.currentTarget.style.borderColor = '#d4af37';
+                  e.currentTarget.style.color = '#d4af37';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.color = '#cbd5e1';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                <MapPin size={15} />
+              </a>
+            </div>
           </div>
 
           <div>
@@ -193,6 +364,11 @@ export const Footer: React.FC = () => {
         @media (max-width: 960px) {
           .footer-links-grid {
             grid-template-columns: 1fr 1fr !important;
+          }
+        }
+        @media (max-width: 768px) {
+          footer {
+            padding-bottom: calc(var(--bottom-safe-clearance, 80px) + 1rem) !important;
           }
         }
         @media (max-width: 600px) {

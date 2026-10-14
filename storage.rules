@@ -15,7 +15,7 @@ service firebase.storage {
     }
 
     function isCatalogManager() {
-      return getRoles().hasAny(['super_admin', 'admin', 'catalog_manager']);
+      return getRoles().hasAny(['super_admin', 'superadmin', 'admin', 'catalog_manager']);
     }
 
     function isOwner(userId) {
@@ -48,10 +48,15 @@ service firebase.storage {
       allow write: if (isOwner(userId) || isCatalogManager()) && isImage() && isValidSize();
     }
 
-    // Default catch-all: strict write controls
-    match /{allPaths=**} {
+    // Admin profile photo media: public read, owner or catalog manager write with MIME & size validation
+    match /admin-profiles/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isCatalogManager() && isImage() && isValidSize();
+      allow write: if (isOwner(userId) || isCatalogManager()) && isImage() && isValidSize();
+    }
+
+    // Default catch-all: strict default-deny
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

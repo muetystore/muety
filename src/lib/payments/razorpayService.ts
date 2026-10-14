@@ -256,6 +256,21 @@ class RazorpayService {
       };
     }
   }
+
+  public async verifyPaymentOnServer(payload: RazorpayPaymentSuccessResponse): Promise<{ success: boolean; message: string; verified?: boolean }> {
+    try {
+      const response = await fetch('/api/payments/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      return await response.json();
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Server payment verification network failure' };
+    }
+  }
 }
 
 export const razorpayService = new RazorpayService();

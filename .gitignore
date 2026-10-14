@@ -9,7 +9,12 @@ coverage/
 # Environment
 .env
 .env.local
-.env.*.local
+.env.*
+!.env.example
+
+# Service Accounts & Firebase Credentials
+*service-account*.json
+*serviceAccount*.json
 
 # Logs
 *.log
@@ -38,3 +43,7 @@ Thumbs.db
 
 # Firebase local/emulator artifacts
 .firebase/
+
+# Local Scratch & JDK
+jdk*/
+scratch_*

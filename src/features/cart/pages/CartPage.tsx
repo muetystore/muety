@@ -112,26 +112,14 @@ export const CartPage: React.FC = () => {
           marginBottom: '2.5rem',
           boxShadow: 'var(--shadow-xs)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', fontWeight: 600 }}>
-              <Truck size={18} color="var(--brand-accent)" />
-              {amountToFreeShipping === 0 ? (
-                <span style={{ color: '#10b981' }}>You have unlocked Complimentary Express Shipping!</span>
-              ) : (
-                <span>Add <strong>₹{amountToFreeShipping.toFixed(2)}</strong> more for <strong>Complimentary Worldwide Express</strong></span>
-              )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.92rem', fontWeight: 600, color: 'var(--brand-primary)' }}>
+              <Truck size={20} color="var(--brand-accent)" />
+              <span>Pan-India Signature Courier Dispatch • <strong>₹89 Flat Delivery Charge</strong></span>
             </div>
-            <span style={{ fontSize: '0.85rem', color: 'var(--brand-muted)', fontWeight: 600 }}>
-              Threshold: ₹{settings.freeShippingThreshold}
+            <span style={{ fontSize: '0.82rem', color: '#10b981', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <ShieldCheck size={16} /> 100% Insured Atelier Handover
             </span>
-          </div>
-          <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--bg-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{
-              width: `${freeShippingProgress}%`,
-              height: '100%',
-              backgroundColor: amountToFreeShipping === 0 ? '#10b981' : 'var(--brand-accent)',
-              transition: 'width 0.4s ease'
-            }} />
           </div>
         </div>
 
@@ -362,14 +350,14 @@ export const CartPage: React.FC = () => {
               )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                <span>Estimated Express Shipping</span>
-                <span style={{ fontWeight: 600, color: shippingFee === 0 ? '#10b981' : 'var(--brand-primary)' }}>
-                  {shippingFee === 0 ? 'FREE' : `₹${shippingFee.toFixed(2)}`}
+                <span>Shipping & Delivery Charge</span>
+                <span style={{ fontWeight: 600, color: 'var(--brand-primary)' }}>
+                  {shippingFee === 0 ? '₹0.00' : `₹${shippingFee.toFixed(2)}`}
                 </span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                <span>Estimated Tax ({settings.taxRate}%)</span>
+                <span>Applicable Tax ({settings.taxRate || 5}% GST)</span>
                 <span style={{ fontWeight: 600, color: 'var(--brand-primary)' }}>₹{taxAmount.toFixed(2)}</span>
               </div>
 
@@ -380,10 +368,23 @@ export const CartPage: React.FC = () => {
                 justifyContent: 'space-between',
                 alignItems: 'baseline'
               }}>
-                <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--brand-primary)' }}>Grand Total</span>
+                <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--brand-primary)' }}>Total Order Value</span>
                 <span style={{ fontSize: '1.75rem', fontWeight: 800, fontFamily: 'var(--font-heading)', color: 'var(--brand-primary)' }}>
                   ₹{grandTotal.toFixed(2)}
                 </span>
+              </div>
+
+              <div style={{
+                backgroundColor: 'var(--bg-main)',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.8rem',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.5,
+                border: '1px solid var(--brand-border)'
+              }}>
+                <div><strong>Online Payment:</strong> Pay ₹{grandTotal.toFixed(2)} full total via Razorpay (UPI, Cards, NetBanking).</div>
+                <div style={{ marginTop: '4px' }}><strong>Cash on Delivery (COD):</strong> Pay ₹89 advance online to confirm; remaining balance of ₹{Math.max(0, grandTotal - 89).toFixed(2)} collected upon delivery.</div>
               </div>
             </div>
 

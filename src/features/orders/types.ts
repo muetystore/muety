@@ -62,6 +62,8 @@ export interface Order {
   total: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
+  codAdvanceAmount?: number;
+  codBalanceDue?: number;
   orderStatus: OrderStatus;
   trackingNumber?: string;
   trackingCarrier?: string;
@@ -69,6 +71,8 @@ export interface Order {
   timeline: OrderTimelineEvent[];
   razorpayPaymentId?: string;
   notes?: string;
+  cancellationRequested?: boolean;
+  cancellationReason?: string;
   createdAt: string;
   updatedAt: string;
   fulfilledAt?: string;

@@ -19,24 +19,11 @@ import { Order, Product } from '@/types';
 
 export const AdminDashboard: React.FC = () => {
   useDocumentTitle('Admin Dashboard');
-  const { success, error } = useNotification();
+  const { success } = useNotification();
 
   const [orders, setOrders] = useState<Order[]>(storageService.getOrders());
   const [products, setProducts] = useState<Product[]>(storageService.getProducts());
   const [, setUsers] = useState(storageService.getUsers());
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  const handleSyncToCloud = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await productService.syncAllToFirebase();
-      success(`Uploaded ${res.count} product(s) to your live Firebase Cloud Firestore!`, 'Firebase Synchronized');
-    } catch (err: any) {
-      error(err.message || 'Failed to sync to Firebase');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   useEffect(() => {
     const unsubOrders = orderService.subscribeToAllOrders((liveOrders) => {
@@ -83,19 +70,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <button 
-            type="button"
-            onClick={handleSyncToCloud}
-            disabled={isSyncing}
-            className="btn btn-outline btn-sm"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#ffffff' }}
-            title="Upload and sync all catalog items to Firebase Cloud Firestore"
-          >
-            <CloudUpload size={16} color="#2563eb" className={isSyncing ? 'animate-spin' : ''} />
-            {isSyncing ? 'Syncing...' : `Push All to Firestore (${products.length})`}
-          </button>
-
-          <Link to="/admin/products" className="btn btn-primary btn-sm">
+          <Link to="/admin/products/new" className="btn btn-primary btn-sm">
             <Plus size={16} /> New Product Creation
           </Link>
         </div>

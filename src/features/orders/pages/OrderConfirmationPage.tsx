@@ -177,8 +177,8 @@ export const OrderConfirmationPage: React.FC = () => {
             <div>
               <Logo size="lg" showTagline />
               <div style={{ fontSize: '0.82rem', color: 'var(--brand-muted)', marginTop: '8px' }}>
-                MUETY Atelier, 2/32 Ramireddypatti, Salem, Tamil Nadu – 636501, India<br />
-                GST / Tax ID: 33AAACM0000A1Z5
+                MUETY Atelier, 2/32B Ramireddypatti, Palikadu, Salem, Tamil Nadu – 636501, India<br />
+                GSTIN: 33HFCPR2838F2ZD • Email: orders@muety.in
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -186,7 +186,11 @@ export const OrderConfirmationPage: React.FC = () => {
               <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
                 Order #{order.orderNumber}<br />
                 Date: {new Date(order.createdAt).toLocaleDateString()}<br />
-                Status: <strong style={{ color: '#10b981' }}>PAID</strong>
+                Status: <strong style={{ color: order.paymentMethod === 'cash_on_delivery' ? '#b45309' : '#10b981' }}>
+                  {order.paymentMethod === 'cash_on_delivery' 
+                    ? 'COD (₹89 Advance Received)' 
+                    : 'PAID & SETTLED'}
+                </strong>
               </div>
             </div>
           </div>
@@ -213,12 +217,18 @@ export const OrderConfirmationPage: React.FC = () => {
                 Payment Summary
               </h5>
               <div style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Method: <strong>{order.paymentMethod === 'razorpay' ? 'Razorpay Secure Gateway' : order.paymentMethod.replace(/_/g, ' ').toUpperCase()}</strong><br />
+                Method: <strong>
+                  {order.paymentMethod === 'cash_on_delivery' 
+                    ? 'Cash on Delivery (₹89 Courier Advance Paid Online)' 
+                    : 'Razorpay Secure Multi-Channel Gateway'}
+                </strong><br />
                 {order.razorpayPaymentId && (
-                  <>Razorpay Ref: <code style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', padding: '2px 6px', borderRadius: '4px', fontSize: '0.82rem' }}>{order.razorpayPaymentId}</code><br /></>
+                  <>Razorpay Auth Ref: <code style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', padding: '2px 6px', borderRadius: '4px', fontSize: '0.82rem' }}>{order.razorpayPaymentId}</code><br /></>
                 )}
-                Payment Status: <strong style={{ color: order.paymentStatus === 'paid' ? '#10b981' : '#f59e0b' }}>
-                  {order.paymentStatus === 'paid' ? 'Authorized & Settled' : 'Pending on Handover'}
+                Payment Status: <strong style={{ color: order.paymentStatus === 'paid' ? '#10b981' : '#b45309' }}>
+                  {order.paymentMethod === 'cash_on_delivery' 
+                    ? `₹89.00 Advance Paid • Balance ₹${(order.codBalanceDue ?? (order.total - 89)).toFixed(2)} on Delivery`
+                    : 'Authorized & Fully Settled'}
                 </strong><br />
                 Applied Promo: <strong>{order.appliedCoupon || 'None'}</strong>
               </div>
@@ -258,9 +268,9 @@ export const OrderConfirmationPage: React.FC = () => {
 
           {/* Financial Totals */}
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <div style={{ width: '280px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.92rem' }}>
+            <div style={{ width: '320px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.92rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                <span>Subtotal:</span>
+                <span>Item Subtotal:</span>
                 <span>₹{order.subtotal.toFixed(2)}</span>
               </div>
               {order.discount > 0 && (
@@ -270,17 +280,39 @@ export const OrderConfirmationPage: React.FC = () => {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                <span>Express Shipping:</span>
-                <span>{order.shippingFee === 0 ? 'FREE' : `₹${order.shippingFee.toFixed(2)}`}</span>
+                <span>Pan-India Courier & Delivery:</span>
+                <span>₹{(order.shippingFee || 89).toFixed(2)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                <span>Estimated Tax:</span>
+                <span>Applicable Tax (GST):</span>
                 <span>₹{order.tax.toFixed(2)}</span>
               </div>
               <div style={{ borderTop: '2px solid var(--brand-border)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.2rem', color: 'var(--brand-primary)' }}>
-                <span>Total Paid:</span>
+                <span>Order Total:</span>
                 <span>₹{order.total.toFixed(2)}</span>
               </div>
+
+              {order.paymentMethod === 'cash_on_delivery' && (
+                <div style={{
+                  backgroundColor: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '8px 12px',
+                  marginTop: '6px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#92400e', fontWeight: 600 }}>
+                    <span>Courier Advance Paid Online:</span>
+                    <span>-₹{(order.codAdvanceAmount || 89).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', color: '#78350f', fontWeight: 800 }}>
+                    <span>Balance Due on Delivery:</span>
+                    <span>₹{(order.codBalanceDue ?? (order.total - 89)).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

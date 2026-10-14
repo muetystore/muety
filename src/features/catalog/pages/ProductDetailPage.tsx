@@ -4,6 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { productService } from '@/features/catalog/services/productService';
 import { reviewService } from '@/features/reviews/services/reviewService';
+import { storageService } from '@/lib/storage/storageService';
 import { useCart } from '@/shared/context/CartContext';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { ProductCard } from '@/features/catalog/components/ProductCard';
@@ -23,15 +24,19 @@ import {
   ZoomOut,
   Zap
 } from 'lucide-react';
-import { Product, Review } from '@/types';
+import { auditService } from '@/shared/services/auditService';
+import { useAuth } from '@/shared/context/AuthContext';
+import { Product, Review, PatronReview } from '@/types';
 
 export const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { addToCart, toggleWishlist, isInWishlist, setIsDrawerOpen } = useCart();
   const { success, warning } = useNotification();
 
   const [product, setProduct] = useState<Product | null>(null);
+  const [liveReviews, setLiveReviews] = useState<PatronReview[]>([]);
   const [selectedImage, setSelectedImage] = useState<number>(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
   const [zoomScale, setZoomScale] = useState<number>(1);
@@ -60,19 +65,51 @@ export const ProductDetailPage: React.FC = () => {
   };
 
   useEffect(() => {
+    let isMounted = true;
     if (id) {
-      const found = productService.getProductBySlug(id);
-      if (found) {
-        setProduct(found);
+      const cached = productService.getProductBySlug(id);
+      if (cached) {
+        setProduct(cached);
+        storageService.addRecentlyViewed(cached.id);
         setSelectedImage(0);
         resetZoom();
-        if (found.colors && found.colors.length > 0) setSelectedColor(found.colors[0]);
-        if (found.sizes && found.sizes.length > 0) setSelectedSize(found.sizes[0]);
+        if (cached.colors && cached.colors.length > 0) setSelectedColor(cached.colors[0]);
+        if (cached.sizes && cached.sizes.length > 0) setSelectedSize(cached.sizes[0]);
         setQuantity(1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
+
+      productService.fetchProductBySlug(id).then(found => {
+        if (isMounted && found) {
+          setProduct(found);
+          storageService.addRecentlyViewed(found.id);
+          if (!cached) {
+            setSelectedImage(0);
+            resetZoom();
+            if (found.colors && found.colors.length > 0) setSelectedColor(found.colors[0]);
+            if (found.sizes && found.sizes.length > 0) setSelectedSize(found.sizes[0]);
+            setQuantity(1);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }
+      });
     }
+    return () => { isMounted = false; };
   }, [id]);
+
+  useEffect(() => {
+    if (!product && !id) return;
+    const targetId = product?.id || product?.slug || id || '';
+    if (!targetId) return;
+
+    const unsub = reviewService.subscribeToProductReviews(targetId, (revs) => {
+      setLiveReviews(revs);
+    });
+
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, [product?.id, product?.slug, id]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -191,49 +228,63 @@ export const ProductDetailPage: React.FC = () => {
   const isSaved = isInWishlist(product.id);
   const relatedProducts = productService.getRelatedProducts(product.id, 4);
 
-  const handleAddReview = (e: React.FormEvent) => {
+  const effectiveReviewCount = liveReviews.length > 0 ? liveReviews.length : (product.reviewCount || 0);
+  const calculatedAvg = liveReviews.length > 0 
+    ? (liveReviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) / liveReviews.length)
+    : (product.rating || 5.0);
+  const effectiveRating = Number(calculatedAvg.toFixed(1));
+
+  const handleAddReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reviewerName.trim() || !reviewComment.trim()) {
+    const cleanAuthor = reviewerName.trim();
+    const cleanComment = reviewComment.trim();
+    const cleanTitle = reviewTitle.trim() || 'Patron Review';
+
+    if (!cleanAuthor || !cleanComment) {
       warning('Please provide your name and review comment.', 'Missing Information');
       return;
     }
 
-    reviewService.addReview({
-      productId: product.id,
-      productName: product.name,
-      authorName: reviewerName.trim(),
-      authorLocation: 'India',
-      rating: reviewRating,
-      quote: reviewComment.trim(),
-      status: 'approved',
-      isFeatured: false,
-      verifiedPurchase: true
-    });
+    try {
+      const createdReview = await reviewService.addReview({
+        productId: product.id,
+        productSlug: product.slug,
+        productName: product.name,
+        authorName: cleanAuthor,
+        authorLocation: 'India',
+        rating: reviewRating,
+        title: cleanTitle,
+        quote: cleanComment,
+        comment: cleanComment,
+        status: 'approved',
+        isFeatured: false,
+        verifiedPurchase: true
+      });
 
-    const newRev: Review = {
-      id: `rev-${Date.now()}`,
-      productId: product.id,
-      userId: 'user-guest',
-      userName: reviewerName.trim(),
-      rating: reviewRating,
-      title: reviewTitle || 'Client Review',
-      comment: reviewComment.trim(),
-      verifiedPurchase: true,
-      createdAt: new Date().toISOString()
-    };
+      // Audit Log for REVIEW_CREATED
+      await auditService.logAction({
+        actorUid: user?.uid || 'patron-guest',
+        actorEmail: user?.email || 'patron@muety.in',
+        actorRole: (user?.roles?.[0] as any) || 'customer',
+        action: 'REVIEW_CREATED',
+        entityType: 'PRODUCT',
+        entityId: createdReview.id,
+        after: createdReview,
+        reason: `Submitted review for ${product.name}`
+      });
 
-    setProduct(prev => prev ? {
-      ...prev,
-      reviews: [newRev, ...(prev.reviews || [])],
-      reviewCount: (prev.reviewCount || 0) + 1
-    } : null);
-
-    success('Thank you! Your testimonial has been published.', 'Review Added');
-    setReviewerName('');
-    setReviewTitle('');
-    setReviewComment('');
-    setShowReviewForm(false);
+      success('Thank you! Your testimonial has been published to Firestore.', 'Review Added');
+      setReviewerName('');
+      setReviewTitle('');
+      setReviewComment('');
+      setShowReviewForm(false);
+    } catch (err: any) {
+      warning(err?.message || 'Failed to submit review.');
+    }
   };
+
+  const isSoldOut = product.availability === 'sold_out' || product.stock === 0;
+  const isManualSoldOut = product.availability === 'sold_out';
 
   return (
     <div className="product-detail-page animate-fade-in" style={{ paddingBottom: '6rem' }}>
@@ -334,8 +385,25 @@ export const ProductDetailPage: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--brand-accent-hover)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              {product.category} • SKU: {product.sku}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--brand-accent-hover)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                {product.category} • SKU: {product.sku}
+              </span>
+
+              {isManualSoldOut && (
+                <span style={{
+                  backgroundColor: '#991b1b',
+                  color: '#ffffff',
+                  fontSize: '0.7rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  padding: '3px 8px',
+                  borderRadius: '3px',
+                  textTransform: 'uppercase'
+                }}>
+                  🔴 SOLD OUT
+                </span>
+              )}
             </div>
 
             <h1 style={{ fontSize: '2.2rem', color: 'var(--brand-primary)', marginTop: '6px', marginBottom: '12px', lineHeight: 1.2 }}>
@@ -345,14 +413,14 @@ export const ProductDetailPage: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
               <div style={{ display: 'flex', color: '#f59e0b' }}>
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} size={16} fill={i < Math.floor(product.rating) ? '#f59e0b' : 'none'} color="#f59e0b" />
+                  <Star key={i} size={16} fill={i < Math.floor(effectiveRating) ? '#f59e0b' : 'none'} color="#f59e0b" />
                 ))}
               </div>
               <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--brand-primary)' }}>
-                {product.rating.toFixed(1)}
+                {effectiveRating.toFixed(1)}
               </span>
               <span style={{ color: 'var(--brand-muted)', fontSize: '0.85rem' }}>
-                ({product.reviewCount} verified reviews)
+                ({effectiveReviewCount} {effectiveReviewCount === 1 ? 'verified review' : 'verified reviews'})
               </span>
             </div>
 
@@ -439,8 +507,11 @@ export const ProductDetailPage: React.FC = () => {
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button
                     type="button"
-                    onClick={() => addToCart(product, quantity, selectedColor, selectedSize)}
-                    disabled={product.stock === 0}
+                    onClick={() => {
+                      if (isSoldOut) return;
+                      addToCart(product, quantity, selectedColor, selectedSize);
+                    }}
+                    disabled={isSoldOut}
                     className="btn btn-primary"
                     style={{
                       flex: 1,
@@ -450,22 +521,24 @@ export const ProductDetailPage: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '8px'
+                      gap: '8px',
+                      opacity: isSoldOut ? 0.6 : 1,
+                      cursor: isSoldOut ? 'not-allowed' : 'pointer'
                     }}
                   >
                     <ShoppingBag size={18} />
-                    {product.stock === 0 ? 'Out of Stock' : 'Add to Bag'}
+                    {isSoldOut ? 'SOLD OUT' : 'Add to Bag'}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      if (product.stock === 0) return;
+                      if (isSoldOut) return;
                       addToCart(product, quantity, selectedColor, selectedSize);
                       setIsDrawerOpen(false);
                       navigate('/checkout');
                     }}
-                    disabled={product.stock === 0}
+                    disabled={isSoldOut}
                     className="btn btn-accent"
                     style={{
                       height: '48px',
@@ -474,7 +547,9 @@ export const ProductDetailPage: React.FC = () => {
                       fontWeight: 700,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '6px'
+                      gap: '6px',
+                      opacity: isSoldOut ? 0.6 : 1,
+                      cursor: isSoldOut ? 'not-allowed' : 'pointer'
                     }}
                   >
                     <Zap size={18} fill="currentColor" /> Buy Now
@@ -510,22 +585,44 @@ export const ProductDetailPage: React.FC = () => {
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
               gap: '1.25rem',
-              marginTop: 'auto'
+              marginTop: '1.5rem'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Truck size={20} color="#d4af37" />
                 <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 700 }}>Complimentary Express</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>Dispatched within 24 hours</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700 }}>Pan-India Courier (₹89 Flat)</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>Salem atelier dispatch • Insured transit</div>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <ShieldCheck size={20} color="#d4af37" />
                 <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 700 }}>Artisan Guarantee</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>Authenticity Certificate included</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700 }}>Silk Mark Certified</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>100% Pure Mulberry Silk Guarantee</div>
                 </div>
               </div>
+            </div>
+
+            {/* Atelier Concierge Enquiry Trigger */}
+            <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+              <a
+                href={`https://wa.me/919940668095?text=${encodeURIComponent(`Hello MUETY Atelier, I am enquiring about "${product.name}" (SKU: ${product.sku || product.id}). Could you assist with drape consultation and availability?`)}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: 'var(--brand-primary)',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                💬 Enquire with Salem Atelier Concierge about this saree
+              </a>
             </div>
           </div>
         </div>
@@ -550,7 +647,7 @@ export const ProductDetailPage: React.FC = () => {
               >
                 {tab === 'details' && 'Description & Craft'}
                 {tab === 'specs' && 'Specifications'}
-                {tab === 'reviews' && `Patron Reviews (${product.reviewCount})`}
+                {tab === 'reviews' && `Patron Reviews (${liveReviews.length || (product.reviews ? product.reviews.length : product.reviewCount || 0)})`}
                 {tab === 'shipping' && 'Shipping & Care'}
               </button>
             ))}
@@ -617,29 +714,68 @@ export const ProductDetailPage: React.FC = () => {
                 )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  {(product.reviews || []).map((rev) => (
-                    <div key={rev.id} style={{ padding: '1.25rem', backgroundColor: '#ffffff', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <span style={{ fontWeight: 700, color: 'var(--brand-primary)' }}>{rev.userName}</span>
-                        <div style={{ display: 'flex', color: '#f59e0b' }}>
-                          {[...Array(5)].map((_, i) => (
-                            <Star key={i} size={14} fill={i < rev.rating ? '#f59e0b' : 'none'} color="#f59e0b" />
-                          ))}
-                        </div>
-                      </div>
-                      <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{rev.comment}</p>
+                  {liveReviews.length === 0 && (!product.reviews || product.reviews.length === 0) ? (
+                    <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#ffffff', borderRadius: 'var(--radius-md)', border: '1px dashed var(--brand-border)', color: 'var(--text-secondary)' }}>
+                      No testimonials published yet for this piece. Be the first patron to share your experience.
                     </div>
-                  ))}
+                  ) : (
+                    (liveReviews.length > 0 ? liveReviews : (product.reviews || [])).map((rev: any) => (
+                      <div key={rev.id} style={{ padding: '1.25rem', backgroundColor: '#ffffff', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 700, color: 'var(--brand-primary)' }}>{rev.authorName || rev.userName}</span>
+                            {rev.authorLocation && (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>({rev.authorLocation})</span>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', color: '#f59e0b' }}>
+                            {[...Array(5)].map((_, i) => (
+                              <Star key={i} size={14} fill={i < (rev.rating || 5) ? '#f59e0b' : 'none'} color="#f59e0b" />
+                            ))}
+                          </div>
+                        </div>
+                        {rev.title && (
+                          <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--brand-primary)', marginBottom: '4px' }}>
+                            "{rev.title}"
+                          </div>
+                        )}
+                        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+                          {rev.quote || rev.comment}
+                        </p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
 
             {activeTab === 'shipping' && (
               <div style={{ maxWidth: '800px', lineHeight: 1.8, color: 'var(--text-secondary)', fontSize: '0.98rem' }}>
-                <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.5rem' }}>Complimentary White-Glove Delivery</h4>
-                <p style={{ marginBottom: '1rem' }}>All MUETY orders feature insured, climate-controlled transit with full live tracking.</p>
-                <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.5rem' }}>Care & Storage Guidelines</h4>
-                <p>Store in the provided breathable silk-lined archival box. Avoid direct moisture or intense illumination.</p>
+                <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
+                  Pan-India Tracked Courier Delivery (₹89 Flat)
+                </h4>
+                <p style={{ marginBottom: '1rem' }}>
+                  Orders are dispatched within 24 to 48 hours from our Salem weaving atelier. Delivery across India typically takes 2 to 4 business days via insured express couriers with live AWB tracking via SMS.
+                </p>
+
+                <div style={{ backgroundColor: 'var(--bg-main)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)', marginBottom: '1.5rem', fontSize: '0.92rem' }}>
+                  <strong>Transparent Order Total Calculation:</strong><br />
+                  <code>Order Total = Item Subtotal − Discount + Applicable Tax (5% GST) + ₹89 Shipping/Delivery Charge</code>
+                </div>
+
+                <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
+                  Flexible Payment & COD Advance Policy
+                </h4>
+                <p style={{ marginBottom: '1rem' }}>
+                  Choose full online payment via Razorpay (UPI, Credit/Debit Cards, NetBanking) for seamless zero-contact delivery, or select Cash on Delivery (COD) with a ₹89 online courier advance credited directly toward your order total. The remaining balance is payable upon delivery.
+                </p>
+
+                <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
+                  Artisan Handloom Policy & Cancellation Window
+                </h4>
+                <p>
+                  Store your saree in the provided breathable muslin cover away from direct sunlight. Because each piece is handcrafted from pure silk, creations are generally non-returnable once delivered. You may submit an order cancellation request directly from your Patron Account while your order remains in "pending" status before atelier packaging.
+                </p>
               </div>
             )}
           </div>

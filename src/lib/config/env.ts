@@ -1,4 +1,4 @@
-/**
+ /**
  * Centralized Public Runtime Configuration Boundary
  * 
  * SECURITY DIRECTIVE:
@@ -8,6 +8,7 @@
  */
 
 export interface EnvConfig {
+  adminAppUrl: string;
   firebase: {
     apiKey: string;
     authDomain: string;
@@ -45,6 +46,7 @@ const cloudName = getEnvVar('VITE_CLOUDINARY_CLOUD_NAME', 'cxivbion');
 const cloudinaryApiKey = getEnvVar('VITE_CLOUDINARY_API_KEY', '922177698232752');
 
 export const env: EnvConfig = {
+  adminAppUrl: getEnvVar('VITE_ADMIN_APP_URL', 'https://www.admin.muety.in'),
   firebase: {
     apiKey,
     authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN', 'muetystore-fdad2.firebaseapp.com'),
@@ -62,7 +64,7 @@ export const env: EnvConfig = {
   cloudinary: {
     cloudName,
     apiKey: cloudinaryApiKey,
-    signatureEndpoint: getEnvVar('VITE_CLOUDINARY_SIGNATURE_ENDPOINT', '/api/cloudinary/sign'),
+    signatureEndpoint: getEnvVar('VITE_CLOUDINARY_SIGNATURE_ENDPOINT', '/api/media/cloudinary-signature'),
     isConfigured: Boolean(cloudName)
   }
 };

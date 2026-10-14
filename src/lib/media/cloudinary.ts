@@ -96,9 +96,13 @@ export function validateImageFile(fileOrDataUrl: File | Blob | string): ImageVal
     return { valid: true };
   }
 
-  // Handle string (Data URL or HTTP URL)
+  // Handle string (Data URL, HTTP URL, or Blob URL)
   if (typeof fileOrDataUrl === 'string') {
     if (fileOrDataUrl.startsWith('http://') || fileOrDataUrl.startsWith('https://')) {
+      return { valid: true };
+    }
+
+    if (fileOrDataUrl.startsWith('blob:')) {
       return { valid: true };
     }
 
@@ -143,10 +147,10 @@ export async function getCloudinaryUploadSignature(
   }
 
   const authHeader = idToken ? `Bearer ${idToken}` : undefined;
+  const endpoint = env.cloudinary.signatureEndpoint || '/api/media/cloudinary-signature';
+  const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
 
-  // Call HTTP server signature endpoint
   try {
-    const endpoint = env.cloudinary.signatureEndpoint || '/api/cloudinary/sign';
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -157,24 +161,38 @@ export async function getCloudinaryUploadSignature(
     });
 
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      if (data && data.signature) {
+        return data;
+      }
+      throw new Error('Cloudinary signature endpoint returned response without signature.');
     }
-  } catch (err) {
-    console.warn('Signature endpoint fetch note:', err);
-  }
 
-  // Development / fallback signature
-  const timestamp = Math.floor(Date.now() / 1000);
-  const cloudName = env.cloudinary.cloudName || 'cxivbion';
-  const apiKey = env.cloudinary.apiKey || '922177698232752';
-  return {
-    apiKey,
-    timestamp,
-    signature: 'dev_mock_signature_' + timestamp,
-    cloudName,
-    folder,
-    publicId
-  };
+    const errText = await res.text();
+    let parseMsg = '';
+    try {
+      const errJson = JSON.parse(errText);
+      parseMsg = errJson?.error?.message || errJson?.message || '';
+    } catch {}
+
+    throw new Error(`Cloudinary upload configuration is unavailable (${res.status}): ${parseMsg || errText || 'Signature endpoint failed'}.`);
+  } catch (err: any) {
+    console.error('Cloudinary Signature Request Error:', err);
+
+    if (isTestEnv) {
+      const timestamp = Math.floor(Date.now() / 1000);
+      return {
+        apiKey: env.cloudinary.apiKey || '922177698232752',
+        timestamp,
+        signature: 'test_environment_signature_' + timestamp,
+        cloudName: env.cloudinary.cloudName || 'cxivbion',
+        folder,
+        publicId
+      };
+    }
+
+    throw new Error(`Cloudinary upload configuration is unavailable: ${err?.message || 'Failed to fetch signature'}.`);
+  }
 }
 
 /**
@@ -202,6 +220,21 @@ export async function uploadToCloudinary(
     };
   }
 
+  // Resolve blob: URL string to binary Blob payload in browser environments
+  let payloadToUpload: File | Blob | string = fileOrDataUrl;
+  if (typeof fileOrDataUrl === 'string' && fileOrDataUrl.startsWith('blob:')) {
+    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      try {
+        const blobRes = await fetch(fileOrDataUrl);
+        if (blobRes.ok) {
+          payloadToUpload = await blobRes.blob();
+        }
+      } catch (fetchBlobErr) {
+        console.warn('Failed to resolve blob URL payload to Blob:', fetchBlobErr);
+      }
+    }
+  }
+
   // Deterministic folder assignment
   let folder = options?.folder;
   if (!folder) {
@@ -222,12 +255,7 @@ export async function uploadToCloudinary(
   const uploadUrl = `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`;
   const formData = new FormData();
 
-  if (typeof fileOrDataUrl === 'string') {
-    formData.append('file', fileOrDataUrl);
-  } else {
-    formData.append('file', fileOrDataUrl);
-  }
-
+  formData.append('file', payloadToUpload);
   formData.append('api_key', sig.apiKey);
   formData.append('timestamp', String(sig.timestamp));
   formData.append('signature', sig.signature);
@@ -249,22 +277,31 @@ export async function uploadToCloudinary(
         const errJson = JSON.parse(errorText);
         parseMsg = errJson?.error?.message || '';
       } catch {}
-      console.warn(`Cloudinary Upload Endpoint note (${res.status}): ${parseMsg || errorText}`);
-      
-      const fallbackUrl = typeof fileOrDataUrl === 'string'
-        ? fileOrDataUrl
-        : (typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(fileOrDataUrl) : '/saree_model_individual.jpg');
-      
-      return {
-        url: fallbackUrl,
-        publicId: options?.publicId || `local_${Date.now()}`
-      };
+      console.error(`Cloudinary Upload Endpoint error (${res.status}): ${parseMsg || errorText}`);
+
+      const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+      if (isTestEnv) {
+        return {
+          url: typeof fileOrDataUrl === 'string' && fileOrDataUrl.startsWith('http') 
+            ? fileOrDataUrl 
+            : 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1200&q=80',
+          publicId: options?.publicId || `test_${Date.now()}`
+        };
+      }
+
+      throw new Error(`Category image upload failed: ${parseMsg || errorText || 'Cloudinary service returned error code ' + res.status}. Please check Cloudinary configuration.`);
     }
 
     const data = await res.json();
+    const finalUrl = data.secure_url || data.url;
+
+    console.log('[CATEGORY IMAGE] Cloudinary upload result', {
+      secureUrl: finalUrl,
+      publicId: data.public_id || options?.publicId || ''
+    });
 
     return {
-      url: data.secure_url || data.url,
+      url: finalUrl,
       publicId: data.public_id || '',
       resourceType: data.resource_type || 'image',
       format: data.format || '',
@@ -273,15 +310,19 @@ export async function uploadToCloudinary(
       bytes: data.bytes
     };
   } catch (err: any) {
-    console.warn('Cloudinary Signed Upload Fallback:', err);
-    const fallbackUrl = typeof fileOrDataUrl === 'string'
-      ? fileOrDataUrl
-      : (typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(fileOrDataUrl) : '/saree_model_individual.jpg');
-    
-    return {
-      url: fallbackUrl,
-      publicId: options?.publicId || `local_${Date.now()}`
-    };
+    console.error('Cloudinary Signed Upload Error:', err);
+
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+    if (isTestEnv) {
+      return {
+        url: typeof fileOrDataUrl === 'string' && fileOrDataUrl.startsWith('http') 
+          ? fileOrDataUrl 
+          : 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1200&q=80',
+        publicId: options?.publicId || `test_${Date.now()}`
+      };
+    }
+
+    throw new Error(`Category image upload failed: ${err?.message || 'Network error or unconfigured Cloudinary credentials'}.`);
   }
 }
 

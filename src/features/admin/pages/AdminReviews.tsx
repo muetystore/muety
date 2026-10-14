@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { reviewService } from '@/features/reviews/services/reviewService';
 import { productService } from '@/features/catalog/services/productService';
+import { auditService } from '@/shared/services/auditService';
+import { useAuth } from '@/shared/context/AuthContext';
 import { PatronReview, Product } from '@/types';
+import { getUserRoles } from '@/shared/utils/permissions';
+import { AdminModal } from '@/features/admin/components/AdminModal';
 import { 
   Star, 
   CheckCircle, 
@@ -15,18 +20,23 @@ import {
   X,
   Search,
   Sparkles,
-  MessageSquare
+  MessageSquare,
+  ExternalLink,
+  Eye,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export const AdminReviews: React.FC = () => {
   useDocumentTitle('Patron Reviews & Testimonials - Admin');
+  const { user } = useAuth();
   const { success, warning } = useNotification();
 
-  const [reviews, setReviews] = useState<PatronReview[]>([]);
+  const [reviews, setReviews] = useState<PatronReview[]>(() => reviewService.getAllReviews());
   const [filterTab, setFilterTab] = useState<'all' | 'featured' | 'pending' | 'approved' | 'rejected'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
+  const [previewPhotoModal, setPreviewPhotoModal] = useState<{ url: string; author: string } | null>(null);
 
   // New review modal state
   const [authorName, setAuthorName] = useState('');
@@ -36,6 +46,8 @@ export const AdminReviews: React.FC = () => {
   const [rating, setRating] = useState(5);
   const [title, setTitle] = useState('');
   const [quote, setQuote] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [displayOrder, setDisplayOrder] = useState(1);
   const [verifiedPurchase, setVerifiedPurchase] = useState(true);
   const [isFeatured, setIsFeatured] = useState(true);
 
@@ -45,10 +57,20 @@ export const AdminReviews: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
-    const handleUpdate = () => loadData();
-    window.addEventListener('muety_reviews_updated', handleUpdate);
-    return () => window.removeEventListener('muety_reviews_updated', handleUpdate);
+    setProducts(productService.getAllProducts());
+
+    const unsubReviews = reviewService.subscribeToReviews((liveRevs) => {
+      setReviews(liveRevs);
+    });
+
+    const unsubProds = productService.subscribeToProducts((liveProds) => {
+      setProducts(liveProds);
+    });
+
+    return () => {
+      if (typeof unsubReviews === 'function') unsubReviews();
+      if (typeof unsubProds === 'function') unsubProds();
+    };
   }, []);
 
   const stats = reviewService.getStatistics();
@@ -56,6 +78,16 @@ export const AdminReviews: React.FC = () => {
   const handleToggleFeatured = async (id: string) => {
     const updated = await reviewService.toggleFeatured(id);
     if (updated) {
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'admin',
+        actorRole: getUserRoles(user)[0] || 'admin',
+        action: 'REVIEW_FEATURED',
+        entityType: 'PRODUCT',
+        entityId: id,
+        reason: `Toggled review featured state for ${updated.authorName}`
+      });
+
       if (updated.isFeatured) {
         success(`Review by "${updated.authorName}" is now featured on the Storefront Home Page.`, 'Featured on Homepage');
       } else {
@@ -68,27 +100,47 @@ export const AdminReviews: React.FC = () => {
   const handleStatusChange = async (id: string, status: 'approved' | 'rejected') => {
     const updated = await reviewService.updateReviewStatus(id, status);
     if (updated) {
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'admin',
+        actorRole: getUserRoles(user)[0] || 'admin',
+        action: status === 'approved' ? 'REVIEW_APPROVED' : 'REVIEW_REJECTED',
+        entityType: 'PRODUCT',
+        entityId: id,
+        reason: `Changed review status to ${status}`
+      });
+
       success(`Review status changed to ${status.toUpperCase()}.`, 'Status Updated');
       loadData();
     }
   };
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (window.confirm(`Are you sure you want to delete the review by ${name}?`)) {
-      reviewService.deleteReview(id);
+      await reviewService.deleteReview(id);
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'admin',
+        actorRole: getUserRoles(user)[0] || 'admin',
+        action: 'REVIEW_DELETED',
+        entityType: 'PRODUCT',
+        entityId: id,
+        reason: `Deleted review by ${name}`
+      });
+
       success(`Review deleted successfully.`, 'Deleted');
       loadData();
     }
   };
 
-  const handleCreateReview = (e: React.FormEvent) => {
+  const handleCreateReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authorName.trim() || !quote.trim() || !productName.trim()) {
       warning('Please fill in author name, product, and review impressions.');
       return;
     }
 
-    reviewService.addReview({
+    const created = await reviewService.addReview({
       authorName: authorName.trim(),
       authorLocation: authorLocation.trim() || 'Global Patron',
       productName: productName.trim(),
@@ -98,12 +150,33 @@ export const AdminReviews: React.FC = () => {
       quote: quote.trim(),
       verifiedPurchase,
       status: 'approved',
-      isFeatured
+      isFeatured,
+      showOnHome: isFeatured,
+      displayOrder: isFeatured ? displayOrder : undefined,
+      photoUrl: photoUrl.trim() || undefined
+    });
+
+    await auditService.logAction({
+      actorUid: user?.uid || 'system',
+      actorEmail: user?.email || 'admin',
+      actorRole: getUserRoles(user)[0] || 'admin',
+      action: 'REVIEW_APPROVED',
+      entityType: 'PRODUCT',
+      entityId: created.id,
+      after: created,
+      reason: `Created patron review by ${authorName}`
     });
 
     success('New patron review and testimonial published successfully.', 'Patron Review Added');
     setIsModalOpen(false);
     resetForm();
+    loadData();
+  };
+
+  const handleUpdateDisplayOrder = async (id: string, newOrder: number) => {
+    if (isNaN(newOrder) || newOrder < 1) return;
+    await reviewService.updateReviewDisplayOrder(id, newOrder);
+    success('Homepage display order saved.', 'Order Updated');
     loadData();
   };
 
@@ -115,6 +188,8 @@ export const AdminReviews: React.FC = () => {
     setRating(5);
     setTitle('');
     setQuote('');
+    setPhotoUrl('');
+    setDisplayOrder(reviews.filter(r => r.isFeatured).length + 1);
     setVerifiedPurchase(true);
     setIsFeatured(true);
   };
@@ -376,7 +451,25 @@ export const AdminReviews: React.FC = () => {
                       <MapPin size={13} /> {rev.authorLocation}
                     </span>
                     <span>•</span>
-                    <span>Product: <strong>{rev.productName}</strong></span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      Product: <strong>{rev.productName}</strong>
+                      {rev.productId && (
+                        <Link 
+                          to={`/admin/products/${rev.productId}/edit`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            color: 'var(--brand-primary)',
+                            textDecoration: 'underline',
+                            fontWeight: 600
+                          }}
+                          title="Open product editor"
+                        >
+                          <ExternalLink size={12} />
+                        </Link>
+                      )}
+                    </span>
                     <span>•</span>
                     <span>Date: {new Date(rev.createdAt).toLocaleDateString()}</span>
                   </div>
@@ -400,22 +493,83 @@ export const AdminReviews: React.FC = () => {
                 </div>
               </div>
 
-              {/* Review Content */}
+              {/* Review Content & Customer Photo Preview */}
               <div style={{
+                display: 'flex',
+                gap: '1.25rem',
                 backgroundColor: 'var(--bg-main)',
                 padding: '1.25rem',
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--brand-border)',
-                marginBottom: '1.25rem'
+                marginBottom: '1.25rem',
+                alignItems: 'flex-start'
               }}>
-                {rev.title && (
-                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--brand-primary)', marginBottom: '6px' }}>
-                    "{rev.title}"
+                {rev.photoUrl ? (
+                  <div 
+                    onClick={() => setPreviewPhotoModal({ url: rev.photoUrl!, author: rev.authorName })}
+                    style={{
+                      position: 'relative',
+                      width: '84px',
+                      height: '108px',
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      border: '2px solid rgba(201, 162, 39, 0.4)',
+                      flexShrink: 0,
+                      backgroundColor: '#0f172a',
+                      boxShadow: 'var(--shadow-sm)'
+                    }}
+                    title="Click to view full patron photograph"
+                  >
+                    <img 
+                      src={rev.photoUrl} 
+                      alt={rev.authorName} 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    />
+                    <div style={{
+                      position: 'absolute',
+                      inset: 0,
+                      backgroundColor: 'rgba(0,0,0,0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#ffffff'
+                    }}>
+                      <Eye size={18} />
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    width: '84px',
+                    height: '108px',
+                    borderRadius: '6px',
+                    border: '1.5px dashed var(--brand-border)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#ffffff',
+                    color: 'var(--brand-muted)',
+                    fontSize: '0.72rem',
+                    textAlign: 'center',
+                    padding: '6px',
+                    flexShrink: 0
+                  }}>
+                    <ImageIcon size={20} style={{ marginBottom: '4px', opacity: 0.5 }} />
+                    <span>No Photo</span>
                   </div>
                 )}
-                <p style={{ margin: 0, fontSize: '0.92rem', color: 'var(--text-secondary)', lineHeight: 1.7, fontStyle: 'italic' }}>
-                  "{rev.quote}"
-                </p>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {rev.title && (
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--brand-primary)', marginBottom: '6px' }}>
+                      "{rev.title}"
+                    </div>
+                  )}
+                  <p style={{ margin: 0, fontSize: '0.92rem', color: 'var(--text-secondary)', lineHeight: 1.7, fontStyle: 'italic' }}>
+                    "{rev.quote}"
+                  </p>
+                </div>
               </div>
 
               {/* Action Toolbar */}
@@ -428,15 +582,39 @@ export const AdminReviews: React.FC = () => {
                 borderTop: '1px solid var(--brand-border)',
                 paddingTop: '1rem'
               }}>
-                {/* Feature on Home Page Toggle */}
-                <button
-                  onClick={() => handleToggleFeatured(rev.id)}
-                  className={`btn btn-sm ${rev.isFeatured ? 'btn-primary' : 'btn-outline'}`}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <Star size={14} fill={rev.isFeatured ? '#d4af37' : 'none'} color={rev.isFeatured ? '#d4af37' : 'currentColor'} />
-                  <span>{rev.isFeatured ? 'Featured on Home (Active)' : 'Feature on Home Page'}</span>
-                </button>
+                {/* Feature on Home Page Toggle & Priority Order */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => handleToggleFeatured(rev.id)}
+                    className={`btn btn-sm ${rev.isFeatured ? 'btn-primary' : 'btn-outline'}`}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Star size={14} fill={rev.isFeatured ? '#d4af37' : 'none'} color={rev.isFeatured ? '#d4af37' : 'currentColor'} />
+                    <span>{rev.isFeatured ? 'Featured on Home (Active)' : 'Feature on Home Page'}</span>
+                  </button>
+
+                  {rev.isFeatured && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)', fontWeight: 600 }}>Home Priority:</span>
+                      <input 
+                        type="number" 
+                        min={1} 
+                        defaultValue={rev.displayOrder || 1} 
+                        onBlur={(e) => handleUpdateDisplayOrder(rev.id, parseInt(e.target.value) || 1)}
+                        style={{
+                          width: '56px',
+                          padding: '4px 6px',
+                          fontSize: '0.82rem',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1.5px solid var(--brand-border)',
+                          textAlign: 'center',
+                          fontWeight: 700
+                        }}
+                        title="Set display order on storefront homepage"
+                      />
+                    </div>
+                  )}
+                </div>
 
                 {/* Moderation Status Controls */}
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -476,184 +654,230 @@ export const AdminReviews: React.FC = () => {
       </div>
 
       {/* Create / Add Testimonial Modal */}
-      {isModalOpen && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.7)',
-          backdropFilter: 'blur(6px)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1rem'
-        }}>
-          <div className="card" style={{
-            maxWidth: '600px',
-            width: '100%',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            padding: '2rem',
-            boxShadow: 'var(--shadow-xl)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--brand-border)', paddingBottom: '1rem' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.3rem', color: 'var(--brand-primary)' }}>Add Patron Testimonial</h3>
-                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Publish verified client feedback directly to the storefront</span>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} style={{ padding: '6px', color: 'var(--brand-muted)' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateReview} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              
-              <div className="grid-2" style={{ gap: '1rem' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Patron Full Name *</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="e.g. Vikram Singhania"
-                    value={authorName} 
-                    onChange={e => setAuthorName(e.target.value)} 
-                    className="form-input" 
-                  />
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Patron Location</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. London, UK or Dubai, UAE"
-                    value={authorLocation} 
-                    onChange={e => setAuthorLocation(e.target.value)} 
-                    className="form-input" 
-                  />
-                </div>
-              </div>
-
-              {/* Product Selection */}
+      <AdminModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Add Patron Testimonial"
+        subtitle="Publish verified client feedback directly to the storefront"
+        headerIcon={<MessageSquare size={20} />}
+        maxWidth="640px"
+      >
+        <form onSubmit={handleCreateReview} style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
+          <div className="admin-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div className="grid-2" style={{ gap: '1rem' }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Associated Product *</label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <select 
-                    className="form-input"
-                    value={productId}
-                    onChange={(e) => {
-                      const pId = e.target.value;
-                      setProductId(pId);
-                      const prod = products.find(p => p.id === pId);
-                      if (prod) setProductName(prod.name);
-                    }}
-                    style={{ flex: 1 }}
-                  >
-                    <option value="">-- Select from Store Catalog or Custom --</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-                {!productId && (
-                  <input 
-                    type="text" 
-                    placeholder="Or type custom product title (e.g. Grand Veloce Weekender)"
-                    value={productName} 
-                    onChange={e => setProductName(e.target.value)} 
-                    className="form-input" 
-                    style={{ marginTop: '8px' }}
-                  />
-                )}
-              </div>
-
-              {/* Rating */}
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Rating</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  {[1, 2, 3, 4, 5].map((starVal) => (
-                    <button
-                      type="button"
-                      key={starVal}
-                      onClick={() => setRating(starVal)}
-                      style={{
-                        padding: '6px',
-                        color: starVal <= rating ? '#f59e0b' : '#cbd5e1',
-                        transition: 'transform 0.1s ease'
-                      }}
-                    >
-                      <Star size={24} fill={starVal <= rating ? '#f59e0b' : 'none'} />
-                    </button>
-                  ))}
-                  <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--brand-primary)', marginLeft: '6px' }}>
-                    {rating} out of 5 Stars
-                  </span>
-                </div>
-              </div>
-
-              {/* Review Headline & Quote */}
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Review Headline (Optional)</label>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Patron Full Name *</label>
                 <input 
                   type="text" 
-                  placeholder="e.g. Breathtaking craftsmanship and swift delivery"
-                  value={title} 
-                  onChange={e => setTitle(e.target.value)} 
+                  required 
+                  placeholder="e.g. Vikram Singhania"
+                  value={authorName} 
+                  onChange={e => setAuthorName(e.target.value)} 
                   className="form-input" 
                 />
               </div>
 
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Patron Quote / Impressions *</label>
-                <textarea 
-                  required 
-                  rows={4}
-                  placeholder="Enter the full review or impressions quote..."
-                  value={quote} 
-                  onChange={e => setQuote(e.target.value)} 
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Patron Location</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. London, UK or Dubai, UAE"
+                  value={authorLocation} 
+                  onChange={e => setAuthorLocation(e.target.value)} 
                   className="form-input" 
                 />
               </div>
+            </div>
 
-              {/* Toggles */}
-              <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', backgroundColor: 'var(--bg-main)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.88rem' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={verifiedPurchase} 
-                    onChange={e => setVerifiedPurchase(e.target.checked)} 
-                  />
-                  <span>Mark as <strong>Verified Patron</strong></span>
-                </label>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.88rem' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={isFeatured} 
-                    onChange={e => setIsFeatured(e.target.checked)} 
-                  />
-                  <span>Feature on <strong>Homepage ("Words from Discerning Patrons")</strong></span>
-                </label>
-              </div>
-
-              {/* Submit / Cancel Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '0.5rem' }}>
-                <button 
-                  type="button" 
-                  onClick={() => setIsModalOpen(false)} 
-                  className="btn btn-outline"
+            {/* Product Selection */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Associated Product *</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select 
+                  className="form-input"
+                  value={productId}
+                  onChange={(e) => {
+                    const pId = e.target.value;
+                    setProductId(pId);
+                    const prod = products.find(p => p.id === pId);
+                    if (prod) setProductName(prod.name);
+                  }}
+                  style={{ flex: 1 }}
                 >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="btn btn-primary"
-                >
-                  Publish Testimonial
-                </button>
+                  <option value="">-- Select from Store Catalog or Custom --</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
               </div>
-            </form>
+              {!productId && (
+                <input 
+                  type="text" 
+                  placeholder="Or type custom product title (e.g. Grand Veloce Weekender)"
+                  value={productName} 
+                  onChange={e => setProductName(e.target.value)} 
+                  className="form-input" 
+                  style={{ marginTop: '8px' }}
+                />
+              )}
+            </div>
+
+            {/* Rating */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Rating</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {[1, 2, 3, 4, 5].map((starVal) => (
+                  <button
+                    type="button"
+                    key={starVal}
+                    onClick={() => setRating(starVal)}
+                    style={{
+                      padding: '4px',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: starVal <= rating ? '#f59e0b' : '#cbd5e1',
+                      transition: 'transform 0.15s ease'
+                    }}
+                  >
+                    <Star size={24} fill={starVal <= rating ? '#f59e0b' : 'none'} />
+                  </button>
+                ))}
+                <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#090d16', marginLeft: '6px' }}>
+                  {rating} out of 5 Stars
+                </span>
+              </div>
+            </div>
+
+            {/* Review Headline & Quote */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Review Headline (Optional)</label>
+              <input 
+                type="text" 
+                placeholder="e.g. Breathtaking craftsmanship and swift delivery"
+                value={title} 
+                onChange={e => setTitle(e.target.value)} 
+                className="form-input" 
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Patron Quote / Impressions *</label>
+              <textarea 
+                required 
+                rows={4}
+                placeholder="Enter the full review or impressions quote..."
+                value={quote} 
+                onChange={e => setQuote(e.target.value)} 
+                className="form-input" 
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+
+            {/* Customer Photo URL */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Customer Photograph URL (Optional)</label>
+              <input 
+                type="url" 
+                placeholder="https://... Cloudinary or hosted photo URL"
+                value={photoUrl} 
+                onChange={e => setPhotoUrl(e.target.value)} 
+                className="form-input" 
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>
+                Original patron portrait photo to display in the polaroid review frame.
+              </span>
+            </div>
+
+            {/* Toggles */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid #e2e8f0' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.88rem', color: '#1e293b' }}>
+                <input 
+                  type="checkbox" 
+                  checked={verifiedPurchase} 
+                  onChange={e => setVerifiedPurchase(e.target.checked)} 
+                  style={{ width: '16px', height: '16px', accentColor: '#090d16' }}
+                />
+                <span>Mark as <strong>Verified Patron</strong></span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.88rem', color: '#1e293b' }}>
+                <input 
+                  type="checkbox" 
+                  checked={isFeatured} 
+                  onChange={e => setIsFeatured(e.target.checked)} 
+                  style={{ width: '16px', height: '16px', accentColor: '#090d16' }}
+                />
+                <span>Feature on <strong>Homepage ("Loved by Our Customers")</strong></span>
+              </label>
+
+              {isFeatured && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Homepage Display Priority:</span>
+                  <input 
+                    type="number"
+                    min={1}
+                    value={displayOrder}
+                    onChange={e => setDisplayOrder(parseInt(e.target.value) || 1)}
+                    className="form-input"
+                    style={{ width: '80px', padding: '4px 8px' }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+
+          {/* Submit / Cancel Buttons */}
+          <div className="admin-modal-footer">
+            <button 
+              type="button" 
+              onClick={() => setIsModalOpen(false)} 
+              className="btn btn-outline"
+              style={{ fontWeight: 600, color: '#475569' }}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              className="btn btn-primary"
+              style={{ fontWeight: 700 }}
+            >
+              Publish Testimonial
+            </button>
+          </div>
+        </form>
+      </AdminModal>
+
+      {/* Customer Photo Lightbox Zoom Modal */}
+      {previewPhotoModal && (
+        <AdminModal
+          isOpen={true}
+          onClose={() => setPreviewPhotoModal(null)}
+          title={`Customer Photograph — ${previewPhotoModal.author}`}
+        >
+          <div style={{ textAlign: 'center', padding: '1rem' }}>
+            <img 
+              src={previewPhotoModal.url} 
+              alt={previewPhotoModal.author} 
+              style={{ 
+                maxWidth: '100%', 
+                maxHeight: '65vh', 
+                borderRadius: '8px', 
+                objectFit: 'contain',
+                boxShadow: 'var(--shadow-md)',
+                backgroundColor: '#000000'
+              }} 
+            />
+            <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+              <button 
+                onClick={() => setPreviewPhotoModal(null)}
+                className="btn btn-primary"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </AdminModal>
       )}
 
     </div>

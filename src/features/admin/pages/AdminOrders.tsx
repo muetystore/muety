@@ -20,7 +20,9 @@ import {
   CheckCircle2,
   XCircle,
   FileText,
-  User
+  User,
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 
 export const AdminOrders: React.FC = () => {
@@ -28,7 +30,9 @@ export const AdminOrders: React.FC = () => {
   const { user } = useAuth();
   const { success, error } = useNotification();
 
-  const [orders, setOrders] = useState<Order[]>(storageService.getOrders());
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [queryError, setQueryError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -40,13 +44,24 @@ export const AdminOrders: React.FC = () => {
   const [isUpdatingTracking, setIsUpdatingTracking] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = orderService.subscribeToAllOrders((liveOrders) => {
-      setOrders(liveOrders);
-      if (selectedOrder) {
-        const matching = liveOrders.find(o => o.id === selectedOrder.id);
-        if (matching) setSelectedOrder(matching);
+    setLoading(true);
+    setQueryError(null);
+
+    const unsubscribe = orderService.subscribeToAllOrders(
+      (liveOrders) => {
+        setOrders(liveOrders);
+        setLoading(false);
+        setQueryError(null);
+        if (selectedOrder) {
+          const matching = liveOrders.find(o => o.id === selectedOrder.id);
+          if (matching) setSelectedOrder(matching);
+        }
+      },
+      (err) => {
+        setLoading(false);
+        setQueryError(`Firestore Query / Permission Error: ${err?.message || 'Unable to sync live orders.'}`);
       }
-    });
+    );
 
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
@@ -174,6 +189,40 @@ export const AdminOrders: React.FC = () => {
         </select>
       </div>
 
+      {/* Query Error Notice */}
+      {queryError && (
+        <div style={{
+          backgroundColor: '#fef2f2',
+          border: '1px solid #f87171',
+          borderRadius: 'var(--radius-md)',
+          padding: '1rem 1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          color: '#991b1b'
+        }}>
+          <AlertTriangle size={20} color="#dc2626" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, fontSize: '0.9rem' }}>
+            <strong>Database Query Notice:</strong> {queryError}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              setQueryError(null);
+              orderService.subscribeToAllOrders(
+                (live) => { setOrders(live); setLoading(false); setQueryError(null); },
+                (err) => { setLoading(false); setQueryError(`Firestore Query / Permission Error: ${err?.message || 'Unable to sync live orders.'}`); }
+              );
+            }}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <RefreshCw size={14} /> Retry
+          </button>
+        </div>
+      )}
+
       {/* Orders Table */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
@@ -190,7 +239,22 @@ export const AdminOrders: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: '3.5rem', textAlign: 'center', color: '#64748b' }}>
+                    <Loader2 className="animate-spin" size={32} color="var(--brand-accent)" style={{ margin: '0 auto 0.75rem', display: 'block' }} />
+                    <p style={{ margin: 0, fontWeight: 600 }}>Syncing live client orders from Firestore...</p>
+                  </td>
+                </tr>
+              ) : queryError ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: '#b91c1c' }}>
+                    <AlertTriangle size={36} color="#ef4444" style={{ margin: '0 auto 0.75rem', display: 'block' }} />
+                    <p style={{ margin: 0, fontWeight: 700 }}>Unable to load live orders</p>
+                    <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{queryError}</span>
+                  </td>
+                </tr>
+              ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                     <Truck size={36} color="#cbd5e1" style={{ margin: '0 auto 0.75rem', display: 'block' }} />
@@ -249,28 +313,8 @@ export const AdminOrders: React.FC = () => {
 
       {/* ORDER DETAIL & FULFILLMENT MODAL */}
       {selectedOrder && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.75)',
-          backdropFilter: 'blur(8px)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1rem'
-        }}>
-          <div style={{
-            backgroundColor: '#ffffff',
-            borderRadius: 'var(--radius-xl)',
-            width: '100%',
-            maxWidth: '850px',
-            maxHeight: '92vh',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.5)',
-            overflow: 'hidden'
-          }}>
+        <div className="admin-modal-overlay" onClick={() => setSelectedOrder(null)}>
+          <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '850px' }}>
             {/* Modal Header */}
             <div style={{
               padding: '1.25rem 1.75rem',
@@ -425,14 +469,46 @@ export const AdminOrders: React.FC = () => {
                       <span>Subtotal</span>
                       <span>₹{(selectedOrder.subtotal || selectedOrder.total).toLocaleString('en-IN')}</span>
                     </div>
+                    {selectedOrder.discount ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#10b981' }}>
+                        <span>Discount ({selectedOrder.appliedCoupon || 'Coupon'})</span>
+                        <span>-₹{selectedOrder.discount.toLocaleString('en-IN')}</span>
+                      </div>
+                    ) : null}
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Shipping Charge</span>
-                      <span>₹{(selectedOrder.shippingFee || 100).toLocaleString('en-IN')}</span>
+                      <span>Shipping (Pan-India Tracked Courier)</span>
+                      <span>₹{(selectedOrder.shippingFee !== undefined ? selectedOrder.shippingFee : 89).toLocaleString('en-IN')}</span>
                     </div>
+                    {selectedOrder.tax ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Tax (GST)</span>
+                        <span>₹{selectedOrder.tax.toLocaleString('en-IN')}</span>
+                      </div>
+                    ) : null}
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 800, color: 'var(--brand-primary)', paddingTop: '6px', borderTop: '1px solid #e2e8f0' }}>
                       <span>Grand Total</span>
                       <span>₹{selectedOrder.total.toLocaleString('en-IN')}</span>
                     </div>
+
+                    {selectedOrder.paymentMethod === 'cash_on_delivery' && (
+                      <div style={{ marginTop: '8px', padding: '10px', backgroundColor: '#fef3c7', borderRadius: '6px', fontSize: '0.85rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#92400e', fontWeight: 600 }}>
+                          <span>COD Online Courier Advance:</span>
+                          <span>₹{(selectedOrder.codAdvanceAmount || 89).toLocaleString('en-IN')}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#78350f', fontWeight: 800, marginTop: '2px' }}>
+                          <span>Balance Due from Customer on Delivery:</span>
+                          <span>₹{(selectedOrder.codBalanceDue ?? (selectedOrder.total - 89)).toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedOrder.cancellationRequested && (
+                      <div style={{ marginTop: '8px', padding: '10px', backgroundColor: '#fee2e2', borderRadius: '6px', border: '1px solid #fca5a5', fontSize: '0.85rem' }}>
+                        <strong style={{ color: '#991b1b', display: 'block' }}>⚠️ Patron Requested Cancellation</strong>
+                        <span style={{ color: '#7f1d1d' }}>Reason: {selectedOrder.cancellationReason || 'Patron requested order cancellation prior to dispatch.'}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

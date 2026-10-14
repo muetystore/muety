@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import crypto from 'crypto';
 import { hasRole, hasAnyRole, hasPermission } from '../../shared/utils/permissions';
 import { UserProfile } from '../../shared/types';
+import { verifyIdTokenAndGetClaims } from '../../../server/firebaseAdmin';
+import { handleVerifyPayment } from '../../../server/paymentApi';
+import { verifyServerMediaAuthorization } from '../../../server/media/cloudinaryServer';
 
 describe('MUETY Production Security & RBAC Policies', () => {
   const superAdminUser: UserProfile = {
@@ -50,6 +54,7 @@ describe('MUETY Production Security & RBAC Policies', () => {
 
   it('Enforces Super Admin full authority', () => {
     expect(hasRole(superAdminUser, 'super_admin')).toBe(true);
+    expect(hasAnyRole(superAdminUser, ['superadmin', 'super_admin'])).toBe(true);
     expect(hasPermission(superAdminUser, 'roles.manage')).toBe(true);
     expect(hasPermission(superAdminUser, 'settings.manage')).toBe(true);
     expect(hasPermission(superAdminUser, 'products.write')).toBe(true);
@@ -84,5 +89,94 @@ describe('MUETY Production Security & RBAC Policies', () => {
     expect(hasPermission(customerUser, 'orders.fulfill')).toBe(false);
     expect(hasPermission(customerUser, 'settings.manage')).toBe(false);
     expect(hasPermission(customerUser, 'audit.read')).toBe(false);
+  });
+
+  describe('Server Claims & ID Token Security Hardening', () => {
+    it('Never escalates unprivileged or empty-role tokens to superadmin', async () => {
+      // Craft a mock token with no roles specified
+      const mockPayload = Buffer.from(JSON.stringify({
+        uid: 'user-patron-999',
+        email: 'patron999@gmail.com'
+        // no roles field
+      })).toString('base64');
+      const testToken = `Bearer header.${mockPayload}.signature`;
+
+      const claims = await verifyIdTokenAndGetClaims(testToken);
+      expect(claims).not.toBeNull();
+      expect(claims?.roles).not.toContain('superadmin');
+      expect(claims?.roles).not.toContain('super_admin');
+      expect(claims?.roles).toEqual(['customer']);
+    });
+  });
+
+  describe('Payment Verification Cryptographic Boundary', () => {
+    const testSecret = 'rzp_test_secret_for_hardening_tests_xyz123';
+
+    it('Rejects payment verification when orderId or signature is missing', async () => {
+      process.env.RAZORPAY_KEY_SECRET = testSecret;
+
+      // Missing orderId & signature
+      await expect(
+        handleVerifyPayment(undefined, {
+          paymentId: 'pay_123456789'
+        })
+      ).rejects.toThrow(/INVALID_ARGUMENT: Missing required Razorpay order identifier/i);
+
+      // Missing signature only
+      await expect(
+        handleVerifyPayment(undefined, {
+          paymentId: 'pay_123456789',
+          orderId: 'order_123456789'
+        })
+      ).rejects.toThrow(/INVALID_ARGUMENT: Missing required Razorpay cryptographic signature/i);
+    });
+
+    it('Rejects forged Razorpay payment signature', async () => {
+      process.env.RAZORPAY_KEY_SECRET = testSecret;
+
+      await expect(
+        handleVerifyPayment(undefined, {
+          paymentId: 'pay_real_123',
+          orderId: 'order_real_123',
+          signature: 'bad_forged_signature_00000000000000000000000000000000'
+        })
+      ).rejects.toThrow(/PERMISSION_DENIED: Security Alert: Invalid Razorpay signature mismatch/i);
+    });
+
+    it('Successfully validates authentic HMAC SHA-256 signature', async () => {
+      process.env.RAZORPAY_KEY_SECRET = testSecret;
+      const orderId = 'order_valid_789';
+      const paymentId = 'pay_valid_789';
+
+      const validSig = crypto
+        .createHmac('sha256', testSecret)
+        .update(`${orderId}|${paymentId}`)
+        .digest('hex');
+
+      const res = await handleVerifyPayment(undefined, {
+        orderId,
+        paymentId,
+        signature: validSig
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.verified).toBe(true);
+      expect(res.paymentId).toBe(paymentId);
+    });
+  });
+
+  describe('Media Management Authorization Hardening', () => {
+    it('Denies non-corporate email containing "admin" in domain from media management', async () => {
+      const mockPayload = Buffer.from(JSON.stringify({
+        uid: 'attacker-1',
+        email: 'attacker-admin@randomdomain.com',
+        roles: ['customer']
+      })).toString('base64');
+      const testToken = `Bearer header.${mockPayload}.signature`;
+
+      await expect(
+        verifyServerMediaAuthorization(testToken, 'muety/categories')
+      ).rejects.toThrow(/PERMISSION_DENIED/i);
+    });
   });
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Logo } from './Logo';
 import { useCart } from '@/shared/context/CartContext';
@@ -11,10 +11,16 @@ import {
   Menu, 
   X, 
   ChevronDown,
-  LogOut,
-  Package,
-  LayoutDashboard
+  LogOut, 
+  Package, 
+  LayoutDashboard,
+  Sparkles,
+  Layers,
+  ChevronRight
 } from 'lucide-react';
+import { productService } from '@/features/catalog/services/productService';
+import { Category } from '@/types';
+import { SearchOverlay } from './SearchOverlay';
 
 export const Header: React.FC = () => {
   const { cartCount, setIsDrawerOpen, wishlist } = useCart();
@@ -25,17 +31,41 @@ export const Header: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
+  const [collectionsMenuOpen, setCollectionsMenuOpen] = useState(false);
+  const [shopByMenuOpen, setShopByMenuOpen] = useState(false);
+  const [mobileShopByOpen, setMobileShopByOpen] = useState(false);
+  const [mobileCollectionsOpen, setMobileCollectionsOpen] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => 
+    typeof window !== 'undefined' ? window.innerWidth < 992 : false
+  );
 
+  const collectionsTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const shopByTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const accountRef = useRef<HTMLDivElement | null>(null);
+  const collectionsRef = useRef<HTMLDivElement | null>(null);
+  const shopByRef = useRef<HTMLDivElement | null>(null);
+
+  // Viewport resize tracking
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileViewport(window.innerWidth < 992);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Header scroll appearance
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
+      setIsScrolled(window.scrollY > 15);
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // External open triggers (e.g. from hero banners or shortcuts)
   useEffect(() => {
     const handleOpenMenu = () => setMobileMenuOpen(true);
     const handleOpenSearch = () => setSearchOpen(true);
@@ -49,251 +79,441 @@ export const Header: React.FC = () => {
     };
   }, []);
 
+  // Fetch real categories
+  useEffect(() => {
+    const unsub = productService.subscribeToCategories((cats) => {
+      setCategories(cats || []);
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
+
+  // Close menus on route change
   useEffect(() => {
     setMobileMenuOpen(false);
     setSearchOpen(false);
     setAccountDropdownOpen(false);
+    setCollectionsMenuOpen(false);
+    setShopByMenuOpen(false);
   }, [location]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/products?q=${encodeURIComponent(searchQuery.trim())}`);
-      setSearchOpen(false);
-    }
+  // Click outside & Escape key listeners
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setCollectionsMenuOpen(false);
+        setShopByMenuOpen(false);
+        setAccountDropdownOpen(false);
+        setMobileMenuOpen(false);
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (collectionsRef.current && !collectionsRef.current.contains(target)) {
+        setCollectionsMenuOpen(false);
+      }
+      if (shopByRef.current && !shopByRef.current.contains(target)) {
+        setShopByMenuOpen(false);
+      }
+      if (accountRef.current && !accountRef.current.contains(target)) {
+        setAccountDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Collections hover handlers with debounce bridge
+  const handleCollectionsEnter = () => {
+    if (collectionsTimerRef.current) clearTimeout(collectionsTimerRef.current);
+    setShopByMenuOpen(false);
+    setCollectionsMenuOpen(true);
+  };
+
+  const handleCollectionsLeave = () => {
+    collectionsTimerRef.current = setTimeout(() => {
+      setCollectionsMenuOpen(false);
+    }, 180);
+  };
+
+  // Shop By hover handlers with debounce bridge
+  const handleShopByEnter = () => {
+    if (shopByTimerRef.current) clearTimeout(shopByTimerRef.current);
+    setCollectionsMenuOpen(false);
+    setShopByMenuOpen(true);
+  };
+
+  const handleShopByLeave = () => {
+    shopByTimerRef.current = setTimeout(() => {
+      setShopByMenuOpen(false);
+    }, 180);
   };
 
   return (
     <>
-      <header style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 1000,
-        backgroundColor: isScrolled ? 'rgba(255, 255, 255, 0.95)' : '#ffffff',
-        backdropFilter: 'blur(16px)',
-        borderBottom: '1px solid var(--brand-border)',
-        boxShadow: isScrolled ? 'var(--shadow-sm)' : 'none',
-        transition: 'all var(--transition-normal)'
-      }}>
-        <div className="container" style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          height: 'var(--header-height)'
-        }}>
-          <button 
-            className="mobile-menu-btn"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            style={{
-              display: 'none',
-              padding: '8px',
-              color: 'var(--brand-primary)',
-              borderRadius: 'var(--radius-sm)'
-            }}
-            aria-label="Toggle Navigation"
-          >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <Logo size="md" />
-          </div>
-
-          <nav className="desktop-nav" style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1.8rem'
-          }}>
-            <NavLink 
-              to="/" 
-              style={({ isActive }) => ({
-                fontFamily: 'var(--font-heading)',
-                fontSize: '0.92rem',
-                fontWeight: isActive ? 700 : 500,
-                letterSpacing: '0.02em',
-                color: isActive ? '#0f172a' : '#475569',
-                position: 'relative',
-                padding: '6px 0',
-                borderBottom: isActive ? '2px solid #0f172a' : '2px solid transparent'
-              })}
-            >
-              Home
-            </NavLink>
-
-            <NavLink 
-              to="/categories" 
-              style={({ isActive }) => ({
-                fontFamily: 'var(--font-heading)',
-                fontSize: '0.92rem',
-                fontWeight: isActive ? 700 : 500,
-                letterSpacing: '0.02em',
-                color: isActive ? '#0f172a' : '#475569',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '6px 0',
-                borderBottom: isActive ? '2px solid #0f172a' : '2px solid transparent'
-              })}
-            >
-              Categories <ChevronDown size={14} />
-            </NavLink>
-
-            <NavLink 
-              to="/products" 
-              style={({ isActive }) => ({
-                fontFamily: 'var(--font-heading)',
-                fontSize: '0.92rem',
-                fontWeight: isActive ? 700 : 500,
-                letterSpacing: '0.02em',
-                color: isActive ? '#0f172a' : '#475569',
-                position: 'relative',
-                padding: '6px 0',
-                borderBottom: isActive ? '2px solid #0f172a' : '2px solid transparent'
-              })}
-            >
-              Collection
-            </NavLink>
-
-            <NavLink 
-              to="/products?tag=new" 
-              style={({ isActive }) => ({
-                fontFamily: 'var(--font-heading)',
-                fontSize: '0.92rem',
-                fontWeight: isActive ? 700 : 500,
-                letterSpacing: '0.02em',
-                color: isActive ? '#0f172a' : '#475569',
-                position: 'relative',
-                padding: '6px 0',
-                borderBottom: isActive ? '2px solid #0f172a' : '2px solid transparent'
-              })}
-            >
-              New Arrivals
-            </NavLink>
-
-            <NavLink 
-              to="/about" 
-              style={({ isActive }) => ({
-                fontFamily: 'var(--font-heading)',
-                fontSize: '0.92rem',
-                fontWeight: isActive ? 700 : 500,
-                letterSpacing: '0.02em',
-                color: isActive ? '#0f172a' : '#475569',
-                position: 'relative',
-                padding: '6px 0',
-                borderBottom: isActive ? '2px solid #0f172a' : '2px solid transparent'
-              })}
-            >
-              About Us
-            </NavLink>
-          </nav>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+      <header className={`main-header ${isScrolled ? 'scrolled' : ''}`}>
+        <div className="header-container">
+          {/* =========================================================
+              MOBILE LEFT CLUSTER: Hamburger Menu & Search
+              DESKTOP LEFT: 1. Muety Logo
+             ========================================================= */}
+          <div className="header-left-cluster">
+            {/* Mobile Hamburger Button */}
             <button 
-              onClick={() => setSearchOpen(!searchOpen)}
-              style={{
-                color: 'var(--brand-primary)',
-                padding: '6px',
-                borderRadius: 'var(--radius-sm)',
-                display: 'flex',
-                alignItems: 'center'
-              }}
-              title="Search Catalog"
+              className="mobile-menu-btn"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? 'Close Navigation Menu' : 'Open Navigation Menu'}
+              aria-expanded={mobileMenuOpen}
             >
-              <Search size={20} />
+              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
 
-            <Link 
-              to="/account?tab=wishlist" 
-              style={{
-                color: 'var(--brand-primary)',
-                padding: '6px',
-                borderRadius: 'var(--radius-sm)',
-                display: 'flex',
-                alignItems: 'center',
-                position: 'relative'
-              }}
-              title="Wishlist"
+            {/* Desktop: 1. Muety Logo */}
+            <div className="header-logo-desktop">
+              <Logo size="md" />
+            </div>
+          </div>
+
+          {/* =========================================================
+              MOBILE CENTER CLUSTER: Centered Logo
+              DESKTOP CENTER/NAV: 2. Shop By | 3. Collections | 4. Patron Care
+             ========================================================= */}
+          <div className="header-center-cluster">
+            {/* Mobile Centered Logo */}
+            <div className="header-logo-mobile">
+              <Logo size="sm" />
+            </div>
+
+            {/* Desktop Navigation Links */}
+            <nav className="desktop-nav" aria-label="Main Navigation">
+              {/* 2. Shop By Mega-Menu */}
+              <div 
+                ref={shopByRef}
+                className="nav-dropdown-wrapper"
+                onMouseEnter={handleShopByEnter}
+                onMouseLeave={handleShopByLeave}
+              >
+                <button
+                  type="button"
+                  className={`nav-dropdown-trigger ${shopByMenuOpen ? 'active' : ''}`}
+                  onClick={() => {
+                    setCollectionsMenuOpen(false);
+                    setShopByMenuOpen(!shopByMenuOpen);
+                  }}
+                  aria-haspopup="true"
+                  aria-expanded={shopByMenuOpen}
+                >
+                  <span>Shop By</span>
+                  <ChevronDown 
+                    size={14} 
+                    className={`nav-chevron ${shopByMenuOpen ? 'rotated' : ''}`}
+                  />
+                </button>
+
+                {shopByMenuOpen && (
+                  <div 
+                    className="shopby-megamenu animate-fade-in"
+                    onMouseEnter={handleShopByEnter}
+                    onMouseLeave={handleShopByLeave}
+                  >
+                    <div className="shopby-megamenu-grid">
+                      {/* Column 1: Occasion */}
+                      <div className="shopby-column">
+                        <div className="shopby-column-title">Shop by Occasion</div>
+                        <ul className="shopby-link-list">
+                          <li>
+                            <Link to="/products?occasion=wedding" onClick={() => setShopByMenuOpen(false)}>
+                              Wedding & Bridal Sarees
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?occasion=festive" onClick={() => setShopByMenuOpen(false)}>
+                              Festive Handlooms
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?occasion=party" onClick={() => setShopByMenuOpen(false)}>
+                              Party & Reception Wear
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?occasion=celebration" onClick={() => setShopByMenuOpen(false)}>
+                              Grand Celebrations
+                            </Link>
+                          </li>
+                        </ul>
+                      </div>
+
+                      {/* Column 2: Fabric */}
+                      <div className="shopby-column">
+                        <div className="shopby-column-title">Shop by Fabric</div>
+                        <ul className="shopby-link-list">
+                          <li>
+                            <Link to="/products?fabric=pure-silk" onClick={() => setShopByMenuOpen(false)}>
+                              Pure Mulberry Silk
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?fabric=kanchipuram" onClick={() => setShopByMenuOpen(false)}>
+                              Kanchipuram Silk
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?fabric=cotton" onClick={() => setShopByMenuOpen(false)}>
+                              Traditional Cotton Handloom
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?fabric=georgette" onClick={() => setShopByMenuOpen(false)}>
+                              Georgette & Soft Crepe
+                            </Link>
+                          </li>
+                        </ul>
+                      </div>
+
+                      {/* Column 3: Style */}
+                      <div className="shopby-column">
+                        <div className="shopby-column-title">Shop by Style</div>
+                        <ul className="shopby-link-list">
+                          <li>
+                            <Link to="/products?style=traditional" onClick={() => setShopByMenuOpen(false)}>
+                              Traditional Classic
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?style=contemporary" onClick={() => setShopByMenuOpen(false)}>
+                              Contemporary Designer
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?style=temple" onClick={() => setShopByMenuOpen(false)}>
+                              Royal Temple Borders
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?tag=zari" onClick={() => setShopByMenuOpen(false)}>
+                              Pure Gold Zari Handlooms
+                            </Link>
+                          </li>
+                        </ul>
+                      </div>
+
+                      {/* Column 4: Price & Curated Edits */}
+                      <div className="shopby-column shopby-column-highlight">
+                        <div className="shopby-column-title">Curated & Price Edits</div>
+                        <ul className="shopby-link-list">
+                          <li>
+                            <Link to="/products?maxPrice=2000" onClick={() => setShopByMenuOpen(false)}>
+                              Under ₹2,000
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?minPrice=2000&maxPrice=5000" onClick={() => setShopByMenuOpen(false)}>
+                              ₹2,000 – ₹5,000
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?minPrice=5000" onClick={() => setShopByMenuOpen(false)}>
+                              Above ₹5,000
+                            </Link>
+                          </li>
+                          <li className="shopby-divider-li" />
+                          <li>
+                            <Link to="/products?tag=new" className="highlight-gold" onClick={() => setShopByMenuOpen(false)}>
+                              ✨ New Arrivals
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?tag=bestseller" className="highlight-gold" onClick={() => setShopByMenuOpen(false)}>
+                              👑 Best Sellers
+                            </Link>
+                          </li>
+                          <li>
+                            <Link to="/products?tag=sale" className="highlight-red" onClick={() => setShopByMenuOpen(false)}>
+                              🔥 Festive Special Edit
+                            </Link>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="shopby-footer">
+                      <Link to="/products" onClick={() => setShopByMenuOpen(false)} className="shopby-footer-link">
+                        Explore Full Handloom Repertory &rarr;
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Collections Dropdown */}
+              <div 
+                ref={collectionsRef}
+                className="nav-dropdown-wrapper"
+                onMouseEnter={handleCollectionsEnter}
+                onMouseLeave={handleCollectionsLeave}
+              >
+                <button 
+                  type="button"
+                  className={`nav-dropdown-trigger ${collectionsMenuOpen ? 'active' : ''}`}
+                  onClick={() => {
+                    setShopByMenuOpen(false);
+                    setCollectionsMenuOpen(!collectionsMenuOpen);
+                  }}
+                  aria-haspopup="true"
+                  aria-expanded={collectionsMenuOpen}
+                >
+                  <span>Collections</span>
+                  <ChevronDown 
+                    size={14} 
+                    className={`nav-chevron ${collectionsMenuOpen ? 'rotated' : ''}`}
+                  />
+                </button>
+
+                {collectionsMenuOpen && (
+                  <div 
+                    className="collections-dropdown-menu animate-fade-in"
+                    onMouseEnter={handleCollectionsEnter}
+                    onMouseLeave={handleCollectionsLeave}
+                  >
+                    <div className="dropdown-section-header">
+                      Explore Handloom Categories
+                    </div>
+
+                    <div className="dropdown-scroll-list">
+                      {categories.length > 0 ? (
+                        categories.map((cat) => (
+                          <Link
+                            key={cat.id}
+                            to={`/products?cat=${cat.slug}`}
+                            onClick={() => setCollectionsMenuOpen(false)}
+                            className="dropdown-item-link"
+                          >
+                            <span>{cat.name}</span>
+                            <span className="dropdown-item-arrow">&rarr;</span>
+                          </Link>
+                        ))
+                      ) : (
+                        <Link
+                          to="/categories"
+                          onClick={() => setCollectionsMenuOpen(false)}
+                          className="dropdown-item-link"
+                        >
+                          <span>All Categories</span>
+                          <span className="dropdown-item-arrow">&rarr;</span>
+                        </Link>
+                      )}
+                    </div>
+
+                    <div className="dropdown-footer-actions">
+                      <Link
+                        to="/categories"
+                        onClick={() => setCollectionsMenuOpen(false)}
+                        className="dropdown-footer-link"
+                      >
+                        Browse Category Directory &rarr;
+                      </Link>
+                      <Link
+                        to="/products"
+                        onClick={() => setCollectionsMenuOpen(false)}
+                        className="dropdown-footer-link gold"
+                      >
+                        View Complete Catalog &rarr;
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Patron Care */}
+              <NavLink to="/support" className="nav-simple-link">
+                Patron Care
+              </NavLink>
+            </nav>
+          </div>
+
+          {/* =========================================================
+              DESKTOP ACTIONS: 5. Search | 6. Wishlist | 7. Bag | 8. Account
+              MOBILE ACTIONS: Bag only (with live badge)
+             ========================================================= */}
+          <div className="header-actions header-right-cluster">
+            {/* 5. Search Icon Button (Desktop & Mobile) */}
+            <button 
+              onClick={() => setSearchOpen(true)}
+              className="header-icon-btn header-search-btn"
+              title="Search Catalog"
+              aria-label="Search Catalog"
             >
-              <Heart size={20} />
+              <Search size={21} />
+            </button>
+
+            {/* 6. Desktop Wishlist Link (Hidden on mobile via CSS) */}
+            <Link 
+              to="/wishlist" 
+              className="header-icon-btn header-wishlist-btn"
+              title="Wishlist"
+              aria-label={`Wishlist (${wishlist.length} saved)`}
+            >
+              <Heart size={21} />
               {wishlist.length > 0 && (
-                <span style={{
-                  position: 'absolute',
-                  top: '0px',
-                  right: '0px',
-                  backgroundColor: '#b91c1c',
-                  color: '#ffffff',
-                  fontSize: '0.65rem',
-                  fontWeight: 800,
-                  width: '16px',
-                  height: '16px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
+                <span className="header-badge-count">
                   {wishlist.length}
                 </span>
               )}
             </Link>
 
-            <div style={{ position: 'relative' }}>
+            {/* 7. Shopping Bag Button (Desktop & Mobile) */}
+            <button 
+              onClick={() => setIsDrawerOpen(true)}
+              className="header-bag-btn"
+              aria-label={`Shopping Bag (${cartCount} items)`}
+              title={`Shopping Bag (${cartCount})`}
+            >
+              <ShoppingBag size={18} color="#facc15" />
+              <span className="header-bag-label">Bag ({cartCount})</span>
+              <span className="header-bag-mobile-badge">{cartCount}</span>
+            </button>
+
+            {/* 8. Desktop Account Profile / Dropdown */}
+            <div ref={accountRef} className="header-user-wrapper">
               {isAuthenticated ? (
                 <button
                   onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    color: 'var(--brand-primary)',
-                    padding: '4px 8px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--brand-border)',
-                    fontSize: '0.85rem',
-                    fontWeight: 600,
-                    backgroundColor: '#ffffff'
-                  }}
+                  aria-expanded={accountDropdownOpen}
+                  aria-haspopup="true"
+                  className="header-account-btn"
                 >
-                  <User size={18} color="var(--brand-accent-hover)" />
-                  <span style={{ maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <User size={17} color="var(--brand-accent-hover)" />
+                  <span className="account-user-name">
                     {user?.displayName ? user.displayName.split(' ')[0] : 'Account'}
                   </span>
-                  <ChevronDown size={14} />
+                  <ChevronDown size={14} className={`nav-chevron ${accountDropdownOpen ? 'rotated' : ''}`} />
                 </button>
               ) : (
                 <Link 
-                  to="/login" 
-                  style={{
-                    color: 'var(--brand-primary)',
-                    padding: '6px',
-                    borderRadius: 'var(--radius-sm)',
-                    display: 'flex',
-                    alignItems: 'center'
-                  }}
-                  title="Sign In / Register"
+                  to="/account" 
+                  className="header-icon-btn"
+                  title="Sign In / Patron Account"
+                  aria-label="Sign In or Patron Account"
                 >
-                  <User size={20} />
+                  <User size={21} />
                 </Link>
               )}
 
               {accountDropdownOpen && isAuthenticated && (
-                <div style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: 'calc(100% + 8px)',
-                  width: '210px',
-                  backgroundColor: '#ffffff',
-                  borderRadius: 'var(--radius-md)',
-                  boxShadow: 'var(--shadow-lg)',
-                  border: '1px solid var(--brand-border)',
-                  padding: '8px 0',
-                  zIndex: 1001,
-                  animation: 'fadeIn 0.2s ease'
-                }}>
-                  <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--brand-border)', marginBottom: '4px' }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--brand-primary)' }}>
+                <div className="account-dropdown-menu animate-fade-in">
+                  <div className="account-dropdown-header">
+                    <div className="account-dropdown-name">
                       {user?.displayName || 'Valued Client'}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--brand-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div className="account-dropdown-email">
                       {user?.email}
                     </div>
                   </div>
@@ -301,15 +521,8 @@ export const Header: React.FC = () => {
                   {user?.role === 'admin' && (
                     <Link
                       to="/admin/dashboard"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 16px',
-                        fontSize: '0.85rem',
-                        color: 'var(--brand-accent-hover)',
-                        fontWeight: 700
-                      }}
+                      onClick={() => setAccountDropdownOpen(false)}
+                      className="account-menu-item gold"
                     >
                       <LayoutDashboard size={16} /> Executive Admin
                     </Link>
@@ -317,30 +530,26 @@ export const Header: React.FC = () => {
 
                   <Link
                     to="/account?tab=orders"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 16px',
-                      fontSize: '0.85rem',
-                      color: 'var(--brand-primary)'
-                    }}
+                    onClick={() => setAccountDropdownOpen(false)}
+                    className="account-menu-item"
                   >
                     <Package size={16} /> My Orders
                   </Link>
 
                   <Link
-                    to="/account"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 16px',
-                      fontSize: '0.85rem',
-                      color: 'var(--brand-primary)'
-                    }}
+                    to="/wishlist"
+                    onClick={() => setAccountDropdownOpen(false)}
+                    className="account-menu-item"
                   >
-                    <User size={16} /> Account Profile
+                    <Heart size={16} /> My Wishlist ({wishlist.length})
+                  </Link>
+
+                  <Link
+                    to="/account"
+                    onClick={() => setAccountDropdownOpen(false)}
+                    className="account-menu-item"
+                  >
+                    <User size={16} /> Account Dashboard
                   </Link>
 
                   <button
@@ -348,124 +557,224 @@ export const Header: React.FC = () => {
                       logout();
                       setAccountDropdownOpen(false);
                     }}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 16px',
-                      fontSize: '0.85rem',
-                      color: '#b91c1c',
-                      background: 'none',
-                      border: 'none',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      borderTop: '1px solid var(--brand-border)',
-                      marginTop: '4px'
-                    }}
+                    className="account-menu-item logout"
                   >
                     <LogOut size={16} /> Sign Out
                   </button>
                 </div>
               )}
             </div>
-
-            <button 
-              onClick={() => setIsDrawerOpen(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                backgroundColor: 'var(--brand-primary)',
-                color: '#ffffff',
-                padding: '8px 14px',
-                borderRadius: 'var(--radius-full)',
-                fontWeight: 600,
-                fontSize: '0.85rem',
-                border: 'none',
-                boxShadow: '0 2px 8px rgba(15, 23, 42, 0.15)'
-              }}
-            >
-              <ShoppingBag size={16} color="#facc15" />
-              <span>Bag ({cartCount})</span>
-            </button>
           </div>
         </div>
-
-        {searchOpen && (
-          <div style={{
-            borderTop: '1px solid var(--brand-border)',
-            backgroundColor: '#f8fafc',
-            padding: '1rem 0',
-            animation: 'fadeIn 0.2s ease'
-          }}>
-            <div className="container">
-              <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '10px' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <input 
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search silk sarees, bridal couture, Kanchipuram, Banarasi..."
-                    autoFocus
-                    style={{
-                      width: '100%',
-                      padding: '10px 16px 10px 40px',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--brand-border)',
-                      fontSize: '0.92rem'
-                    }}
-                  />
-                  <Search size={18} color="var(--brand-muted)" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
-                </div>
-                <button type="submit" className="btn btn-primary btn-sm">
-                  Search
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => setSearchOpen(false)}
-                  className="btn btn-outline btn-sm"
-                >
-                  Cancel
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
       </header>
 
-      {mobileMenuOpen && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          top: 'var(--header-height)',
-          backgroundColor: '#ffffff',
-          zIndex: 999,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '2rem 1.5rem',
-          overflowY: 'auto',
-          animation: 'fadeIn 0.2s ease'
-        }} className="mobile-menu-overlay">
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', fontSize: '1.1rem', fontWeight: 600 }}>
-            <NavLink to="/" onClick={() => setMobileMenuOpen(false)}>Home</NavLink>
-            <NavLink to="/categories" onClick={() => setMobileMenuOpen(false)}>All Categories</NavLink>
-            <NavLink to="/products" onClick={() => setMobileMenuOpen(false)}>Full Catalog</NavLink>
-            <NavLink to="/products?tag=new" onClick={() => setMobileMenuOpen(false)}>New Arrivals</NavLink>
-            <NavLink to="/about" onClick={() => setMobileMenuOpen(false)}>About MUETY</NavLink>
-            <NavLink to="/contact" onClick={() => setMobileMenuOpen(false)}>Contact Concierge</NavLink>
-          </nav>
+      {/* =========================================================
+          KALANMANDIR-INSPIRED SEARCH OVERLAY / DRAWER
+         ========================================================= */}
+      <SearchOverlay 
+        isOpen={searchOpen} 
+        onClose={() => setSearchOpen(false)} 
+        isMobile={isMobileViewport}
+      />
 
-          <div style={{ marginTop: 'auto', paddingTop: '2rem', borderTop: '1px solid var(--brand-border)' }}>
+      {/* =========================================================
+          MOBILE NAVIGATION DRAWER
+         ========================================================= */}
+      {mobileMenuOpen && (
+        <div 
+          className="mobile-menu-overlay animate-fade-in"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            top: 'var(--header-height-mobile, 52px)',
+            backgroundColor: '#ffffff',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '1.25rem',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            boxShadow: 'var(--shadow-xl)',
+            boxSizing: 'border-box'
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', color: '#c9a227', textTransform: 'uppercase' }}>
+              STORE NAVIGATION
+            </span>
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '1rem', fontWeight: 600 }}>
+              <NavLink 
+                to="/" 
+                onClick={() => setMobileMenuOpen(false)} 
+                style={({ isActive }) => ({ color: isActive ? '#c9a227' : '#10182d', padding: '6px 0', textDecoration: 'none' })}
+              >
+                Home
+              </NavLink>
+
+              {/* Mobile Shop By Accordion */}
+              <div style={{ borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9', padding: '6px 0' }}>
+                <button
+                  type="button"
+                  onClick={() => setMobileShopByOpen(!mobileShopByOpen)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    background: 'none',
+                    border: 'none',
+                    padding: '8px 0',
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    color: mobileShopByOpen ? '#c9a227' : '#10182d',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Sparkles size={16} color="#c9a227" /> Shop By
+                  </span>
+                  <ChevronDown size={16} style={{ transform: mobileShopByOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+                </button>
+
+                {mobileShopByOpen && (
+                  <div style={{ padding: '6px 0 10px 12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Occasion</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
+                        <Link to="/products?occasion=wedding" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Wedding & Bridal</Link>
+                        <Link to="/products?occasion=festive" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Festive Handlooms</Link>
+                        <Link to="/products?occasion=party" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Party Wear</Link>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Fabric</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
+                        <Link to="/products?fabric=pure-silk" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Pure Mulberry Silk</Link>
+                        <Link to="/products?fabric=kanchipuram" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Kanchipuram Silk</Link>
+                        <Link to="/products?fabric=cotton" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Handloom Cotton</Link>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Price Range</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
+                        <Link to="/products?maxPrice=2000" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Under ₹2,000</Link>
+                        <Link to="/products?minPrice=2000&maxPrice=5000" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>₹2,000 – ₹5,000</Link>
+                        <Link to="/products?minPrice=5000" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Above ₹5,000</Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Mobile Collections Accordion */}
+              <div style={{ borderBottom: '1px solid #f1f5f9', padding: '6px 0' }}>
+                <button
+                  type="button"
+                  onClick={() => setMobileCollectionsOpen(!mobileCollectionsOpen)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    background: 'none',
+                    border: 'none',
+                    padding: '8px 0',
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    color: mobileCollectionsOpen ? '#c9a227' : '#10182d',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Layers size={16} color="#c9a227" /> Collections
+                  </span>
+                  <ChevronDown size={16} style={{ transform: mobileCollectionsOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+                </button>
+
+                {mobileCollectionsOpen && (
+                  <div style={{ padding: '6px 0 10px 12px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.9rem' }}>
+                    {categories.map((c) => (
+                      <Link key={c.id} to={`/products?cat=${c.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
+                        {c.name}
+                      </Link>
+                    ))}
+                    <Link to="/categories" onClick={() => setMobileMenuOpen(false)} style={{ color: '#c9a227', fontWeight: 600, textDecoration: 'none' }}>
+                      Browse All Categories &rarr;
+                    </Link>
+                    <Link to="/products" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', fontWeight: 600, textDecoration: 'none' }}>
+                      Complete Catalog &rarr;
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              <NavLink 
+                to="/about" 
+                onClick={() => setMobileMenuOpen(false)} 
+                style={({ isActive }) => ({ color: isActive ? '#c9a227' : '#10182d', padding: '6px 0', textDecoration: 'none' })}
+              >
+                Salem Atelier
+              </NavLink>
+
+              <NavLink 
+                to="/support" 
+                onClick={() => setMobileMenuOpen(false)} 
+                style={({ isActive }) => ({ color: isActive ? '#c9a227' : '#10182d', padding: '6px 0', textDecoration: 'none' })}
+              >
+                Patron Care
+              </NavLink>
+
+              <NavLink 
+                to="/wishlist" 
+                onClick={() => setMobileMenuOpen(false)} 
+                style={({ isActive }) => ({ color: isActive ? '#c9a227' : '#10182d', padding: '6px 0', textDecoration: 'none' })}
+              >
+                Saved Wishlist ({wishlist.length})
+              </NavLink>
+
+              <NavLink 
+                to="/account" 
+                onClick={() => setMobileMenuOpen(false)} 
+                style={({ isActive }) => ({ color: isActive ? '#c9a227' : '#10182d', padding: '6px 0', textDecoration: 'none' })}
+              >
+                Patron Account
+              </NavLink>
+            </nav>
+          </div>
+
+          <div style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid #f1f5f9' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: '0.85rem' }}>
+              PATRON CONCIERGE
+            </span>
             {isAuthenticated ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <Link to="/account" className="btn btn-primary" style={{ width: '100%' }}>My Account Profile</Link>
-                <button onClick={logout} className="btn btn-outline" style={{ width: '100%', color: '#b91c1c' }}>Sign Out</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#10182d', marginBottom: '2px' }}>
+                  {user?.displayName || 'Valued Patron'}
+                  <span style={{ display: 'block', fontSize: '0.78rem', color: '#64748b', fontWeight: 400 }}>{user?.email}</span>
+                </div>
+                {user?.role === 'admin' && (
+                  <Link to="/admin/dashboard" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start', color: '#854d0e', fontWeight: 700 }}>
+                    <LayoutDashboard size={16} /> Executive Admin Dashboard
+                  </Link>
+                )}
+                <Link to="/account?tab=orders" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start' }}>
+                  <Package size={16} /> My Orders & Invoices
+                </Link>
+                <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="btn btn-outline btn-sm" style={{ width: '100%', justifyContent: 'flex-start', color: '#b91c1c', borderColor: '#fca5a5', marginTop: '4px' }}>
+                  <LogOut size={16} /> Sign Out
+                </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <Link to="/login" className="btn btn-primary" style={{ flex: 1 }}>Sign In</Link>
-                <Link to="/register" className="btn btn-outline" style={{ flex: 1 }}>Register</Link>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="btn btn-primary btn-sm" style={{ flex: 1 }}>Sign In</Link>
+                  <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="btn btn-outline btn-sm" style={{ flex: 1 }}>Register</Link>
+                </div>
+                <Link to="/account?tab=orders" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
+                  <Package size={14} /> Track Order
+                </Link>
               </div>
             )}
           </div>

@@ -24,21 +24,21 @@ export const Logo: React.FC<LogoProps> = ({
 }) => {
   const isVertical = orientation === 'vertical' || (orientation === undefined && (size === 'lg' || size === 'xl') && showTagline);
 
-  let imageSize = '44px';
-  let fontSize = '1.45rem';
-  let letterSpacing = '0.12em';
-  let taglineSize = '0.62rem';
+  let imageSize = '34px';
+  let fontSize = '1.24rem';
+  let letterSpacing = '0.1em';
+  let taglineSize = '0.52rem';
 
   if (size === 'sm') {
-    imageSize = '32px';
-    fontSize = '1.15rem';
-    letterSpacing = '0.1em';
-    taglineSize = '0.55rem';
+    imageSize = '28px';
+    fontSize = '1.05rem';
+    letterSpacing = '0.08em';
+    taglineSize = '0.48rem';
   } else if (size === 'md') {
-    imageSize = '44px';
-    fontSize = '1.45rem';
-    letterSpacing = '0.12em';
-    taglineSize = '0.62rem';
+    imageSize = '34px';
+    fontSize = '1.24rem';
+    letterSpacing = '0.1em';
+    taglineSize = '0.52rem';
   } else if (size === 'lg') {
     imageSize = isVertical ? '84px' : '56px';
     fontSize = '1.85rem';
@@ -75,7 +75,7 @@ export const Logo: React.FC<LogoProps> = ({
         display: 'inline-flex',
         flexDirection: isVertical ? 'column' : 'row',
         alignItems: 'center',
-        gap: '0.75rem',
+        gap: '0.55rem',
         textDecoration: 'none',
         userSelect: 'none'
       }}

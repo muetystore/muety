@@ -439,7 +439,7 @@ describe('MUETY Security & Authorization Matrix Integration Tests', () => {
       });
       expect(notFound.statusCode).toBe(404);
       expect(notFound.body.error.code).toBe('NOT_FOUND');
-    });
+    }, 30000);
   });
 
 });

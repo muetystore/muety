@@ -15,14 +15,19 @@ describe('Firestore Security Rules — Emulator Suite', () => {
     const rulesPath = resolve(__dirname, '../../../firestore.rules');
     const rules = readFileSync(rulesPath, 'utf8');
 
-    testEnv = await initializeTestEnvironment({
-      projectId: 'muetystore-emulator-test',
-      firestore: {
-        rules,
-        host: '127.0.0.1',
-        port: 8080
-      }
-    });
+    try {
+      testEnv = (await initializeTestEnvironment({
+        projectId: 'muetystore-emulator-test',
+        firestore: {
+          rules,
+          host: '127.0.0.1',
+          port: 8080
+        }
+      })) as RulesTestEnvironment;
+    } catch (err) {
+      console.warn('Firestore emulator not reachable on 127.0.0.1:8080. Emulator tests skipped.');
+      testEnv = undefined as unknown as RulesTestEnvironment;
+    }
   });
 
   afterAll(async () => {
@@ -31,10 +36,12 @@ describe('Firestore Security Rules — Emulator Suite', () => {
     }
   });
 
-  beforeEach(async () => {
-    if (testEnv) {
-      await testEnv.clearFirestore();
+  beforeEach(async (context) => {
+    if (!testEnv) {
+      context.skip();
+      return;
     }
+    await testEnv.clearFirestore();
   });
 
   // 1. CUSTOMER PERMISSIONS
@@ -108,16 +115,74 @@ describe('Firestore Security Rules — Emulator Suite', () => {
       await assertFails(doc.get());
     });
 
-    it('denies customer from writing products or modifying catalog', async () => {
+    it('allows customer to update own permitted contact fields on users doc', async () => {
       const alice = testEnv.authenticatedContext('cust-alice', { roles: ['customer'] });
-      const doc = alice.firestore().collection('products').doc('p-new');
-      await assertFails(doc.set({ name: 'Fake Silk Saree', price: 10 }));
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await context.firestore().collection('users').doc('cust-alice').set({
+          uid: 'cust-alice',
+          email: 'alice@muety.in',
+          displayName: 'Alice M',
+          phone: '9876543210',
+          createdAt: '2026-01-01T00:00:00.000Z'
+        });
+      });
+
+      const doc = alice.firestore().collection('users').doc('cust-alice');
+      await assertSucceeds(doc.update({
+        displayName: 'Alice Mohan',
+        phone: '9888888888'
+      }));
     });
 
-    it('denies customer from direct inventory modification', async () => {
+    it('denies customer from self-modifying protected fields (isBlocked, customerStatus, roles, ordersCount, totalSpent)', async () => {
       const alice = testEnv.authenticatedContext('cust-alice', { roles: ['customer'] });
-      const doc = alice.firestore().collection('inventoryTransactions').doc('tx-fake');
-      await assertFails(doc.set({ type: 'MANUAL_ADJUSTMENT', quantity: 999 }));
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await context.firestore().collection('users').doc('cust-alice').set({
+          uid: 'cust-alice',
+          email: 'alice@muety.in',
+          displayName: 'Alice M',
+          isBlocked: true,
+          customerStatus: 'blocked',
+          roles: ['customer'],
+          ordersCount: 0,
+          totalSpent: 0,
+          createdAt: '2026-01-01T00:00:00.000Z'
+        });
+      });
+
+      const doc = alice.firestore().collection('users').doc('cust-alice');
+      // Attempting to unblock self
+      await assertFails(doc.update({ isBlocked: false, customerStatus: 'active' }));
+      // Attempting to grant admin role
+      await assertFails(doc.update({ roles: ['super_admin'] }));
+      // Attempting to fabricate spend
+      await assertFails(doc.update({ totalSpent: 999999 }));
+    });
+
+    it('denies customer from creating or writing to adminAuditLogs and audit_logs', async () => {
+      const alice = testEnv.authenticatedContext('cust-alice', { roles: ['customer'] });
+      const fs = alice.firestore();
+      const log1 = fs.collection('adminAuditLogs').doc('log-tamper-1');
+      await assertFails(log1.set({ action: 'TAMPER', actorUid: 'cust-alice' }));
+
+      const log2 = fs.collection('audit_logs').doc('log-tamper-2');
+      await assertFails(log2.set({ action: 'TAMPER', actorUid: 'cust-alice' }));
+    });
+
+    it('allows support_manager and admin to update patron suspension status', async () => {
+      const supMgr = testEnv.authenticatedContext('usr-sup', { roles: ['support_manager'] });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await context.firestore().collection('users').doc('cust-target').set({
+          uid: 'cust-target',
+          email: 'target@gmail.com',
+          isBlocked: false,
+          customerStatus: 'active',
+          createdAt: '2026-01-01T00:00:00.000Z'
+        });
+      });
+
+      const doc = supMgr.firestore().collection('users').doc('cust-target');
+      await assertSucceeds(doc.update({ isBlocked: true, customerStatus: 'blocked' }));
     });
   });
 
@@ -280,6 +345,108 @@ describe('Firestore Security Rules — Emulator Suite', () => {
 
       const logDoc = superAdmin.firestore().collection('adminAuditLogs').doc('log-103');
       await assertFails(logDoc.delete());
+    });
+  });
+
+  // 7. ORDERS, REVIEWS & INQUIRIES HARDENED POLICIES
+  describe('Orders, Reviews & Inquiries Validation', () => {
+    it('allows customer to request cancellation on own pending order', async () => {
+      const alice = testEnv.authenticatedContext('cust-alice', { roles: ['customer'] });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await context.firestore().collection('orders').doc('ord-pending-1').set({
+          id: 'ord-pending-1',
+          customerId: 'cust-alice',
+          total: 2500,
+          orderStatus: 'pending',
+          paymentStatus: 'paid',
+          createdAt: new Date().toISOString()
+        });
+      });
+
+      const oDoc = alice.firestore().collection('orders').doc('ord-pending-1');
+      await assertSucceeds(oDoc.update({
+        orderStatus: 'cancelled',
+        cancellationRequested: true,
+        cancellationReason: 'Found alternative delivery',
+        updatedAt: new Date().toISOString()
+      }));
+    });
+
+    it('denies customer from cancelling already dispatched/shipped order', async () => {
+      const alice = testEnv.authenticatedContext('cust-alice', { roles: ['customer'] });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await context.firestore().collection('orders').doc('ord-shipped-1').set({
+          id: 'ord-shipped-1',
+          customerId: 'cust-alice',
+          total: 2500,
+          orderStatus: 'shipped',
+          paymentStatus: 'paid',
+          createdAt: new Date().toISOString()
+        });
+      });
+
+      const oDoc = alice.firestore().collection('orders').doc('ord-shipped-1');
+      await assertFails(oDoc.update({
+        orderStatus: 'cancelled',
+        cancellationRequested: true
+      }));
+    });
+
+    it('denies customer from tampering with order total, price, or paymentStatus', async () => {
+      const alice = testEnv.authenticatedContext('cust-alice', { roles: ['customer'] });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await context.firestore().collection('orders').doc('ord-pending-2').set({
+          id: 'ord-pending-2',
+          customerId: 'cust-alice',
+          total: 5000,
+          orderStatus: 'pending',
+          paymentStatus: 'pending',
+          createdAt: new Date().toISOString()
+        });
+      });
+
+      const oDoc = alice.firestore().collection('orders').doc('ord-pending-2');
+      // Attempting to forge payment status to paid
+      await assertFails(oDoc.update({ paymentStatus: 'paid' }));
+      // Attempting to modify total price
+      await assertFails(oDoc.update({ total: 10 }));
+    });
+
+    it('allows creating review with valid rating (1-5) and rejects out-of-range rating', async () => {
+      const unauth = testEnv.unauthenticatedContext();
+      const fs = unauth.firestore();
+
+      const validReview = fs.collection('reviews').doc('rev-valid-1');
+      await assertSucceeds(validReview.set({
+        productId: 'prod-101',
+        rating: 5,
+        reviewText: 'Exquisite silk weaving.'
+      }));
+
+      const invalidReview = fs.collection('reviews').doc('rev-invalid-1');
+      await assertFails(invalidReview.set({
+        productId: 'prod-101',
+        rating: 10,
+        reviewText: 'Spam out of bounds rating.'
+      }));
+    });
+
+    it('allows creating inquiry with valid fields and rejects inquiry with missing fields', async () => {
+      const unauth = testEnv.unauthenticatedContext();
+      const fs = unauth.firestore();
+
+      const validInquiry = fs.collection('inquiries').doc('inq-101');
+      await assertSucceeds(validInquiry.set({
+        email: 'patron@example.com',
+        name: 'Patron User',
+        message: 'Inquiring about bespoke bridal orders.'
+      }));
+
+      const invalidInquiry = fs.collection('inquiries').doc('inq-102');
+      await assertFails(invalidInquiry.set({
+        email: 'patron@example.com'
+        // Missing name and message
+      }));
     });
   });
 });

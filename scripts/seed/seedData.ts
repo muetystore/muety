@@ -9,6 +9,7 @@ export const INITIAL_CATEGORIES: Category[] = [
     id: 'cat-sarees',
     name: 'Festive Silk Sarees',
     slug: 'sarees',
+    categoryCode: 'FS',
     description: 'Handwoven pure Kanchipuram & Banarasi mulberry silk sarees with authentic 24K gold zari borders.',
     image: '/saree_model_individual.jpg',
     itemCount: 6,
@@ -18,6 +19,7 @@ export const INITIAL_CATEGORIES: Category[] = [
     id: 'cat-bridal',
     name: 'Bridal Couture',
     slug: 'bridal',
+    categoryCode: 'BC',
     description: 'Exquisite bridal Kanchipuram silk sarees and hand-embroidered wedding creations for auspicious occasions.',
     image: '/saree_model_drape.jpg',
     itemCount: 4,
@@ -27,6 +29,7 @@ export const INITIAL_CATEGORIES: Category[] = [
     id: 'cat-handloom',
     name: 'Heritage Handloom',
     slug: 'handloom',
+    categoryCode: 'HH',
     description: 'Pure Chanderi, Tussar, Organza, and Linen silk handwoven creations from master weaver ateliers.',
     image: '/saree_fabric_detail.jpg',
     itemCount: 5,
@@ -36,6 +39,7 @@ export const INITIAL_CATEGORIES: Category[] = [
     id: 'cat-jewelry',
     name: 'Royal Temple Jewelry',
     slug: 'jewelry',
+    categoryCode: 'RT',
     description: 'Handcrafted Kundan, Temple gold-plated, and Polki artisan jewelry tailored for saree elegance.',
     image: '/diwali_hero_banner.jpg',
     itemCount: 4,
@@ -56,7 +60,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     rating: 5.0,
     reviewCount: 42,
     stock: 12,
-    sku: 'MUETY-S-001',
+    sku: 'FS-01',
+    categoryIds: ['cat-sarees'],
+    primaryCategoryId: 'cat-sarees',
+    categoryId: 'cat-sarees',
     category: 'Festive Silk Sarees',
     categorySlug: 'sarees',
     images: [
@@ -67,7 +74,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     featured: true,
     isNewArrival: true,
     isBestSeller: true,
-    tags: ['Pure Silk', 'Kanchipuram', 'Gold Zari', 'Diwali Special', 'Festive Heritage', 'Handloom'],
+    isMostWanted: true,
+    occasion: 'bridal',
+    tags: ['Pure Silk', 'Kanchipuram', 'Gold Zari', 'Diwali Special', 'Festive Heritage', 'Handloom', 'bridal'],
     specifications: {
       'Fabric': '100% Pure Mulberry Silk (Silk Mark Certified)',
       'Zari': 'Gold Thread Zari Weave',
@@ -91,7 +100,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     rating: 4.9,
     reviewCount: 28,
     stock: 6,
-    sku: 'MUETY-S-002',
+    sku: 'BC-02',
     category: 'Bridal Couture',
     categorySlug: 'bridal',
     images: [
@@ -100,8 +109,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
     featured: true,
     isNewArrival: true,
-    isBestSeller: false,
-    tags: ['Banarasi', 'Bridal Red', 'Kadwa Jaal', 'Silver Zari', 'Silk Mark'],
+    isBestSeller: true,
+    isMostWanted: true,
+    occasion: 'bridal',
+    tags: ['Banarasi', 'Bridal Red', 'Kadwa Jaal', 'Silver Zari', 'Silk Mark', 'bridal'],
     specifications: {
       'Fabric': 'Pure Banarasi Katan Silk',
       'Zari': 'Gold & Silver Brocade',
@@ -125,7 +136,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     rating: 4.8,
     reviewCount: 19,
     stock: 8,
-    sku: 'MUETY-S-003',
+    sku: 'HH-03',
     category: 'Heritage Handloom',
     categorySlug: 'handloom',
     images: [
@@ -135,7 +146,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     featured: true,
     isNewArrival: false,
     isBestSeller: true,
-    tags: ['Organza Silk', 'Hand-Painted', 'Sapphire Blue', 'Lightweight Luxury'],
+    isMostWanted: true,
+    occasion: 'reception',
+    tags: ['Organza Silk', 'Hand-Painted', 'Sapphire Blue', 'Lightweight Luxury', 'reception'],
     specifications: {
       'Fabric': '100% Pure Organza Silk',
       'Work': 'Hand-Painted Lotus & Scalloped Zari',
@@ -158,7 +171,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     rating: 4.9,
     reviewCount: 31,
     stock: 15,
-    sku: 'MUETY-S-004',
+    sku: 'HH-04',
     category: 'Heritage Handloom',
     categorySlug: 'handloom',
     images: [
@@ -168,7 +181,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     featured: true,
     isNewArrival: true,
     isBestSeller: false,
-    tags: ['Chanderi Silk', 'Pistachio Green', 'Tissue Zari', 'Lightweight'],
+    isMostWanted: true,
+    occasion: 'temple',
+    tags: ['Chanderi Silk', 'Pistachio Green', 'Tissue Zari', 'Lightweight', 'temple'],
     specifications: {
       'Fabric': 'Chanderi Silk Cotton',
       'Zari': 'Gold Tissue Border',
@@ -191,7 +206,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     rating: 5.0,
     reviewCount: 16,
     stock: 5,
-    sku: 'MUETY-J-001',
+    sku: 'TJ-01',
     category: 'Royal Temple Jewelry',
     categorySlug: 'jewelry',
     images: [
@@ -258,9 +273,9 @@ export const INITIAL_SETTINGS: StoreSettings = {
   currency: 'INR',
   currencySymbol: '₹',
   taxRate: 5,
-  freeShippingThreshold: 2000,
-  standardShippingFee: 100,
-  expressShippingFee: 250,
+  freeShippingThreshold: 0,
+  standardShippingFee: 89,
+  expressShippingFee: 89,
   shippingCountry: 'India',
   policy: {
     returnsAccepted: false,
@@ -270,7 +285,7 @@ export const INITIAL_SETTINGS: StoreSettings = {
   },
   announcementBanner: {
     enabled: true,
-    text: '✨ Compliment: Free Shipping Across India on Orders Above ₹2,000 | Silk Mark Certified Handlooms ✨',
+    text: '✨ Pan-India Insured Courier (₹89 Flat) | Silk Mark Certified Salem Handlooms ✨',
     link: '/products'
   }
 };
@@ -280,8 +295,8 @@ export const INITIAL_USERS: UserProfile[] = [
     uid: '64HTWU7iCWNtvRKHhTCuJeXFLxq2',
     email: 'superadmin@muety.in',
     displayName: 'MUETY Executive Super Admin',
-    roles: ['super_admin', 'admin'],
-    role: 'super_admin',
+    roles: ['superadmin', 'admin'],
+    role: 'superadmin',
     createdAt: '2026-01-01T00:00:00Z'
   },
   {
@@ -301,40 +316,8 @@ export const INITIAL_USERS: UserProfile[] = [
     createdAt: '2026-01-01T00:00:00Z'
   },
   {
-    uid: '8Jgok1VDMefnE6cP02hrcnZt9ho1',
-    email: 'superadmin@muetystore.com',
-    displayName: 'MUETY Executive Super Admin',
-    roles: ['super_admin', 'admin'],
-    role: 'super_admin',
-    createdAt: '2026-01-01T00:00:00Z'
-  },
-  {
-    uid: 'z5Crczp4aNY58mZf1zULDHIajTe2',
-    email: 'admin@muetystore.com',
-    displayName: 'MUETY Store Admin',
-    roles: ['admin'],
-    role: 'admin',
-    createdAt: '2026-01-01T00:00:00Z'
-  },
-  {
-    uid: 'gPCGtOJtqYQvnLWBgNqFzq370ww1',
-    email: 'catalog@muetystore.com',
-    displayName: 'MUETY Catalog Manager',
-    roles: ['catalog_manager'],
-    role: 'catalog_manager',
-    createdAt: '2026-01-01T00:00:00Z'
-  },
-  {
-    uid: 'admin-kalvi-master',
-    email: 'kalvimohan03@gmail.com',
-    displayName: 'MUETY Executive Concierge',
-    roles: ['super_admin', 'admin'],
-    role: 'super_admin',
-    createdAt: '2026-01-01T00:00:00Z'
-  },
-  {
     uid: 'customer-demo-01',
-    email: 'patron@muetystore.com',
+    email: 'patron@muety.in',
     displayName: 'Ananya Sharma',
     roles: ['customer'],
     role: 'customer',
@@ -348,7 +331,7 @@ export const INITIAL_ORDERS: Order[] = [
     orderNumber: 'MT-ORD-9812',
     customerId: 'customer-demo-01',
     customerName: 'Ananya Sharma',
-    customerEmail: 'patron@muetystore.com',
+    customerEmail: 'patron@muety.in',
     customerPhone: '+91 98765 43210',
     shippingAddress: {
       fullName: 'Ananya Sharma',
@@ -388,27 +371,70 @@ export const INITIAL_REVIEWS: PatronReview[] = [
   {
     id: 'rev-01',
     productId: 'muety-saree-01',
+    productSlug: 'muety-royal-kanchipuram-pure-silk-saree',
     productName: 'MUETY Royal Kanchipuram Pure Silk Saree',
     authorName: 'Priyamvada N.',
     authorLocation: 'Chennai, Tamil Nadu',
     rating: 5,
     quote: 'The softness of the pure mulberry silk and authentic 24K Korvai gold zari border is beyond breathtaking. True heirloom craftsmanship!',
+    photoUrl: '/saree_model_individual.jpg',
     verifiedPurchase: true,
     status: 'approved',
     isFeatured: true,
+    showOnHome: true,
+    displayOrder: 1,
     createdAt: '2026-02-22T10:00:00Z'
   },
   {
     id: 'rev-02',
     productId: 'muety-saree-02',
+    productSlug: 'muety-crimson-banarasi-silk-saree',
     productName: 'MUETY Crimson Banarasi Silk Saree',
     authorName: 'Dr. Radhika Sen',
     authorLocation: 'Kolkata, West Bengal',
     rating: 5,
     quote: 'Purchased for my daughter’s wedding ceremony. The Kadwa floral brocade jaal reflects rich tradition. Unmatched luxury atelier experience.',
+    photoUrl: '/saree_model_drape.jpg',
     verifiedPurchase: true,
     status: 'approved',
     isFeatured: true,
+    showOnHome: true,
+    displayOrder: 2,
     createdAt: '2026-02-25T15:30:00Z'
+  },
+  {
+    id: 'rev-03',
+    productId: 'muety-saree-03',
+    productSlug: 'muety-mysore-crepe-silk-saree',
+    productName: 'MUETY Heritage Mysore Crepe Silk Saree',
+    authorName: 'Meenakshi Sundaram',
+    authorLocation: 'Madurai, Tamil Nadu',
+    rating: 5,
+    quote: 'The drape of this Salem bridal silk is exceptionally lightweight yet royal. The gold zari luster holds true under festive lighting.',
+    photoUrl: '/saree_fabric_detail.jpg',
+    verifiedPurchase: true,
+    status: 'approved',
+    isFeatured: true,
+    showOnHome: true,
+    displayOrder: 3,
+    createdAt: '2026-02-28T11:20:00Z'
+  },
+  {
+    id: 'rev-04',
+    productId: 'muety-saree-04',
+    productSlug: 'muety-tussar-georgette-silk-saree',
+    productName: 'MUETY Pure Tussar Georgette Silk Saree',
+    authorName: 'Ananya Deshmukh',
+    authorLocation: 'Pune, Maharashtra',
+    rating: 5,
+    quote: 'Pure mulberry silk with authentic Silk Mark certification. Arrived in exquisite heritage atelier packaging within 3 days.',
+    photoUrl: '/saree_model_individual.jpg',
+    verifiedPurchase: true,
+    status: 'approved',
+    isFeatured: true,
+    showOnHome: true,
+    displayOrder: 4,
+    createdAt: '2026-03-02T14:45:00Z'
   }
 ];
+

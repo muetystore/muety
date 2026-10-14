@@ -5,7 +5,7 @@ import { productService } from '@/features/catalog/services/productService';
 import { storageService } from '@/lib/storage/storageService';
 import { ProductCard } from '@/features/catalog/components/ProductCard';
 import { QuickViewModal } from '@/features/catalog/components/QuickViewModal';
-import { Product } from '@/types';
+import { Product, Category } from '@/types';
 import { 
   SlidersHorizontal, 
   Search, 
@@ -20,18 +20,29 @@ export const ProductsPage: React.FC = () => {
 
   const queryParam = searchParams.get('q') || '';
   const categoryParam = searchParams.get('cat') || 'all';
+  const occasionParam = searchParams.get('occasion') || '';
+  const fabricParam = searchParams.get('fabric') || '';
+  const styleParam = searchParams.get('style') || '';
+  const tagParam = searchParams.get('tag') || '';
+  const minPriceParam = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : null;
+  const maxPriceParam = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : null;
 
   const [searchTerm, setSearchTerm] = useState(queryParam);
   const [selectedCategory, setSelectedCategory] = useState(categoryParam);
   const [allProducts, setAllProducts] = useState<Product[]>(() => storageService.getProducts());
-  const [categories, setCategories] = useState(() => productService.getCategories());
+  const [categories, setCategories] = useState<Category[]>(() => storageService.getCategories());
+  
+  const [productsLoading, setProductsLoading] = useState<boolean>(() => storageService.getProducts().length === 0);
+  const [categoriesLoading, setCategoriesLoading] = useState<boolean>(() => storageService.getCategories().length === 0);
+  const [productsError, setProductsError] = useState<string | null>(null);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
   const maxAvailablePrice = useMemo(() => {
     const highest = Math.max(...allProducts.map(p => p.price || 0), 2500);
     return Math.max(5000, Math.ceil(highest / 500) * 500 + 500);
   }, [allProducts]);
 
-  const [priceRange, setPriceRange] = useState<number>(10000);
+  const [priceRange, setPriceRange] = useState<number>(100000);
   const [sortBy, setSortBy] = useState<string>('featured');
   const [onlyInStock, setOnlyInStock] = useState<boolean>(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState<boolean>(false);
@@ -39,15 +50,48 @@ export const ProductsPage: React.FC = () => {
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
   useEffect(() => {
-    const unsubscribe = productService.subscribeToProducts((all) => {
-      setAllProducts(all);
-      setCategories(productService.getCategories());
-    });
+    setProductsLoading(true);
+    setProductsError(null);
+    setCategoriesLoading(true);
+    setCategoriesError(null);
+
+    const unsubProducts = productService.subscribeToProducts(
+      (all) => {
+        setAllProducts(all);
+        setProductsLoading(false);
+        setProductsError(null);
+      },
+      (err) => {
+        console.error('ProductsPage subscribeToProducts error:', err);
+        setProductsError(err?.message || 'Unable to load catalog from Firestore.');
+        setProductsLoading(false);
+      }
+    );
+
+    const unsubCategories = productService.subscribeToCategories(
+      (cats) => {
+        setCategories(cats);
+        setCategoriesLoading(false);
+        setCategoriesError(null);
+      },
+      (err) => {
+        console.warn('ProductsPage subscribeToCategories error:', err);
+        setCategoriesError(err?.message || 'Unable to load categories.');
+        setCategoriesLoading(false);
+      }
+    );
 
     return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
+      if (typeof unsubProducts === 'function') unsubProducts();
+      if (typeof unsubCategories === 'function') unsubCategories();
     };
   }, []);
+
+  useEffect(() => {
+    if (maxAvailablePrice > priceRange && priceRange !== 100000) {
+      setPriceRange(maxAvailablePrice);
+    }
+  }, [maxAvailablePrice]);
 
   useEffect(() => {
     setSearchTerm(queryParam);
@@ -78,6 +122,73 @@ export const ProductsPage: React.FC = () => {
       );
     }
 
+    // Occasion filter
+    if (occasionParam) {
+      const occ = occasionParam.toLowerCase().trim();
+      list = list.filter(p => 
+        (p.occasion || '').toLowerCase().includes(occ) ||
+        (p.description || '').toLowerCase().includes(occ) ||
+        (p.shortDescription || '').toLowerCase().includes(occ) ||
+        (p.name || '').toLowerCase().includes(occ) ||
+        (p.tags || []).some(t => (t || '').toLowerCase().includes(occ))
+      );
+    }
+
+    // Fabric filter
+    if (fabricParam) {
+      const fab = fabricParam.toLowerCase().replace(/-/g, ' ').trim();
+      const fabTokens = fab.split(' ').filter(Boolean);
+      list = list.filter(p => {
+        const textToSearch = [
+          p.fabric || '',
+          p.material || '',
+          p.silkType || '',
+          p.name || '',
+          p.description || '',
+          ...(p.tags || [])
+        ].join(' ').toLowerCase();
+        return fabTokens.some(tok => textToSearch.includes(tok));
+      });
+    }
+
+    // Style filter
+    if (styleParam) {
+      const sty = styleParam.toLowerCase().trim();
+      list = list.filter(p => 
+        (p.borderType || '').toLowerCase().includes(sty) ||
+        (p.weaveTechnique || '').toLowerCase().includes(sty) ||
+        (p.craftsmanship || '').toLowerCase().includes(sty) ||
+        (p.name || '').toLowerCase().includes(sty) ||
+        (p.description || '').toLowerCase().includes(sty) ||
+        (p.tags || []).some(t => (t || '').toLowerCase().includes(sty))
+      );
+    }
+
+    // Tag / Special edits filter
+    if (tagParam) {
+      const tg = tagParam.toLowerCase().trim();
+      if (tg === 'new') {
+        list = list.filter(p => p.isNewArrival || p.newArrival || (p.tags || []).some(t => (t || '').toLowerCase().includes('new')));
+      } else if (tg === 'bestseller') {
+        list = list.filter(p => p.isBestSeller || p.bestseller || (p.tags || []).some(t => (t || '').toLowerCase().includes('bestseller') || (t || '').toLowerCase().includes('best seller')));
+      } else if (tg === 'sale') {
+        list = list.filter(p => Boolean((p.originalPrice && p.originalPrice > p.price) || (p.tags || []).some(t => (t || '').toLowerCase().includes('sale') || (t || '').toLowerCase().includes('festive'))));
+      } else {
+        list = list.filter(p => 
+          (p.tags || []).some(t => (t || '').toLowerCase().includes(tg)) ||
+          (p.name || '').toLowerCase().includes(tg)
+        );
+      }
+    }
+
+    // Min and Max price filters
+    if (minPriceParam !== null) {
+      list = list.filter(p => p.price >= minPriceParam);
+    }
+    if (maxPriceParam !== null) {
+      list = list.filter(p => p.price <= maxPriceParam);
+    }
+
     list = list.filter(p => p.price <= priceRange);
 
     if (onlyInStock) {
@@ -104,7 +215,7 @@ export const ProductsPage: React.FC = () => {
     }
 
     return list;
-  }, [allProducts, searchTerm, selectedCategory, priceRange, sortBy, onlyInStock]);
+  }, [allProducts, searchTerm, selectedCategory, occasionParam, fabricParam, styleParam, tagParam, minPriceParam, maxPriceParam, priceRange, sortBy, onlyInStock]);
 
   const getCategoryCount = (slug: string) => {
     if (slug === 'all') return allProducts.length;
@@ -154,10 +265,22 @@ export const ProductsPage: React.FC = () => {
         <div className="container">
           <div style={{ maxWidth: '640px' }}>
             <span style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', color: '#d4af37', textTransform: 'uppercase' }}>
-              THE COMPLETE REPERTORY
+              {occasionParam || fabricParam || styleParam || tagParam ? 'CURATED EDIT' : 'THE COMPLETE REPERTORY'}
             </span>
             <h1 style={{ color: '#ffffff', fontSize: '2.2rem', marginTop: '4px', marginBottom: '0.4rem' }}>
-              {selectedCategory !== 'all' 
+              {occasionParam 
+                ? `Shop by Occasion: ${occasionParam.charAt(0).toUpperCase() + occasionParam.slice(1)}`
+                : fabricParam
+                ? `Shop by Fabric: ${fabricParam.replace(/-/g, ' ').toUpperCase()}`
+                : styleParam
+                ? `Shop by Style: ${styleParam.charAt(0).toUpperCase() + styleParam.slice(1)}`
+                : tagParam === 'new'
+                ? '✨ New Arrivals Edit'
+                : tagParam === 'bestseller'
+                ? '👑 Royal Best Sellers'
+                : tagParam === 'sale'
+                ? '🔥 Festive Special Offers'
+                : selectedCategory !== 'all'
                 ? categories.find(c => c.slug === selectedCategory)?.name || 'Collection'
                 : 'MUETY Collections'
               }
@@ -179,7 +302,7 @@ export const ProductsPage: React.FC = () => {
           marginBottom: '1rem',
           backgroundColor: 'var(--bg-main)',
           position: 'sticky',
-          top: '76px',
+          top: 'var(--header-height-mobile, 52px)',
           zIndex: 90
         }}>
           <button
@@ -414,7 +537,35 @@ export const ProductsPage: React.FC = () => {
           </aside>
 
           <div>
-            {products.length === 0 ? (
+            {productsLoading ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '5rem 2rem',
+                backgroundColor: '#ffffff',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--brand-border)'
+              }}>
+                <div className="animate-spin" style={{ display: 'inline-block', width: '32px', height: '32px', border: '3px solid #cbd5e1', borderTopColor: '#0f172a', borderRadius: '50%', marginBottom: '1rem' }} />
+                <h3 style={{ fontSize: '1.2rem', color: 'var(--brand-primary)', marginBottom: '0.5rem' }}>Connecting to MUETY Firestore...</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Retrieving live handcrafted creations from cloud database.</p>
+              </div>
+            ) : productsError ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '4rem 2rem',
+                backgroundColor: '#fef2f2',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid #fca5a5'
+              }}>
+                <h3 style={{ color: '#991b1b', marginBottom: '0.5rem' }}>Unable to load the catalog right now.</h3>
+                <p style={{ color: '#7f1d1d', fontSize: '0.9rem', marginBottom: '1.5rem', maxWidth: '480px', margin: '0 auto 1.5rem' }}>
+                  {productsError}
+                </p>
+                <button onClick={() => window.location.reload()} className="btn btn-primary btn-sm">
+                  Retry Connection
+                </button>
+              </div>
+            ) : products.length === 0 ? (
               <div style={{
                 textAlign: 'center',
                 padding: '5rem 2rem',

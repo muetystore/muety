@@ -118,7 +118,7 @@ function getFallbackStoreDestination() {
   if (window.location.protocol === 'file:' || !window.location.host) {
     return null; // Local file preview mode - remain on page with live banner
   }
-  return window.location.origin + '/store';
+  return 'https://store.muety.in';
 }
 
 function executeStoreNavigation(targetUrl) {

@@ -28,15 +28,15 @@ try {
   
   if (app) {
     auth = getAuth(app);
-    const dbId = env.firebase.databaseId || 'default';
-    try {
-      db = getFirestore(app, dbId);
-    } catch {
+    const customDbId = env.firebase.databaseId;
+    if (customDbId && customDbId !== 'default' && customDbId !== '(default)') {
       try {
+        db = getFirestore(app, customDbId);
+      } catch {
         db = getFirestore(app);
-      } catch (e) {
-        console.warn('Firestore fallback init note:', e);
       }
+    } else {
+      db = getFirestore(app);
     }
   }
 } catch (error) {

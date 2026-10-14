@@ -12,16 +12,24 @@ export const SupportPage: React.FC = () => {
       a: 'MUETY pure silk sarees should be dry cleaned to preserve natural luster and zari integrity. Store your saree wrapped in a breathable muslin fabric in a cool, dry place away from direct sunlight.'
     },
     {
-      q: 'How do I verify the authenticity of the silk and zari?',
-      a: 'All MUETY sarees come with Silk Mark certification and quality guarantees. Our zaris utilize tested gold and silver thread plating interweaving with 100% pure Mulberry silk.'
+      q: 'What is your shipping and delivery charge?',
+      a: 'We charge a single flat fee of ₹89 per order for insured, tracked courier dispatch anywhere across India. There are never any duplicate fees or unexpected delivery charges.'
+    },
+    {
+      q: 'How does Cash on Delivery (COD) work?',
+      a: 'For COD orders, a ₹89 online courier advance is paid securely via Razorpay at checkout. This ₹89 is credited directly toward your order total. The remaining balance (Order Total − ₹89) is paid to the courier upon doorstep delivery. The advance is not an extra charge.'
+    },
+    {
+      q: 'Can I cancel an order after placing it?',
+      a: 'Yes, if your order is still in "pending" status before atelier packaging and dispatch, you can request order cancellation directly from your Patron Account under My Orders.'
     },
     {
       q: 'How do I track my delivery dispatch?',
-      a: 'As soon as your order leaves our atelier, an automated dispatch notification with your courier tracking number is sent to your email and accessible under your MUETY Account.'
+      a: 'As soon as your order leaves our Salem atelier, an automated dispatch notification with your courier tracking number is sent to your email and accessible in your MUETY Account.'
     },
     {
-      q: 'Can I apply a promo coupon to my order?',
-      a: 'Yes, enter your code (such as MUETY15) in the promo box inside the Shopping Bag or during Step 1 of Express Checkout.'
+      q: 'How do I verify the authenticity of the silk and zari?',
+      a: 'All MUETY sarees come with Silk Mark certification and quality guarantees. Our weaves utilize tested gold and silver thread plating interwoven with 100% pure Mulberry silk.'
     }
   ];
 
@@ -47,13 +55,13 @@ export const SupportPage: React.FC = () => {
           <div className="card" style={{ padding: '1.5rem', textAlign: 'center' }}>
             <Phone size={24} color="var(--brand-accent)" style={{ margin: '0 auto 8px' }} />
             <h4 style={{ fontSize: '1rem', marginBottom: '4px' }}>Phone / WhatsApp</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--brand-muted)' }}>+91 93857 91540</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--brand-muted)' }}>+91 99406 68095</p>
           </div>
 
           <div className="card" style={{ padding: '1.5rem', textAlign: 'center' }}>
             <Mail size={24} color="var(--brand-accent)" style={{ margin: '0 auto 8px' }} />
             <h4 style={{ fontSize: '1rem', marginBottom: '4px' }}>Email Assistance</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--brand-muted)' }}>muetystore@gmail.com</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--brand-muted)' }}>support@muety.in</p>
           </div>
 
           <div className="card" style={{ padding: '1.5rem', textAlign: 'center' }}>

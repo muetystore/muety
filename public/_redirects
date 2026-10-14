@@ -1,1 +1,12 @@
+# ==============================================================================
+# Netlify Redirects & Domain Rewrites Configuration for MUETY
+# ==============================================================================
+
+# POST-LAUNCH MIGRATION RULE:
+# When Muety officially launches and muety.in becomes the primary store front,
+# uncomment the line below to permanently 301-redirect store.muety.in visitors to muety.in:
+# https://store.muety.in/*  https://muety.in/:splat  301!
+
+# Single Page Application (SPA) client-side routing fallback
+# Directs all routes to index.html for React Router to handle
 /*    /index.html   200

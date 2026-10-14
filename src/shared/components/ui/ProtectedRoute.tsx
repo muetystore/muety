@@ -55,7 +55,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   let isAuthorized = true;
 
   if (requireAdmin) {
-    isAuthorized = hasAnyRole(user, ['super_admin', 'admin', 'catalog_manager', 'order_manager', 'support_agent']);
+    isAuthorized = hasAnyRole(user, ['superadmin', 'super_admin', 'admin', 'catalog_manager', 'order_manager', 'support_agent']);
   }
 
   if (isAuthorized && requiredRoles && requiredRoles.length > 0) {

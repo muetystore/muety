@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Header } from '@/shared/components/ui/Header';
 import { Footer } from '@/shared/components/ui/Footer';
@@ -7,6 +7,13 @@ import { AnnouncementBar } from '@/shared/components/ui/AnnouncementBar';
 import { ProtectedRoute } from '@/shared/components/ui/ProtectedRoute';
 import { MobileBottomNav } from '@/shared/components/ui/MobileBottomNav';
 import { ScrollToTop } from '@/shared/components/ui/ScrollToTop';
+import { 
+  isAdminDomain, 
+  isStoreDomain, 
+  isLocalOrDev, 
+  shouldRedirectStoreToRoot, 
+  getAdminPortalUrl 
+} from '@/shared/utils/domainRouting';
 
 // Eagerly loaded core entry routes
 import { HomePage } from '@/features/catalog/pages/HomePage';
@@ -20,6 +27,7 @@ const CartPage = lazy(() => import('@/features/cart/pages/CartPage').then(m => (
 const CheckoutPage = lazy(() => import('@/features/checkout/pages/CheckoutPage').then(m => ({ default: m.CheckoutPage })));
 const OrderConfirmationPage = lazy(() => import('@/features/orders/pages/OrderConfirmationPage').then(m => ({ default: m.OrderConfirmationPage })));
 const AccountPage = lazy(() => import('@/features/customers/pages/AccountPage').then(m => ({ default: m.AccountPage })));
+const WishlistPage = lazy(() => import('@/features/wishlist/pages/WishlistPage').then(m => ({ default: m.WishlistPage })));
 const LoginPage = lazy(() => import('@/features/auth/pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import('@/features/auth/pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
 const AboutPage = lazy(() => import('@/features/info/pages/AboutPage').then(m => ({ default: m.AboutPage })));
@@ -43,6 +51,10 @@ const AdminInquiries = lazy(() => import('@/features/admin/pages/AdminInquiries'
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin').then(m => ({ default: m.AdminLogin })));
 const AdminUsers = lazy(() => import('@/features/admin/pages/AdminUsers').then(m => ({ default: m.AdminUsers })));
 const AdminAuditLogs = lazy(() => import('@/features/admin/pages/AdminAuditLogs').then(m => ({ default: m.AdminAuditLogs })));
+const AdminAnnouncements = lazy(() => import('@/features/admin/pages/AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })));
+const AdminProfile = lazy(() => import('@/features/admin/pages/AdminProfile').then(m => ({ default: m.AdminProfile })));
+const AdminProductEditor = lazy(() => import('@/features/admin/pages/AdminProductEditor').then(m => ({ default: m.AdminProductEditor })));
+const AdminSetupPassword = lazy(() => import('@/features/admin/pages/AdminSetupPassword').then(m => ({ default: m.AdminSetupPassword })));
 
 const LoadingFallback: React.FC = () => (
   <div style={{
@@ -67,6 +79,34 @@ const LoadingFallback: React.FC = () => (
   </div>
 );
 
+/**
+ * Handles redirecting visitors to the dedicated admin portal subdomain in production.
+ */
+const AdminRedirectToSubdomain: React.FC = () => {
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const target = getAdminPortalUrl(window.location.pathname + window.location.search);
+      window.location.replace(target);
+    }
+  }, []);
+
+  return <LoadingFallback />;
+};
+
+/**
+ * Handles redirecting store.muety.in to muety.in after official launch.
+ */
+const StorefrontPostLaunchRedirect: React.FC = () => {
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const target = `https://muety.in${window.location.pathname}${window.location.search}`;
+      window.location.replace(target);
+    }
+  }, []);
+
+  return <LoadingFallback />;
+};
+
 const CustomerLayout: React.FC = () => {
   return (
     <div className="storefront-app" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -85,37 +125,128 @@ const CustomerLayout: React.FC = () => {
 };
 
 export const AppRouter: React.FC = () => {
+  const onAdminDomain = isAdminDomain();
+
+  // If on store subdomain after launch, redirect to apex domain muety.in
+  if (!onAdminDomain && isStoreDomain() && shouldRedirectStoreToRoot()) {
+    return <StorefrontPostLaunchRedirect />;
+  }
+
+  // 1. DEDICATED ADMIN SUBDOMAIN ROUTING (admin.muety.in)
+  if (onAdminDomain) {
+    return (
+      <>
+        <ScrollToTop />
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            {/* Direct Admin Auth Routes */}
+            <Route path="/login" element={<AdminLogin />} />
+            <Route path="/setup-password" element={<AdminSetupPassword />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/setup-password" element={<AdminSetupPassword />} />
+
+            {/* Root on admin subdomain directs to dashboard */}
+            <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
+
+            {/* Direct shortcuts without /admin prefix on admin.muety.in */}
+            <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="/profile" element={<Navigate to="/admin/profile" replace />} />
+            <Route path="/products" element={<Navigate to="/admin/products" replace />} />
+            <Route path="/products/new" element={<Navigate to="/admin/products/new" replace />} />
+            <Route path="/products/:id/edit" element={<Navigate to="/admin/products/:id/edit" replace />} />
+            <Route path="/orders" element={<Navigate to="/admin/orders" replace />} />
+            <Route path="/inquiries" element={<Navigate to="/admin/inquiries" replace />} />
+            <Route path="/reviews" element={<Navigate to="/admin/reviews" replace />} />
+            <Route path="/customers" element={<Navigate to="/admin/customers" replace />} />
+            <Route path="/categories" element={<Navigate to="/admin/categories" replace />} />
+            <Route path="/coupons" element={<Navigate to="/admin/coupons" replace />} />
+            <Route path="/announcements" element={<Navigate to="/admin/announcements" replace />} />
+            <Route path="/settings" element={<Navigate to="/admin/settings" replace />} />
+            <Route path="/admins" element={<Navigate to="/admin/admins" replace />} />
+            <Route path="/audit-logs" element={<Navigate to="/admin/audit-logs" replace />} />
+
+            {/* Core Protected Admin Management Hierarchy */}
+            <Route 
+              path="/admin" 
+              element={
+                <ProtectedRoute requireAdmin={true}>
+                  <AdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/admin/dashboard" replace />} />
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="profile" element={<AdminProfile />} />
+              <Route path="products" element={<AdminProducts />} />
+              <Route path="products/new" element={<AdminProductEditor />} />
+              <Route path="products/:id/edit" element={<AdminProductEditor />} />
+              <Route path="orders" element={<AdminOrders />} />
+              <Route path="inquiries" element={<AdminInquiries />} />
+              <Route path="reviews" element={<AdminReviews />} />
+              <Route path="customers" element={<AdminCustomers />} />
+              <Route path="categories" element={<AdminCategories />} />
+              <Route path="coupons" element={<AdminCoupons />} />
+              <Route path="announcements" element={<AdminAnnouncements />} />
+              <Route path="settings" element={<AdminSettings />} />
+              <Route path="admins" element={<ProtectedRoute requiredRoles={['superadmin', 'super_admin']}><AdminUsers /></ProtectedRoute>} />
+              <Route path="audit-logs" element={<ProtectedRoute requiredRoles={['superadmin', 'super_admin', 'admin']}><AdminAuditLogs /></ProtectedRoute>} />
+            </Route>
+
+            {/* Catch-all on admin subdomain safely stays in admin panel */}
+            <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+          </Routes>
+        </Suspense>
+      </>
+    );
+  }
+
+  // 2. STOREFRONT ROUTING (store.muety.in / muety.in / localhost)
   return (
     <>
       <ScrollToTop />
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
-          {/* Admin Routes */}
-          <Route path="/admin/login" element={<AdminLogin />} />
+          {/* Admin routes on Storefront: In production redirect to admin.muety.in; in local dev allow access */}
+          <Route 
+            path="/admin/login" 
+            element={!isLocalOrDev() ? <AdminRedirectToSubdomain /> : <AdminLogin />} 
+          />
+          <Route 
+            path="/admin/setup-password" 
+            element={!isLocalOrDev() ? <AdminRedirectToSubdomain /> : <AdminSetupPassword />} 
+          />
 
           <Route 
             path="/admin" 
             element={
-              <ProtectedRoute requireAdmin={true}>
-                <AdminLayout />
-              </ProtectedRoute>
+              !isLocalOrDev() ? (
+                <AdminRedirectToSubdomain />
+              ) : (
+                <ProtectedRoute requireAdmin={true}>
+                  <AdminLayout />
+                </ProtectedRoute>
+              )
             }
           >
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="profile" element={<AdminProfile />} />
             <Route path="products" element={<AdminProducts />} />
+            <Route path="products/new" element={<AdminProductEditor />} />
+            <Route path="products/:id/edit" element={<AdminProductEditor />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="inquiries" element={<AdminInquiries />} />
             <Route path="reviews" element={<AdminReviews />} />
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="categories" element={<AdminCategories />} />
             <Route path="coupons" element={<AdminCoupons />} />
+            <Route path="announcements" element={<AdminAnnouncements />} />
             <Route path="settings" element={<AdminSettings />} />
-            <Route path="admins" element={<ProtectedRoute requiredRoles={['super_admin']}><AdminUsers /></ProtectedRoute>} />
-            <Route path="audit-logs" element={<ProtectedRoute requiredRoles={['super_admin', 'admin']}><AdminAuditLogs /></ProtectedRoute>} />
+            <Route path="admins" element={<ProtectedRoute requiredRoles={['superadmin', 'super_admin']}><AdminUsers /></ProtectedRoute>} />
+            <Route path="audit-logs" element={<ProtectedRoute requiredRoles={['superadmin', 'super_admin', 'admin']}><AdminAuditLogs /></ProtectedRoute>} />
           </Route>
 
-          {/* Customer Storefront */}
+          {/* Customer Storefront Routes wrapped in CustomerLayout */}
           <Route element={<CustomerLayout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/products" element={<ProductsPage />} />
@@ -126,6 +257,7 @@ export const AppRouter: React.FC = () => {
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
             <Route path="/account" element={<AccountPage />} />
+            <Route path="/wishlist" element={<WishlistPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             

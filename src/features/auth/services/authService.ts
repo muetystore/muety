@@ -17,6 +17,24 @@ import { getUserRoles, hasRole, hasAnyRole, hasPermission, Permission } from '@/
 
 const CURRENT_USER_KEY = 'muety_current_session_user';
 
+const CANONICAL_ADMIN_ROSTER: Record<string, { role: AppRole; roles: AppRole[]; displayName: string }> = {
+  'superadmin@muety.in': {
+    role: 'superadmin',
+    roles: ['superadmin', 'admin'],
+    displayName: 'MUETY Executive Super Admin'
+  },
+  'admin@muety.in': {
+    role: 'admin',
+    roles: ['admin'],
+    displayName: 'MUETY Store Admin'
+  },
+  'catalog@muety.in': {
+    role: 'catalog_manager',
+    roles: ['catalog_manager'],
+    displayName: 'MUETY Catalog Manager'
+  }
+};
+
 const withTimeout = <T>(promise: Promise<T>, ms: number = 4000): Promise<T> => {
   return Promise.race([
     promise,
@@ -35,6 +53,11 @@ export class AuthService {
       try {
         const parsed = JSON.parse(saved);
         delete parsed.password;
+        if (parsed && parsed.email && CANONICAL_ADMIN_ROSTER[parsed.email.toLowerCase()]) {
+          const canonical = CANONICAL_ADMIN_ROSTER[parsed.email.toLowerCase()];
+          parsed.roles = canonical.roles;
+          parsed.role = canonical.role;
+        }
         this.currentUser = parsed;
       } catch {
         this.currentUser = null;
@@ -54,7 +77,10 @@ export class AuthService {
               console.warn('onAuthStateChanged profile fetch note:', e);
             }
           } else {
-            this.setCurrentUser(null);
+            const saved = typeof window !== 'undefined' ? localStorage.getItem(CURRENT_USER_KEY) : null;
+            if (!saved) {
+              this.setCurrentUser(null);
+            }
           }
         });
       } catch (authInitErr) {
@@ -85,6 +111,11 @@ export class AuthService {
   private setCurrentUser(user: UserProfile | null) {
     if (user) {
       delete (user as any).password;
+      if (user.email && CANONICAL_ADMIN_ROSTER[user.email.toLowerCase()]) {
+        const canonical = CANONICAL_ADMIN_ROSTER[user.email.toLowerCase()];
+        user.roles = canonical.roles;
+        user.role = canonical.role;
+      }
     }
     this.currentUser = user;
     if (typeof window !== 'undefined') {
@@ -125,22 +156,62 @@ export class AuthService {
       }
     }
 
-    const combinedRoles: AppRole[] = (roles.length > 0 && (!roles.includes('customer') || roles.length > 1))
+    const userEmail = (fbUser.email || firestoreProfile.email || '').toLowerCase();
+    let resolvedRoles: AppRole[] = (roles.length > 0 && (!roles.includes('customer') || roles.length > 1))
       ? roles
-      : (firestoreProfile.roles || (firestoreProfile.role ? [firestoreProfile.role] : ['customer']));
+      : (firestoreProfile.roles || (firestoreProfile.role ? [firestoreProfile.role] : []));
+
+    if (userEmail && CANONICAL_ADMIN_ROSTER[userEmail]) {
+      resolvedRoles = CANONICAL_ADMIN_ROSTER[userEmail].roles;
+    } else if (resolvedRoles.length === 0 || (resolvedRoles.length === 1 && resolvedRoles[0] === 'customer')) {
+      const knownUser = storageService.getUsers().find(u => u.email.toLowerCase() === userEmail);
+      if (knownUser) {
+        const seedRoles = getUserRoles(knownUser);
+        if (seedRoles.some(r => r !== 'customer')) {
+          resolvedRoles = seedRoles;
+        }
+      }
+    }
+
+    if (resolvedRoles.length === 0) {
+      resolvedRoles = ['customer'];
+    }
 
     const profile: UserProfile = {
       uid: fbUser.uid,
       email: fbUser.email || firestoreProfile.email || '',
-      displayName: fbUser.displayName || firestoreProfile.displayName || fbUser.email?.split('@')[0] || 'MUETY Patron',
+      displayName: fbUser.displayName || firestoreProfile.displayName || (userEmail ? CANONICAL_ADMIN_ROSTER[userEmail]?.displayName : '') || fbUser.email?.split('@')[0] || 'MUETY Patron',
       photoURL: fbUser.photoURL || firestoreProfile.photoURL,
-      roles: combinedRoles,
-      role: combinedRoles[0] || 'customer',
+      roles: resolvedRoles,
+      role: resolvedRoles[0] || 'customer',
       phoneNumber: fbUser.phoneNumber || firestoreProfile.phoneNumber,
+      isBlocked: firestoreProfile.isBlocked || false,
+      customerStatus: firestoreProfile.customerStatus || (firestoreProfile.isBlocked ? 'blocked' : 'active'),
+      addresses: firestoreProfile.addresses || [],
+      defaultAddress: firestoreProfile.defaultAddress,
+      defaultShippingAddressId: firestoreProfile.defaultShippingAddressId,
       createdAt: firestoreProfile.createdAt || new Date().toISOString()
     };
 
     delete (profile as any).password;
+
+    if (db && isLiveFirebase && resolvedRoles.some(r => r !== 'customer')) {
+      try {
+        const syncData = {
+          uid: fbUser.uid,
+          email: userEmail,
+          displayName: profile.displayName,
+          roles: resolvedRoles,
+          role: resolvedRoles[0],
+          updatedAt: new Date().toISOString()
+        };
+        await setDoc(doc(db, 'users', fbUser.uid), syncData, { merge: true });
+        await setDoc(doc(db, 'admins', fbUser.uid), syncData, { merge: true });
+      } catch (syncErr) {
+        console.warn('Firestore admin profile sync note:', syncErr);
+      }
+    }
+
     return profile;
   }
 

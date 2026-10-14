@@ -205,7 +205,7 @@ export const CartDrawer: React.FC = () => {
             </div>
 
             <p style={{ fontSize: '0.78rem', color: 'var(--brand-muted)', marginBottom: '1rem' }}>
-              Taxes and shipping calculated during checkout. Complimentary delivery available.
+              Pan-India express courier delivery: ₹89 flat. Applicable GST calculated at checkout.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

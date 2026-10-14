@@ -3,6 +3,7 @@ import { Product, CartItem, Coupon } from '@/types';
 import { couponService } from '@/features/coupons/services/couponService';
 import { storageService } from '@/lib/storage/storageService';
 import { useNotification } from './NotificationContext';
+import { calculateOrderFinancials } from '@/shared/utils/pricingEngine';
 
 interface CartContextType {
   items: CartItem[];
@@ -81,6 +82,12 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [appliedCoupon]);
 
   const addToCart = (product: Product, quantity = 1, color?: string, size?: string) => {
+    const currentProd = storageService.getProductById(product.id) || product;
+    if (currentProd.availability === 'sold_out' || product.availability === 'sold_out') {
+      warning('This product is currently sold out.', 'Sold Out');
+      return;
+    }
+
     const selectedColor = color || (product.colors && product.colors.length > 0 ? product.colors[0] : undefined);
     const selectedSize = size || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
 
@@ -156,10 +163,14 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
   const settings = storageService.getSettings();
-  const shippingFee = subtotal === 0 ? 0 : (settings.standardShippingFee || 100);
-  const taxableAmount = Math.max(0, subtotal - discountAmount);
-  const taxAmount = Number(((taxableAmount * settings.taxRate) / 100).toFixed(2));
-  const grandTotal = Number((taxableAmount + shippingFee + taxAmount).toFixed(2));
+  const financials = calculateOrderFinancials({
+    subtotal,
+    discount: discountAmount,
+    taxRate: settings.taxRate || 5
+  });
+  const shippingFee = financials.shippingFee;
+  const taxAmount = financials.tax;
+  const grandTotal = financials.total;
 
   const applyCoupon = (code: string) => {
     const result = couponService.validateCoupon(code, subtotal);

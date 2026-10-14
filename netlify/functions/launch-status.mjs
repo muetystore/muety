@@ -14,7 +14,7 @@ export async function handler() {
     body: JSON.stringify({
       status: isLive ? 'LIVE' : 'PRE_LAUNCH',
       launchAt: targetDateStr,
-      storeUrl: process.env.STORE_URL || '/',
+      storeUrl: process.env.STORE_URL || process.env.MUETY_STORE_URL || 'https://store.muety.in',
       serverTime: new Date().toISOString(),
       mode: process.env.NODE_ENV || 'production'
     })

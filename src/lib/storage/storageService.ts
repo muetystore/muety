@@ -24,8 +24,51 @@ const KEYS = {
   REVIEWS: 'muety_reviews_v1',
   CURRENT_USER: 'muety_current_user_v1',
   WISHLIST: 'muety_wishlist_v1',
-  CART: 'muety_cart_v1'
+  CART: 'muety_cart_v1',
+  RECENTLY_VIEWED: 'muety_recently_viewed_v1'
 };
+
+const memoryStore: Record<string, string> = {};
+const categoryListeners = new Set<(cats: Category[]) => void>();
+const productListeners = new Set<(products: Product[]) => void>();
+
+export function subscribeLocalCategories(callback: (cats: Category[]) => void): () => void {
+  categoryListeners.add(callback);
+  return () => categoryListeners.delete(callback);
+}
+
+export function subscribeLocalProducts(callback: (products: Product[]) => void): () => void {
+  productListeners.add(callback);
+  return () => productListeners.delete(callback);
+}
+
+function safeGetItem(key: string): string | null {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const val = localStorage.getItem(key);
+      if (val !== null) return val;
+    }
+  } catch {}
+  return memoryStore[key] !== undefined ? memoryStore[key] : null;
+}
+
+function safeSetItem(key: string, value: string): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, value);
+    }
+  } catch {}
+  memoryStore[key] = value;
+}
+
+function safeRemoveItem(key: string): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(key);
+    }
+  } catch {}
+  delete memoryStore[key];
+}
 
 class StorageService {
   constructor() {
@@ -33,44 +76,66 @@ class StorageService {
   }
 
   private initializeDefaults() {
-    if (typeof window === 'undefined') return;
-    const existingRaw = localStorage.getItem(KEYS.PRODUCTS);
+    const existingRaw = safeGetItem(KEYS.PRODUCTS);
     if (existingRaw && (existingRaw.includes('dfvdfvdf') || existingRaw.includes('cat-timepieces'))) {
-      localStorage.removeItem(KEYS.PRODUCTS);
-      localStorage.removeItem(KEYS.CATEGORIES);
-      localStorage.setItem(KEYS.INITIALIZED, 'v4_prod_clean');
+      safeRemoveItem(KEYS.PRODUCTS);
+      safeRemoveItem(KEYS.CATEGORIES);
+      safeSetItem(KEYS.INITIALIZED, 'v7_canonical_identities_sanitized');
     }
 
-    const isInit = localStorage.getItem(KEYS.INITIALIZED);
-    if (!isInit || isInit !== 'v5_firestore_authority') {
-      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify([]));
-      localStorage.setItem(KEYS.CATEGORIES, JSON.stringify([]));
-      localStorage.setItem(KEYS.COUPONS, JSON.stringify([]));
-      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
-      localStorage.setItem(KEYS.USERS, JSON.stringify([]));
-      localStorage.setItem(KEYS.ORDERS, JSON.stringify([]));
-      localStorage.setItem(KEYS.REVIEWS, JSON.stringify([]));
-      localStorage.setItem(KEYS.INITIALIZED, 'v5_firestore_authority');
+    const isInit = safeGetItem(KEYS.INITIALIZED);
+    if (!isInit || isInit !== 'v7_canonical_identities_sanitized') {
+      safeSetItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+      safeSetItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
+      safeSetItem(KEYS.COUPONS, JSON.stringify(INITIAL_COUPONS));
+      safeSetItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
+      safeSetItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
+      safeSetItem(KEYS.ORDERS, JSON.stringify([]));
+      safeSetItem(KEYS.REVIEWS, JSON.stringify(INITIAL_REVIEWS));
+      safeSetItem(KEYS.INITIALIZED, 'v7_canonical_identities_sanitized');
     }
   }
 
   // --- PRODUCTS ---
   getProducts(): Product[] {
     try {
-      if (typeof window === 'undefined') return [];
-      const data = localStorage.getItem(KEYS.PRODUCTS);
-      const items = data ? JSON.parse(data) : [];
+      const data = safeGetItem(KEYS.PRODUCTS);
+      const items = data !== null ? JSON.parse(data) : INITIAL_PRODUCTS;
+      const categories = this.getCategories();
+
       return (items || []).map((p: any) => {
         const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : ['/saree_model_individual.jpg'];
         
+        // Migration logic for multi-category:
+        let categoryIds: string[] = Array.isArray(p.categoryIds) && p.categoryIds.length > 0 ? p.categoryIds : [];
+        if (categoryIds.length === 0) {
+          if (p.categoryId) {
+            categoryIds = [p.categoryId];
+          } else {
+            const matchCat = (categories || []).find(c => 
+              (c.slug || '').toLowerCase() === (p.categorySlug || '').toLowerCase() ||
+              (c.name || '').toLowerCase() === (p.category || '').toLowerCase()
+            );
+            categoryIds = [matchCat ? matchCat.id : (p.categorySlug || 'cat-sarees')];
+          }
+        }
+
+        const primaryCategoryId = p.primaryCategoryId && categoryIds.includes(p.primaryCategoryId) 
+          ? p.primaryCategoryId 
+          : categoryIds[0];
+
         return {
           ...p,
           images,
+          categoryIds,
+          primaryCategoryId,
+          categoryId: p.categoryId || primaryCategoryId,
           price: Number(p.price) || 0,
           stock: p.stock !== undefined ? Number(p.stock) : 10,
           category: p.category || 'Festive Silk Sarees',
           categorySlug: p.categorySlug || 'sarees',
-          sku: p.sku || `MUETY-${Math.floor(100 + Math.random() * 900)}`
+          sku: p.sku || `SR-${Math.floor(10 + Math.random() * 90)}`,
+          availability: p.availability || 'available'
         };
       });
     } catch {
@@ -83,10 +148,14 @@ class StorageService {
   }
 
   saveProducts(products: Product[]): void {
-    if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(products));
-      window.dispatchEvent(new Event('muety_products_updated'));
+      safeSetItem(KEYS.PRODUCTS, JSON.stringify(products));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('muety_products_updated'));
+      }
+      productListeners.forEach(cb => {
+        try { cb(products); } catch {}
+      });
     } catch {}
   }
 
@@ -117,19 +186,40 @@ class StorageService {
   // --- CATEGORIES ---
   getCategories(): Category[] {
     try {
-      if (typeof window === 'undefined') return [];
-      const data = localStorage.getItem(KEYS.CATEGORIES);
-      return data ? JSON.parse(data) : [];
+      const data = safeGetItem(KEYS.CATEGORIES);
+      const list: Category[] = data !== null ? JSON.parse(data) : INITIAL_CATEGORIES;
+      return list.map(c => {
+        const fallbackLetters = (c.name || 'Saree').replace(/[^a-zA-Z]/g, '').toUpperCase();
+        const code = (!c.categoryCode || c.categoryCode.trim().length !== 2)
+          ? (fallbackLetters.length >= 2 ? fallbackLetters.slice(0, 2) : 'XX')
+          : c.categoryCode.trim().toUpperCase();
+
+        let imgUrl = (c as any).imageUrl || c.image || (c as any).coverImage || (c as any).coverImageUrl || '/saree_model_individual.jpg';
+        if (imgUrl.startsWith('data:') || imgUrl.startsWith('blob:') || imgUrl.startsWith('file:')) {
+          imgUrl = 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1200&q=80';
+        }
+
+        return { 
+          ...c, 
+          image: imgUrl,
+          imageUrl: imgUrl,
+          categoryCode: code 
+        };
+      });
     } catch {
       return [];
     }
   }
 
   saveCategories(categories: Category[]): void {
-    if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(categories));
-      window.dispatchEvent(new Event('muety_categories_updated'));
+      safeSetItem(KEYS.CATEGORIES, JSON.stringify(categories));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('muety_categories_updated'));
+      }
+      categoryListeners.forEach(cb => {
+        try { cb(categories); } catch {}
+      });
     } catch {}
   }
 
@@ -198,7 +288,7 @@ class StorageService {
   // --- ORDERS ---
   getOrders(): Order[] {
     try {
-      const data = localStorage.getItem(KEYS.ORDERS);
+      const data = safeGetItem(KEYS.ORDERS);
       return data ? JSON.parse(data) : [];
     } catch {
       return [];
@@ -214,8 +304,10 @@ class StorageService {
   }
 
   saveOrders(orders: Order[]): void {
-    localStorage.setItem(KEYS.ORDERS, JSON.stringify(orders));
-    window.dispatchEvent(new Event('muety_orders_updated'));
+    safeSetItem(KEYS.ORDERS, JSON.stringify(orders));
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new Event('muety_orders_updated'));
+    }
   }
 
   createOrder(order: Order): Order {
@@ -272,12 +364,26 @@ class StorageService {
   // --- STORE SETTINGS ---
   getSettings(): StoreSettings {
     try {
-      const data = localStorage.getItem(KEYS.SETTINGS);
+      const data = safeGetItem(KEYS.SETTINGS);
       if (data) {
         const parsed: StoreSettings = JSON.parse(data);
+        let changed = false;
         if (parsed.currencySymbol === '$' || parsed.currency === 'USD') {
           parsed.currency = 'INR';
           parsed.currencySymbol = '₹';
+          changed = true;
+        }
+        // Safe repeatable migration: migrate legacy unmigrated default (100 or missing) to ₹89 flat courier fee once
+        const hasMigrated = (parsed as any)._shippingMigratedV2 === true;
+        if (!hasMigrated) {
+          if (parsed.standardShippingFee === 100 || typeof parsed.standardShippingFee !== 'number') {
+            parsed.standardShippingFee = 89;
+            parsed.expressShippingFee = 89;
+          }
+          (parsed as any)._shippingMigratedV2 = true;
+          changed = true;
+        }
+        if (changed) {
           this.saveSettings(parsed);
         }
         return parsed;
@@ -289,24 +395,41 @@ class StorageService {
   }
 
   saveSettings(settings: StoreSettings): void {
-    localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
-    window.dispatchEvent(new Event('muety_settings_updated'));
+    const toSave = {
+      ...settings,
+      _shippingMigratedV2: (settings as any)._shippingMigratedV2 !== undefined 
+        ? (settings as any)._shippingMigratedV2 
+        : true
+    };
+    safeSetItem(KEYS.SETTINGS, JSON.stringify(toSave));
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new Event('muety_settings_updated'));
+    }
   }
 
   // --- USERS ---
   getUsers(): UserProfile[] {
+    const isLegacyEmail = (email?: string) => {
+      if (!email) return false;
+      const lower = email.toLowerCase();
+      return lower.includes('muetystore.com') || lower === 'kalvimohan03@gmail.com';
+    };
+
     try {
       const data = localStorage.getItem(KEYS.USERS);
       const parsed: UserProfile[] = data ? JSON.parse(data) : [];
-      const combined = [...parsed];
+      const sanitizedParsed = parsed.filter(u => !isLegacyEmail(u.email));
+      const combined = [...sanitizedParsed];
+
       INITIAL_USERS.forEach(initUser => {
-        if (!combined.some(u => u.uid === initUser.uid || u.email.toLowerCase() === initUser.email.toLowerCase())) {
+        if (!isLegacyEmail(initUser.email) && !combined.some(u => u.uid === initUser.uid || u.email.toLowerCase() === initUser.email.toLowerCase())) {
           combined.push(initUser);
         }
       });
-      return combined.length > 0 ? combined : INITIAL_USERS;
+
+      return combined.length > 0 ? combined : INITIAL_USERS.filter(u => !isLegacyEmail(u.email));
     } catch {
-      return INITIAL_USERS;
+      return INITIAL_USERS.filter(u => !isLegacyEmail(u.email));
     }
   }
 
@@ -341,6 +464,28 @@ class StorageService {
 
   saveWishlist(ids: string[]): void {
     localStorage.setItem(KEYS.WISHLIST, JSON.stringify(ids));
+  }
+
+  // --- RECENTLY VIEWED ---
+  getRecentlyViewed(): string[] {
+    try {
+      const data = safeGetItem(KEYS.RECENTLY_VIEWED);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  addRecentlyViewed(productId: string): void {
+    if (!productId) return;
+    try {
+      const current = this.getRecentlyViewed();
+      const updated = [productId, ...current.filter(id => id !== productId)].slice(0, 12);
+      safeSetItem(KEYS.RECENTLY_VIEWED, JSON.stringify(updated));
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('muety_recently_viewed_updated', { detail: updated }));
+      }
+    } catch {}
   }
 
   // --- REVIEWS & TESTIMONIALS ---
@@ -383,15 +528,27 @@ class StorageService {
   }
 
   // --- RESET TO FACTORY DEMO DATA ---
+  clearAll(): void {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.clear();
+      }
+    } catch {}
+    Object.keys(memoryStore).forEach(k => delete memoryStore[k]);
+    this.initializeDefaults();
+  }
+
   resetToSeedData(): void {
-    localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
-    localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
-    localStorage.setItem(KEYS.COUPONS, JSON.stringify(INITIAL_COUPONS));
-    localStorage.setItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
-    localStorage.setItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
-    localStorage.setItem(KEYS.ORDERS, JSON.stringify(INITIAL_ORDERS));
-    localStorage.setItem(KEYS.REVIEWS, JSON.stringify(INITIAL_REVIEWS));
-    window.location.reload();
+    safeSetItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+    safeSetItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
+    safeSetItem(KEYS.COUPONS, JSON.stringify(INITIAL_COUPONS));
+    safeSetItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
+    safeSetItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
+    safeSetItem(KEYS.ORDERS, JSON.stringify(INITIAL_ORDERS));
+    safeSetItem(KEYS.REVIEWS, JSON.stringify(INITIAL_REVIEWS));
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
   }
 }
 

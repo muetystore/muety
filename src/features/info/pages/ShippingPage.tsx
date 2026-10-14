@@ -26,20 +26,20 @@ export const ShippingPage: React.FC = () => {
           <div className="card" style={{ padding: '2rem' }}>
             <Truck size={32} color="#d4af37" style={{ marginBottom: '1rem' }} />
             <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)', color: 'var(--brand-primary)', fontWeight: 700 }}>
-              Pan-India Express Shipping
+              Pan-India Tracked Courier
             </h3>
             <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              Standard shipping fee of <strong>₹100</strong> across India for all atelier orders.
+              Total shipping/delivery charge is flat <strong>₹89 per order</strong> across India with insured courier tracking.
             </p>
           </div>
 
           <div className="card" style={{ padding: '2rem' }}>
             <ShieldCheck size={32} color="#d4af37" style={{ marginBottom: '1rem' }} />
             <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)', color: 'var(--brand-primary)', fontWeight: 700 }}>
-              Secure Transit Protection
+              Insured Atelier Dispatch
             </h3>
             <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              Every package is verified, tamper-sealed, and tracked live from our Salem atelier to your doorstep.
+              Every saree is inspected, tamper-sealed with Silk Mark authenticity, and dispatched from our Salem atelier.
             </p>
           </div>
         </div>
@@ -49,18 +49,41 @@ export const ShippingPage: React.FC = () => {
             1. Dispatch & Delivery Timelines
           </h2>
           <p style={{ marginBottom: '1.5rem' }}>
-            Orders placed on MUETY are processed, quality-checked, and dispatched from our Salem weaving atelier within 24 to 48 hours. Estimated delivery within India is 3 to 6 business days depending on destination PIN code.
+            Orders placed on MUETY are processed, quality-inspected, and dispatched from our Salem weaving atelier within 24 to 48 hours. Estimated delivery across India is 2 to 4 business days depending on destination PIN code. Real-time courier tracking is provided via SMS and your patron portal.
           </p>
 
           <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
-            2. Delivery Charges
+            2. Transparent Shipping & Delivery Fee (₹89 Flat)
           </h2>
-          <ul style={{ listStyle: 'disc', paddingLeft: '1.5rem', marginBottom: '1.5rem' }}>
-            <li><strong>Flat Shipping Fee:</strong> Canonical flat fee of ₹100 applies to all orders across India.</li>
-          </ul>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <p>
+              MUETY charges a single, transparent fee of <strong>₹89 per order</strong> for insured doorstep courier delivery across India. There are never any duplicate fees, handling surcharges, or hidden fees.
+            </p>
+            <div style={{ backgroundColor: 'var(--bg-main)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)', marginTop: '0.75rem', fontSize: '0.92rem' }}>
+              <strong>Canonical Order Total Calculation:</strong><br />
+              <code>Order Total = Item Subtotal − Discount + Applicable Tax (5% GST) + ₹89 Shipping/Delivery Charge</code>
+            </div>
+          </div>
 
           <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
-            3. Return, Refund & Cancellation Policy
+            3. Payment Options & COD Advance
+          </h2>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <ul style={{ listStyle: 'disc', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <li>
+                <strong>Online Payment (Razorpay):</strong> Pay 100% of the Order Total securely online via UPI, Credit/Debit Card, NetBanking, or Digital Wallets for zero-touch delivery.
+              </li>
+              <li>
+                <strong>Cash on Delivery (COD) — ₹89 Advance:</strong> For COD orders, a <strong>₹89 online advance</strong> is collected via Razorpay at checkout. This advance is credited directly toward your order total to cover tracked courier dispatch. At delivery, you pay only the remaining balance (<code>Order Total − ₹89</code>). The ₹89 advance is never an extra surcharge.
+              </li>
+              <li>
+                <strong>Advance Terms:</strong> As set out in our Terms & Policies (Effective 10 October 2026), the ₹89 advance fee is non-refundable for ordinary customer cancellations after dispatch, refusal to accept delivery, or failure to collect the parcel, to the extent permitted by applicable law. It remains refundable where required by law, such as order non-fulfillment by MUETY.
+              </li>
+            </ul>
+          </div>
+
+          <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            4. Return & Cancellation Policy
           </h2>
           <div style={{
             backgroundColor: '#fffdf5',
@@ -71,18 +94,18 @@ export const ShippingPage: React.FC = () => {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400e', fontWeight: 800, fontSize: '1.05rem', marginBottom: '0.5rem' }}>
               <AlertCircle size={20} color="#b45309" />
-              <span>Non-Returnable, Non-Refundable & Non-Cancellable Position</span>
+              <span>Artisan Handloom Policy & Cancellation Window</span>
             </div>
             <p style={{ color: '#78350f', fontSize: '0.92rem', lineHeight: 1.7, margin: 0 }}>
-              At MUETY, each pure silk saree and ethnic garment is curated and inspected with artisan precision. Consequently, all orders are <strong>non-returnable, non-refundable, and non-cancellable</strong> once submitted, subject to statutory consumer protection rights that cannot legally be excluded under applicable Indian law.
+              Because each saree is an artisan handloom creation, orders are generally non-returnable once delivered, subject to mandatory consumer protection laws. However, if your order is still in <strong>pending status</strong> prior to atelier packaging and dispatch, you may request order cancellation directly from your <strong>Patron Account</strong> or by contacting our concierge.
             </p>
           </div>
 
           <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
-            4. Support & Quality Inquiries
+            5. Inquiries & Atelier Concierge
           </h2>
           <p>
-            If your shipment arrives damaged or with a verified weaving defect, please notify MUETY Concierge within 24 hours of delivery at <strong>support@muety.in</strong> or WhatsApp at <strong>+91 9940668095</strong> along with unboxing video footage.
+            If your shipment arrives damaged or with an unboxing issue, please notify the MUETY Concierge within 24 hours of delivery at <strong>support@muety.in</strong> or WhatsApp at <strong>+91 9940668095</strong> along with unboxing footage for immediate resolution.
           </p>
         </div>
       </div>

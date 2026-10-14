@@ -1,18 +1,28 @@
 import { Product, Category } from '../types';
-import { storageService } from '@/lib/storage/storageService';
-import { db } from '@/lib/firebase/firebase';
+import { storageService, subscribeLocalCategories, subscribeLocalProducts } from '@/lib/storage/storageService';
+import { db, app, auth } from '@/lib/firebase/firebase';
+import { env } from '@/lib/config/env';
+import { authService } from '@/features/auth/services/authService';
+import { auditService } from '@/shared/services/auditService';
 import { 
   collection, 
   doc, 
   setDoc, 
+  getDoc,
   deleteDoc, 
   onSnapshot, 
   getDocs,
   query,
   where,
   writeBatch,
+  runTransaction,
   Unsubscribe 
 } from 'firebase/firestore';
+import { 
+  generateCategoryCodeSuggestion,
+  validateCategoryCode,
+  isCategoryCodeUnique
+} from './categoryCodeService';
 import { 
   uploadToCloudinary, 
   uploadProductImagesToCloudinary,
@@ -20,6 +30,49 @@ import {
   extractCloudinaryPublicId,
   CloudinaryMediaMetadata
 } from '@/lib/media/cloudinary';
+
+const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+const inFlightSkus = new Set<string>();
+const localCounters: Record<string, number> = {};
+
+export function clearSkuCounters(): void {
+  Object.keys(localCounters).forEach(k => delete localCounters[k]);
+  inFlightSkus.clear();
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('muety_counter_')) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  }
+}
+
+export function clearInFlightSkus(): void {
+  clearSkuCounters();
+}
+
+export function resolveCategoryCode(primaryCategoryId: string): string {
+  const categories = storageService.getCategories();
+  const primaryCat = categories.find(c => 
+    c.id === primaryCategoryId || 
+    c.slug === primaryCategoryId || 
+    (c.categoryCode && c.categoryCode.toUpperCase() === primaryCategoryId.toUpperCase()) ||
+    c.name.toLowerCase() === primaryCategoryId.toLowerCase()
+  );
+  
+  let categoryCode = (primaryCat?.categoryCode || '').trim().toUpperCase();
+  if (!categoryCode || categoryCode.length !== 2) {
+    if (primaryCategoryId && /^[A-Za-z]{2}$/.test(primaryCategoryId)) {
+      categoryCode = primaryCategoryId.toUpperCase();
+    } else {
+      categoryCode = generateCategoryCodeSuggestion(primaryCat?.name || primaryCategoryId || 'Saree') || 'XX';
+    }
+  }
+  return categoryCode;
+}
 
 export async function uploadProductImage(
   imageDataOrUrl: string, 
@@ -80,6 +133,95 @@ export const productService = {
     return storageService.getProducts().find(p => p.slug === slug || p.id === slug);
   },
 
+  async fetchProductBySlug(slug: string): Promise<Product | undefined> {
+    const cleanSlug = slug.toLowerCase().trim();
+
+    if (db) {
+      try {
+        const q = query(collection(db, 'products'), where('slug', '==', cleanSlug));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const docSnap = snap.docs[0];
+          const raw = docSnap.data() as any;
+          const title = raw.title || raw.name || 'Untitled Product';
+          const stock = raw.stock !== undefined ? Number(raw.stock) : (raw.inventory !== undefined ? Number(raw.inventory) : 10);
+          const p: Product = {
+            id: docSnap.id || raw.id,
+            name: title,
+            title,
+            slug: raw.slug || cleanSlug,
+            description: raw.description || '',
+            shortDescription: raw.shortDescription || '',
+            price: Number(raw.price) || 0,
+            originalPrice: raw.originalPrice ? Number(raw.originalPrice) : undefined,
+            discountPercentage: Number(raw.discountPercentage || 0),
+            rating: Number(raw.rating) || 5.0,
+            reviewCount: Number(raw.reviewCount) || 0,
+            stock,
+            inventory: stock,
+            sku: raw.sku || `MUETY-${Math.floor(100 + Math.random() * 900)}`,
+            category: raw.category || 'Festive Silk Sarees',
+            categorySlug: raw.categorySlug || 'sarees',
+            images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'],
+            featured: Boolean(raw.featured),
+            isNewArrival: Boolean(raw.isNewArrival),
+            isBestSeller: Boolean(raw.isBestSeller),
+            status: raw.status || 'active',
+            availability: raw.availability || 'available',
+            tags: Array.isArray(raw.tags) ? raw.tags : [],
+            specifications: raw.specifications || {},
+            createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+            updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString()
+          };
+          storageService.addProduct(p);
+          return p;
+        }
+
+        const docRef = doc(db, 'products', cleanSlug);
+        const docSnap = await getDoc(docRef);
+        if (docSnap && docSnap.exists()) {
+          const raw = docSnap.data() as any;
+          const title = raw.title || raw.name || 'Untitled Product';
+          const stock = raw.stock !== undefined ? Number(raw.stock) : (raw.inventory !== undefined ? Number(raw.inventory) : 10);
+          const p: Product = {
+            id: docSnap.id,
+            name: title,
+            title,
+            slug: raw.slug || cleanSlug,
+            description: raw.description || '',
+            shortDescription: raw.shortDescription || '',
+            price: Number(raw.price) || 0,
+            originalPrice: raw.originalPrice ? Number(raw.originalPrice) : undefined,
+            discountPercentage: Number(raw.discountPercentage || 0),
+            rating: Number(raw.rating) || 5.0,
+            reviewCount: Number(raw.reviewCount) || 0,
+            stock,
+            inventory: stock,
+            sku: raw.sku || `MUETY-${Math.floor(100 + Math.random() * 900)}`,
+            category: raw.category || 'Festive Silk Sarees',
+            categorySlug: raw.categorySlug || 'sarees',
+            images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'],
+            featured: Boolean(raw.featured),
+            isNewArrival: Boolean(raw.isNewArrival),
+            isBestSeller: Boolean(raw.isBestSeller),
+            status: raw.status || 'active',
+            availability: raw.availability || 'available',
+            tags: Array.isArray(raw.tags) ? raw.tags : [],
+            specifications: raw.specifications || {},
+            createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+            updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString()
+          };
+          storageService.addProduct(p);
+          return p;
+        }
+      } catch (err) {
+        console.warn('Firestore fetchProductBySlug error:', err);
+      }
+    }
+
+    return this.getProductBySlug(cleanSlug);
+  },
+
   getFeaturedProducts(): Product[] {
     return storageService.getProducts().filter(p => p.featured);
   },
@@ -92,11 +234,114 @@ export const productService = {
     return storageService.getProducts().filter(p => p.isBestSeller);
   },
 
-  getProductsByCategory(categorySlug: string): Product[] {
-    return storageService.getProducts().filter(
-      p => (p.categorySlug || '').toLowerCase() === categorySlug.toLowerCase() ||
-           (p.category || '').toLowerCase() === categorySlug.toLowerCase()
+  async getSkuPreviewForCategory(primaryCategoryId: string): Promise<string> {
+    const categoryCode = resolveCategoryCode(primaryCategoryId);
+
+    let num = 1;
+    let readFromFirestore = false;
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+
+    if (db && !isTestEnv) {
+      try {
+        const counterDocId = `productSku_${categoryCode}`;
+        const counterRef = doc(db, 'counters', counterDocId);
+        const counterSnap = await getDoc(counterRef);
+        if (counterSnap.exists()) {
+          num = Number(counterSnap.data()?.nextNumber) || 1;
+          readFromFirestore = true;
+        }
+      } catch (err) {
+        console.warn('[productService] Firestore SKU preview read note:', err);
+      }
+    }
+
+    if (!readFromFirestore) {
+      if (localCounters[categoryCode] !== undefined && localCounters[categoryCode] > 0) {
+        num = localCounters[categoryCode];
+      } else {
+        const key = `muety_counter_${categoryCode}`;
+        const stored = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+        const storedNum = stored ? parseInt(stored, 10) : 0;
+        if (storedNum > 0) {
+          num = storedNum;
+        } else {
+          const allProducts = storageService.getProducts();
+          const prefix1 = `${categoryCode}-`;
+          const prefix2 = `MUETY-${categoryCode}-`;
+          let maxSeq = 0;
+          allProducts.forEach(p => {
+            if (p.sku) {
+              const upperSku = p.sku.toUpperCase();
+              let seqStr = '';
+              if (upperSku.startsWith(prefix1)) {
+                seqStr = upperSku.replace(prefix1, '');
+              } else if (upperSku.startsWith(prefix2)) {
+                seqStr = upperSku.replace(prefix2, '');
+              }
+              if (seqStr) {
+                const seqNum = parseInt(seqStr, 10);
+                if (!isNaN(seqNum) && seqNum > maxSeq) {
+                  maxSeq = seqNum;
+                }
+              }
+            }
+          });
+          num = maxSeq + 1;
+        }
+      }
+    }
+
+    let formattedNum = num < 10 ? `0${num}` : `${num}`;
+    let proposedSku = `${categoryCode}-${formattedNum}`;
+
+    let attempts = 0;
+    while ((await this.checkSkuExists(proposedSku)) && attempts < 50) {
+      num++;
+      attempts++;
+      formattedNum = num < 10 ? `0${num}` : `${num}`;
+      proposedSku = `${categoryCode}-${formattedNum}`;
+    }
+
+    return proposedSku;
+  },
+
+  async generateNextSkuForCategory(primaryCategoryId: string): Promise<string> {
+    return this.getSkuPreviewForCategory(primaryCategoryId);
+  },
+
+  getProductsByCategory(categorySlugOrId: string): Product[] {
+    const cleanCat = (categorySlugOrId || '').toLowerCase().trim();
+    const categories = storageService.getCategories();
+    const targetCat = categories.find(c => 
+      c.id.toLowerCase() === cleanCat || 
+      c.slug.toLowerCase() === cleanCat || 
+      c.name.toLowerCase() === cleanCat
     );
+    const targetId = targetCat ? targetCat.id : cleanCat;
+    const targetSlug = targetCat ? targetCat.slug : cleanCat;
+
+    return storageService.getProducts().filter(p => {
+      if (p.categoryIds && Array.isArray(p.categoryIds) && p.categoryIds.length > 0) {
+        const hasMatch = p.categoryIds.some(cid => {
+          const lowerCid = cid.toLowerCase();
+          return lowerCid === targetId.toLowerCase() || 
+                 lowerCid === targetSlug.toLowerCase() ||
+                 lowerCid === cleanCat;
+        });
+        if (hasMatch) return true;
+      }
+
+      if (p.primaryCategoryId) {
+        const primLower = p.primaryCategoryId.toLowerCase();
+        if (primLower === targetId.toLowerCase() || primLower === targetSlug.toLowerCase() || primLower === cleanCat) {
+          return true;
+        }
+      }
+
+      return (p.categorySlug || '').toLowerCase() === cleanCat ||
+             (p.categorySlug || '').toLowerCase() === targetSlug.toLowerCase() ||
+             (p.category || '').toLowerCase() === cleanCat;
+    });
   },
 
   searchProducts(queryText: string, category?: string, minPrice?: number, maxPrice?: number, sortBy?: string): Product[] {
@@ -117,11 +362,38 @@ export const productService = {
     }
 
     if (category && category !== 'all') {
-      const catLower = category.toLowerCase();
-      products = products.filter(p => 
-        (p.categorySlug || '').toLowerCase() === catLower || 
-        (p.category || '').toLowerCase() === catLower
+      const catLower = category.toLowerCase().trim();
+      const categories = storageService.getCategories();
+      const targetCat = categories.find(c => 
+        c.id.toLowerCase() === catLower || 
+        c.slug.toLowerCase() === catLower || 
+        c.name.toLowerCase() === catLower
       );
+      const targetId = targetCat ? targetCat.id : catLower;
+      const targetSlug = targetCat ? targetCat.slug : catLower;
+
+      products = products.filter(p => {
+        if (p.categoryIds && Array.isArray(p.categoryIds) && p.categoryIds.length > 0) {
+          const hasMatch = p.categoryIds.some(cid => {
+            const lowerCid = cid.toLowerCase();
+            return lowerCid === targetId.toLowerCase() || 
+                   lowerCid === targetSlug.toLowerCase() || 
+                   lowerCid === catLower;
+          });
+          if (hasMatch) return true;
+        }
+
+        if (p.primaryCategoryId) {
+          const primLower = p.primaryCategoryId.toLowerCase();
+          if (primLower === targetId.toLowerCase() || primLower === targetSlug.toLowerCase() || primLower === catLower) {
+            return true;
+          }
+        }
+
+        return (p.categorySlug || '').toLowerCase() === catLower ||
+               (p.categorySlug || '').toLowerCase() === targetSlug.toLowerCase() ||
+               (p.category || '').toLowerCase() === catLower;
+      });
     }
 
     if (minPrice !== undefined) {
@@ -165,10 +437,46 @@ export const productService = {
     return (categoryMatches.length > 0 ? categoryMatches : all).slice(0, limit);
   },
 
-  async createProduct(productData: Omit<Product, 'id' | 'slug' | 'createdAt' | 'updatedAt'> & { id?: string; slug?: string }): Promise<Product> {
+  async createProduct(productData: Partial<Product> & { id?: string; slug?: string; sku?: string }): Promise<Product> {
+    if (!productData.name?.trim() && !productData.title?.trim()) {
+      throw new Error('Product creation failed: Product title is required.');
+    }
+
     const productId = productData.id || `prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const title = productData.title || productData.name || 'Untitled Product';
+    const title = (productData.title || productData.name || '').trim();
     const slug = productData.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || productId;
+
+    // Multi-category & Primary category normalization
+    const categories = storageService.getCategories();
+    let categoryIds: string[] = Array.isArray(productData.categoryIds) && productData.categoryIds.length > 0 
+      ? productData.categoryIds 
+      : [];
+    
+    if (categoryIds.length === 0) {
+      if (productData.categoryId) {
+        categoryIds = [productData.categoryId];
+      } else {
+        const catObj = categories.find(c => 
+          c.name.toLowerCase() === (productData.category || '').toLowerCase() ||
+          c.slug.toLowerCase() === (productData.categorySlug || '').toLowerCase()
+        ) || categories[0];
+        if (catObj) categoryIds = [catObj.id];
+      }
+    }
+
+    if (categoryIds.length === 0 && categories.length > 0) {
+      categoryIds = [categories[0].id];
+    }
+
+    let primaryCategoryId = productData.primaryCategoryId;
+    if (!primaryCategoryId || !categoryIds.includes(primaryCategoryId)) {
+      primaryCategoryId = categoryIds[0] || '';
+    }
+
+    const categoryCode = resolveCategoryCode(primaryCategoryId);
+    const primaryCat = categories.find(c => c.id === primaryCategoryId) || categories[0];
+    const categoryName = primaryCat ? primaryCat.name : (productData.category || 'Festive Silk Sarees');
+    const categorySlug = primaryCat ? primaryCat.slug : (productData.categorySlug || 'sarees');
 
     let mediaMetadata: CloudinaryMediaMetadata[] = [];
     if (productData.images && productData.images.length > 0) {
@@ -188,64 +496,182 @@ export const productService = {
     const status: Product['status'] = productData.status || 'active';
     const finalImages = mediaMetadata.length > 0 ? mediaMetadata.map(m => m.url) : (productData.images || ['/saree_model_individual.jpg']);
 
+    const initialSku = (productData.sku || '').trim();
+    // Check if input SKU is custom or standard preview format
+    const isStandardPreviewSku = !initialSku || 
+      initialSku.startsWith('MUETY-') ||
+      initialSku.startsWith('SR-') || 
+      initialSku.startsWith('S-') || 
+      initialSku.startsWith('XX-') ||
+      new RegExp(`^${categoryCode}-\\d+$`, 'i').test(initialSku) ||
+      new RegExp(`^MUETY-${categoryCode}-\\d+$`, 'i').test(initialSku);
+
+    let finalSku = initialSku;
+
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+
+    if (db && !isTestEnv) {
+      try {
+        const counterDocId = `productSku_${categoryCode}`;
+        const counterRef = doc(db, 'counters', counterDocId);
+        const productRef = doc(db, 'products', productId);
+
+        await runTransaction(db, async (transaction) => {
+          let seqNum = 1;
+          const counterSnap = await transaction.get(counterRef);
+          if (counterSnap.exists()) {
+            seqNum = Number(counterSnap.data()?.nextNumber) || 1;
+          } else {
+            const allProducts = storageService.getProducts();
+            const prefix1 = `${categoryCode}-`;
+            const prefix2 = `MUETY-${categoryCode}-`;
+            let maxSeq = 0;
+            allProducts.forEach(p => {
+              if (p.sku) {
+                const upperSku = p.sku.toUpperCase();
+                let seqStr = '';
+                if (upperSku.startsWith(prefix1)) seqStr = upperSku.replace(prefix1, '');
+                else if (upperSku.startsWith(prefix2)) seqStr = upperSku.replace(prefix2, '');
+                if (seqStr) {
+                  const sNum = parseInt(seqStr, 10);
+                  if (!isNaN(sNum) && sNum > maxSeq) maxSeq = sNum;
+                }
+              }
+            });
+            seqNum = maxSeq + 1;
+          }
+
+          if (isStandardPreviewSku || !finalSku) {
+            const formattedNum = seqNum < 10 ? `0${seqNum}` : `${seqNum}`;
+            finalSku = `${categoryCode}-${formattedNum}`;
+          }
+
+          const payloadToSave: Record<string, any> = {
+            id: String(productId),
+            title: String(title),
+            name: String(title),
+            slug: String(slug),
+            sku: String(finalSku),
+            categoryIds,
+            primaryCategoryId: String(primaryCategoryId),
+            categoryId: String(primaryCategoryId),
+            category: String(categoryName),
+            categorySlug: String(categorySlug),
+            price: Number(productData.price) || 0,
+            originalPrice: Number(productData.originalPrice || 0),
+            discountPercentage: Number(productData.discountPercentage || 0),
+            inventory: Number(stock) || 0,
+            stock: Number(stock) || 0,
+            images: Array.isArray(finalImages) ? finalImages : [],
+            media: mediaMetadata,
+            description: String(productData.description || 'Exquisite handcrafted MUETY piece.'),
+            shortDescription: String(productData.shortDescription || (productData.description ? productData.description.slice(0, 100) : 'Handcrafted atelier piece.')),
+            published: productData.published !== undefined ? Boolean(productData.published) : true,
+            status: String(status),
+            availability: String(productData.availability || 'available'),
+            featured: Boolean(productData.featured),
+            isNewArrival: Boolean(productData.isNewArrival || productData.newArrival),
+            isBestSeller: Boolean(productData.isBestSeller || productData.bestseller),
+            isMostWanted: Boolean(productData.isMostWanted || productData.mostWanted),
+            occasion: productData.occasion || '',
+            occasions: Array.isArray(productData.occasions) ? productData.occasions : (productData.occasion ? [productData.occasion] : []),
+            rating: Number(productData.rating || 5.0),
+            reviewCount: Number(productData.reviewCount || 0),
+            tags: Array.isArray(productData.tags) && productData.tags.length > 0 ? productData.tags : [String(categorySlug), 'luxury', 'atelier'],
+            colors: Array.isArray(productData.colors) ? productData.colors : [],
+            sizes: Array.isArray(productData.sizes) ? productData.sizes : [],
+            specifications: (productData.specifications && typeof productData.specifications === 'object') ? productData.specifications : {},
+            createdAt: nowIso,
+            updatedAt: nowIso
+          };
+
+          Object.keys(payloadToSave).forEach(key => {
+            if (payloadToSave[key] === undefined || payloadToSave[key] === null) delete payloadToSave[key];
+          });
+
+          transaction.set(productRef, payloadToSave, { merge: true });
+
+          const nextSeqNum = seqNum + 1;
+          transaction.set(counterRef, {
+            categoryCode,
+            nextNumber: nextSeqNum,
+            updatedAt: nowIso
+          }, { merge: true });
+        });
+      } catch (err: any) {
+        console.warn('Firebase Firestore product creation transaction note:', err);
+        throw new Error(`Product creation failed: ${err?.message || 'Firestore transaction failed'}`);
+      }
+    } else {
+      // Local / Test environment atomic reservation
+      let seqNum = localCounters[categoryCode];
+      if (!seqNum || seqNum < 1) {
+        const key = `muety_counter_${categoryCode}`;
+        const stored = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+        const storedNum = stored ? parseInt(stored, 10) : 0;
+        if (storedNum > 0) {
+          seqNum = storedNum;
+        } else {
+          const allProducts = storageService.getProducts();
+          const prefix1 = `${categoryCode}-`;
+          const prefix2 = `MUETY-${categoryCode}-`;
+          let maxSeq = 0;
+          allProducts.forEach(p => {
+            if (p.sku) {
+              const upperSku = p.sku.toUpperCase();
+              let seqStr = '';
+              if (upperSku.startsWith(prefix1)) seqStr = upperSku.replace(prefix1, '');
+              else if (upperSku.startsWith(prefix2)) seqStr = upperSku.replace(prefix2, '');
+              if (seqStr) {
+                const sNum = parseInt(seqStr, 10);
+                if (!isNaN(sNum) && sNum > maxSeq) maxSeq = sNum;
+              }
+            }
+          });
+          seqNum = maxSeq + 1;
+        }
+      }
+
+      if (isStandardPreviewSku || !finalSku) {
+        const formattedNum = seqNum < 10 ? `0${seqNum}` : `${seqNum}`;
+        finalSku = `${categoryCode}-${formattedNum}`;
+      }
+
+      const nextSeq = seqNum + 1;
+      localCounters[categoryCode] = nextSeq;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`muety_counter_${categoryCode}`, String(nextSeq));
+      }
+    }
+
     const newProduct: Product = {
       ...productData,
       id: productId,
       name: title,
       title,
       slug,
+      sku: finalSku,
+      categoryIds,
+      primaryCategoryId,
+      categoryId: primaryCategoryId,
+      category: categoryName,
+      categorySlug,
+      price: Number(productData.price) || 0,
       stock,
       inventory: stock,
       status,
+      availability: productData.availability || 'available',
       images: finalImages,
       media: mediaMetadata,
+      description: productData.description || productData.shortDescription || title,
+      shortDescription: productData.shortDescription || productData.description || title,
+      tags: Array.isArray(productData.tags) ? productData.tags : [],
+      rating: productData.rating !== undefined ? Number(productData.rating) : 5,
+      reviewCount: productData.reviewCount !== undefined ? Number(productData.reviewCount) : 0,
+      specifications: productData.specifications || {},
       createdAt: nowIso,
       updatedAt: nowIso
     };
-
-    if (db) {
-      try {
-        const payload: Record<string, any> = {
-          id: String(newProduct.id),
-          title: String(title),
-          name: String(title),
-          slug: String(slug),
-          sku: String(newProduct.sku || `MUETY-${Math.floor(100 + Math.random() * 900)}`),
-          price: Number(newProduct.price) || 0,
-          originalPrice: Number(newProduct.originalPrice || 0),
-          discountPercentage: Number(newProduct.discountPercentage || 0),
-          category: String(newProduct.category || 'Festive Silk Sarees'),
-          categorySlug: String(newProduct.categorySlug || 'sarees'),
-          inventory: Number(stock) || 0,
-          stock: Number(stock) || 0,
-          images: Array.isArray(finalImages) ? finalImages : [],
-          media: mediaMetadata,
-          description: String(newProduct.description || 'Exquisite handcrafted MUETY piece.'),
-          shortDescription: String(newProduct.shortDescription || (newProduct.description ? newProduct.description.slice(0, 100) : 'Handcrafted atelier piece.')),
-          status: String(status),
-          featured: Boolean(newProduct.featured),
-          isNewArrival: Boolean(newProduct.isNewArrival),
-          isBestSeller: Boolean(newProduct.isBestSeller),
-          rating: Number(newProduct.rating || 5.0),
-          reviewCount: Number(newProduct.reviewCount || 0),
-          tags: Array.isArray(newProduct.tags) && newProduct.tags.length > 0 ? newProduct.tags : [String(newProduct.categorySlug || 'sarees'), 'luxury', 'atelier'],
-          colors: Array.isArray(newProduct.colors) ? newProduct.colors : [],
-          sizes: Array.isArray(newProduct.sizes) ? newProduct.sizes : [],
-          specifications: (newProduct.specifications && typeof newProduct.specifications === 'object') ? newProduct.specifications : {},
-          createdAt: nowIso,
-          updatedAt: nowIso
-        };
-
-        Object.keys(payload).forEach(key => {
-          if (payload[key] === undefined || payload[key] === null) delete payload[key];
-        });
-
-        const productRef = doc(db, 'products', newProduct.id);
-        await setDoc(productRef, payload, { merge: true });
-      } catch (err: any) {
-        console.warn('Firebase Firestore product creation note (saved locally):', err);
-      }
-    }
 
     storageService.addProduct(newProduct);
     return newProduct;
@@ -256,6 +682,38 @@ export const productService = {
     const existing = storageService.getProductById(productId);
     const title = product.title || product.name || 'Untitled Product';
     const slug = product.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || productId;
+
+    // Multi-category & Primary category normalization
+    const categories = storageService.getCategories();
+    let categoryIds: string[] = Array.isArray(product.categoryIds) && product.categoryIds.length > 0 
+      ? product.categoryIds 
+      : (existing?.categoryIds || []);
+    
+    if (categoryIds.length === 0) {
+      if (product.categoryId) {
+        categoryIds = [product.categoryId];
+      } else if (existing?.categoryId) {
+        categoryIds = [existing.categoryId];
+      } else {
+        const catObj = categories.find(c => 
+          c.name.toLowerCase() === (product.category || '').toLowerCase() ||
+          c.slug.toLowerCase() === (product.categorySlug || '').toLowerCase()
+        );
+        if (catObj) categoryIds = [catObj.id];
+      }
+    }
+
+    let primaryCategoryId = product.primaryCategoryId;
+    if (!primaryCategoryId || !categoryIds.includes(primaryCategoryId)) {
+      primaryCategoryId = categoryIds[0] || existing?.primaryCategoryId || '';
+    }
+
+    // PERMANENT SKU INVARIANT: Existing product SKU must NEVER be changed on edit!
+    const finalSku = existing?.sku || product.sku;
+
+    const primaryCat = categories.find(c => c.id === primaryCategoryId);
+    const categoryName = primaryCat ? primaryCat.name : (product.category || 'Festive Silk Sarees');
+    const categorySlug = primaryCat ? primaryCat.slug : (product.categorySlug || 'sarees');
 
     let mediaMetadata: CloudinaryMediaMetadata[] = [];
     if (product.images && product.images.length > 0) {
@@ -305,37 +763,52 @@ export const productService = {
       name: title,
       title,
       slug,
+      sku: finalSku,
+      categoryIds,
+      primaryCategoryId,
+      categoryId: primaryCategoryId,
+      category: categoryName,
+      categorySlug,
       stock,
       inventory: stock,
       status,
+      availability: product.availability || existing?.availability || 'available',
       images: finalImages,
       media: mediaMetadata,
       updatedAt: nowIso
     };
 
-    if (db) {
+    if (db && !isTestEnv) {
       try {
         const payload: Record<string, any> = {
           id: String(updated.id),
           title: String(title),
           name: String(title),
           slug: String(slug),
-          sku: String(updated.sku || ''),
+          sku: String(finalSku),
+          categoryIds,
+          primaryCategoryId: String(primaryCategoryId),
+          categoryId: String(primaryCategoryId),
+          category: String(categoryName),
+          categorySlug: String(categorySlug),
           price: Number(updated.price) || 0,
           originalPrice: updated.originalPrice ? Number(updated.originalPrice) : 0,
           discountPercentage: Number(updated.discountPercentage || 0),
-          category: String(updated.category || 'Festive Silk Sarees'),
-          categorySlug: String(updated.categorySlug || 'sarees'),
           inventory: Number(stock) || 0,
           stock: Number(stock) || 0,
           images: Array.isArray(finalImages) ? finalImages : [],
           media: mediaMetadata,
           description: String(updated.description || ''),
           shortDescription: String(updated.shortDescription || ''),
+          published: updated.published !== undefined ? Boolean(updated.published) : true,
           status: String(status),
+          availability: String(updated.availability || 'available'),
           featured: Boolean(updated.featured),
-          isNewArrival: Boolean(updated.isNewArrival),
-          isBestSeller: Boolean(updated.isBestSeller),
+          isNewArrival: Boolean(updated.isNewArrival || updated.newArrival),
+          isBestSeller: Boolean(updated.isBestSeller || updated.bestseller),
+          isMostWanted: Boolean(updated.isMostWanted || updated.mostWanted),
+          occasion: updated.occasion || '',
+          occasions: Array.isArray(updated.occasions) ? updated.occasions : (updated.occasion ? [updated.occasion] : []),
           rating: Number(updated.rating || 5.0),
           reviewCount: Number(updated.reviewCount || 0),
           tags: Array.isArray(updated.tags) ? updated.tags : [],
@@ -391,7 +864,7 @@ export const productService = {
 
     storageService.deleteProduct(id);
 
-    if (db) {
+    if (db && !isTestEnv) {
       try {
         await deleteDoc(doc(db, 'products', id));
         try {
@@ -410,12 +883,65 @@ export const productService = {
     return true;
   },
 
-  subscribeToProducts(callback: (products: Product[]) => void): Unsubscribe {
-    callback(storageService.getProducts());
+  subscribeToProducts(callback: (products: Product[]) => void, onError?: (err: Error) => void): Unsubscribe {
+    const authUser = auth?.currentUser;
+    const currentUserProfile = authService.getCurrentUser();
 
-    if (db) {
+    if (import.meta.env.DEV) {
+      console.log('[FIRESTORE CATALOG DIAGNOSTIC]', {
+        projectId: env.firebase.projectId,
+        appId: env.firebase.appId,
+        authUid: authUser?.uid || 'anonymous',
+        authEmail: authUser?.email || null,
+        authRoles: currentUserProfile?.roles || [],
+        collectionPath: 'products',
+        exactQuery: 'collection(db, "products")',
+        snapshotSize: null,
+        fromCache: null,
+        hasPendingWrites: null,
+        errorCode: null,
+        errorMessage: null,
+        returnedProductIds: [],
+        returnedProductSlugs: [],
+        returnedPublicationFields: []
+      });
+    }
+
+    if (db && !isTestEnv) {
       try {
         const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
+          const docList = snapshot.docs;
+          const returnedIds = docList.map(d => d.id);
+          const returnedSlugs = docList.map(d => (d.data() as any).slug || d.id);
+          const returnedPub = docList.map(d => {
+            const data = d.data() as any;
+            return {
+              id: d.id,
+              published: data.published !== undefined ? Boolean(data.published) : (data.status === 'active'),
+              status: data.status || 'active'
+            };
+          });
+
+          if (import.meta.env.DEV) {
+            console.log('[FIRESTORE CATALOG DIAGNOSTIC]', {
+              projectId: env.firebase.projectId,
+              appId: env.firebase.appId,
+              authUid: authUser?.uid || 'anonymous',
+              authEmail: authUser?.email || null,
+              authRoles: currentUserProfile?.roles || [],
+              collectionPath: 'products',
+              exactQuery: 'collection(db, "products")',
+              snapshotSize: snapshot.size,
+              fromCache: snapshot.metadata.fromCache,
+              hasPendingWrites: snapshot.metadata.hasPendingWrites,
+              errorCode: null,
+              errorMessage: null,
+              returnedProductIds: returnedIds,
+              returnedProductSlugs: returnedSlugs,
+              returnedPublicationFields: returnedPub
+            });
+          }
+
           if (!snapshot.empty) {
             const cloudProducts: Product[] = [];
             snapshot.forEach(docSnap => {
@@ -423,9 +949,11 @@ export const productService = {
               if (raw && (raw.id || docSnap.id)) {
                 const title = raw.title || raw.name || 'Untitled Product';
                 const stock = raw.stock !== undefined ? Number(raw.stock) : (raw.inventory !== undefined ? Number(raw.inventory) : 10);
+                const isPub = raw.published !== undefined ? Boolean(raw.published) : (raw.status !== 'draft');
                 
                 const sanitized: Product = {
                   id: docSnap.id || raw.id,
+                  productId: raw.productId || docSnap.id || raw.id,
                   name: title,
                   title: title,
                   slug: raw.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
@@ -445,14 +973,27 @@ export const productService = {
                   categorySlug: raw.categorySlug || (raw.category ? raw.category.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'sarees'),
                   images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'],
                   featured: Boolean(raw.featured),
-                  isNewArrival: Boolean(raw.isNewArrival),
-                  isBestSeller: Boolean(raw.isBestSeller),
-                  status: raw.status || (stock > 0 ? 'active' : 'out_of_stock'),
+                  isNewArrival: Boolean(raw.isNewArrival || raw.newArrival),
+                  newArrival: Boolean(raw.isNewArrival || raw.newArrival),
+                  isBestSeller: Boolean(raw.isBestSeller || raw.bestseller),
+                  bestseller: Boolean(raw.isBestSeller || raw.bestseller),
+                  published: isPub,
+                  status: raw.status || (isPub ? 'active' : 'draft'),
+                  availability: raw.availability || 'available',
                   tags: Array.isArray(raw.tags) ? raw.tags : [],
                   specifications: raw.specifications || {},
                   colors: Array.isArray(raw.colors) ? raw.colors : undefined,
                   sizes: Array.isArray(raw.sizes) ? raw.sizes : undefined,
                   materials: Array.isArray(raw.materials) ? raw.materials : undefined,
+                  silkType: raw.silkType,
+                  zariType: raw.zariType,
+                  borderType: raw.borderType,
+                  palluType: raw.palluType,
+                  weaveTechnique: raw.weaveTechnique,
+                  craftsmanship: raw.craftsmanship,
+                  occasion: raw.occasion,
+                  careInstructions: raw.careInstructions,
+                  authenticityInformation: raw.authenticityInformation,
                   createdAt: typeof raw.createdAt?.toDate === 'function' 
                     ? raw.createdAt.toDate().toISOString() 
                     : (typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString()),
@@ -471,206 +1012,526 @@ export const productService = {
             storageService.saveProducts([]);
             callback([]);
           }
-        }, (_err) => {
-          callback(storageService.getProducts());
+        }, (err) => {
+          if (import.meta.env.DEV) {
+            console.error('[FIRESTORE CATALOG DIAGNOSTIC]', {
+              projectId: env.firebase.projectId,
+              appId: env.firebase.appId,
+              authUid: authUser?.uid || 'anonymous',
+              authEmail: authUser?.email || null,
+              authRoles: currentUserProfile?.roles || [],
+              collectionPath: 'products',
+              exactQuery: 'collection(db, "products")',
+              snapshotSize: 0,
+              fromCache: false,
+              hasPendingWrites: false,
+              errorCode: err?.code || 'UNKNOWN_ERROR',
+              errorMessage: err?.message || 'Firestore snapshot error',
+              returnedProductIds: [],
+              returnedProductSlugs: [],
+              returnedPublicationFields: []
+            });
+          }
+          if (onError) {
+            onError(err);
+          } else {
+            callback([]);
+          }
         });
         return unsubscribe;
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Firestore onSnapshot init error:', err);
+        if (onError) onError(err as Error);
       }
     }
 
+    callback(storageService.getProducts());
+    const unsubLocal = subscribeLocalProducts((updatedProds) => callback(updatedProds));
     const handler = () => callback(storageService.getProducts());
-    window.addEventListener('muety_products_updated', handler);
-    return () => window.removeEventListener('muety_products_updated', handler);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('muety_products_updated', handler);
+      return () => {
+        unsubLocal();
+        window.removeEventListener('muety_products_updated', handler);
+      };
+    }
+    return unsubLocal;
   },
 
-  async syncAllToFirebase(): Promise<{ success: boolean; count: number; message: string }> {
-    const localProducts = storageService.getProducts();
-    if (!localProducts.length) {
-      return { success: true, count: 0, message: 'No products to synchronize.' };
-    }
-    if (!db) {
-      return { success: true, count: localProducts.length, message: `Synchronized ${localProducts.length} product(s) in local cache.` };
-    }
+  async checkSkuExists(sku: string, excludeProductId?: string): Promise<boolean> {
+    const cleanSku = sku.trim().toUpperCase();
+    if (!cleanSku) return false;
 
-    try {
-      const batch = writeBatch(db);
-      for (const prod of localProducts) {
-        const prodId = String(prod.id || `prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
-        const title = String(prod.title || prod.name || 'Untitled Product');
-        const slug = String(prod.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || prodId);
-        const stock = Number(prod.stock !== undefined ? prod.stock : (prod.inventory !== undefined ? prod.inventory : 10));
-        const status = String(prod.status || (stock > 0 ? 'active' : 'out_of_stock'));
-        const images = Array.isArray(prod.images) && prod.images.length > 0 ? prod.images : ['/saree_model_individual.jpg'];
+    // Check local catalog
+    const localMatches = storageService.getProducts().some(
+      p => (p.sku || '').toUpperCase() === cleanSku && p.id !== excludeProductId
+    );
+    if (localMatches) return true;
 
-        const cleanDoc: Record<string, any> = {
-          id: prodId,
-          title: title,
-          name: title,
-          slug: slug,
-          sku: String(prod.sku || `MUETY-${Math.floor(100 + Math.random() * 900)}`),
-          price: Number(prod.price) || 0,
-          originalPrice: prod.originalPrice ? Number(prod.originalPrice) : 0,
-          discountPercentage: Number(prod.discountPercentage || 0),
-          category: String(prod.category || 'Festive Silk Sarees'),
-          categorySlug: String(prod.categorySlug || 'sarees'),
-          inventory: stock,
-          stock: stock,
-          status: status,
-          images: images,
-          description: String(prod.description || 'Exquisite handcrafted MUETY piece.'),
-          shortDescription: String(prod.shortDescription || (prod.description ? prod.description.slice(0, 100) : 'Handcrafted atelier piece.')),
-          featured: Boolean(prod.featured),
-          isNewArrival: Boolean(prod.isNewArrival),
-          isBestSeller: Boolean(prod.isBestSeller),
-          rating: Number(prod.rating || 5.0),
-          reviewCount: Number(prod.reviewCount || 0),
-          tags: Array.isArray(prod.tags) && prod.tags.length > 0 ? prod.tags : [String(prod.categorySlug || 'sarees'), 'luxury', 'atelier'],
-          colors: Array.isArray(prod.colors) ? prod.colors : [],
-          sizes: Array.isArray(prod.sizes) ? prod.sizes : [],
-          specifications: (prod.specifications && typeof prod.specifications === 'object') ? prod.specifications : {},
-          createdAt: typeof prod.createdAt === 'string' ? prod.createdAt : new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-
-        Object.keys(cleanDoc).forEach(key => {
-          if (cleanDoc[key] === undefined || cleanDoc[key] === null) delete cleanDoc[key];
-        });
-
-        const docRef = doc(db, 'products', prodId);
-        batch.set(docRef, cleanDoc, { merge: true });
+    // Query Firestore (only in non-test env)
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+    if (db && !isTestEnv) {
+      try {
+        const q = query(collection(db, 'products'), where('sku', '==', cleanSku));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const matching = snap.docs.find(d => d.id !== excludeProductId);
+          return !!matching;
+        }
+      } catch (err) {
+        console.warn('Firestore SKU uniqueness query note:', err);
       }
-
-      const commitTask = batch.commit();
-      const timeoutTask = new Promise(resolve => setTimeout(resolve, 1500));
-      await Promise.race([commitTask, timeoutTask]);
-
-      return {
-        success: true,
-        count: localProducts.length,
-        message: `Instantly synchronized ${localProducts.length} product(s) with Firebase Cloud Firestore!`
-      };
-    } catch {
-      return {
-        success: true,
-        count: localProducts.length,
-        message: `Synchronized ${localProducts.length} product(s) to inventory.`
-      };
     }
+
+    return false;
+  },
+
+  async checkSlugExists(slug: string, excludeProductId?: string): Promise<boolean> {
+    const cleanSlug = slug.trim().toLowerCase();
+    if (!cleanSlug) return false;
+
+    // Check local catalog
+    const localMatches = storageService.getProducts().some(
+      p => (p.slug || '').toLowerCase() === cleanSlug && p.id !== excludeProductId
+    );
+    if (localMatches) return true;
+
+    // Query Firestore (only in non-test env)
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+    if (db && !isTestEnv) {
+      try {
+        const q = query(collection(db, 'products'), where('slug', '==', cleanSlug));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const matching = snap.docs.find(d => d.id !== excludeProductId);
+          return !!matching;
+        }
+      } catch (err) {
+        console.warn('Firestore Slug uniqueness query note:', err);
+      }
+    }
+
+    return false;
   },
 
   getCategories(): Category[] {
     return storageService.getCategories();
   },
 
-  async addCategory(name: string, description: string, image: string): Promise<Category> {
+  async addCategory(name: string, description: string, image: string, categoryCodeInput?: string, categoryIdInput?: string): Promise<Category> {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-    const category: Category = {
-      id: `cat-${Date.now()}`,
-      name,
-      slug,
-      description,
-      image,
-      itemCount: 0,
-      featured: false
-    };
-
-    storageService.addCategory(category);
-
-    if (db) {
-      try {
-        await setDoc(doc(db, 'categories', category.id), category);
-      } catch {}
+    let categoryCode = (categoryCodeInput || '').trim().toUpperCase();
+    if (!categoryCode) {
+      categoryCode = generateCategoryCodeSuggestion(name);
     }
 
+    const val = validateCategoryCode(categoryCode);
+    if (!val.valid) {
+      throw new Error(val.error || 'Invalid category code.');
+    }
+
+    const catId = categoryIdInput || `cat-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const unique = await isCategoryCodeUnique(categoryCode, catId);
+    if (!unique) {
+      throw new Error(`Category code "${categoryCode}" is already used by another category.`);
+    }
+
+    const imgUrl = image || '/saree_model_individual.jpg';
+
+    if (!imgUrl || imgUrl.startsWith('data:') || imgUrl.startsWith('blob:') || imgUrl.startsWith('file:')) {
+      throw new Error('Category image upload did not return a permanent image URL. Base64 persistence is disallowed.');
+    }
+
+    const category: Category = {
+      id: catId,
+      name,
+      slug,
+      categoryCode,
+      description,
+      image: imgUrl,
+      imageUrl: imgUrl,
+      coverImage: imgUrl,
+      coverImageUrl: imgUrl,
+      itemCount: 0,
+      featured: false,
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+    if (db && !isTestEnv) {
+      try {
+        const batch = writeBatch(db);
+        batch.set(doc(db, 'categories', category.id), category, { merge: true });
+        batch.set(doc(db, 'categoryCodes', categoryCode), { categoryId: category.id, code: categoryCode });
+        await batch.commit();
+        if (import.meta.env.DEV) {
+          console.log('[FIRESTORE WRITE SUCCESS] Category created:', category.id, category.name);
+        }
+      } catch (err: any) {
+        console.error('[FIRESTORE WRITE ERROR] Category creation failed:', err);
+        throw new Error(`Firestore category write failed: ${err?.message || 'Permission denied or network failure.'}`);
+      }
+    }
+
+    storageService.addCategory(category);
     return category;
   },
 
   async updateCategory(category: Category): Promise<Category> {
-    storageService.updateCategory(category);
-
-    if (db) {
-      try {
-        await setDoc(doc(db, 'categories', category.id), category, { merge: true });
-      } catch {}
+    const code = (category.categoryCode || '').trim().toUpperCase();
+    const val = validateCategoryCode(code);
+    if (!val.valid) {
+      throw new Error(val.error || 'Invalid category code.');
     }
 
-    return category;
+    const unique = await isCategoryCodeUnique(code, category.id);
+    if (!unique) {
+      throw new Error(`Category code "${code}" is already used by another category.`);
+    }
+
+    const imgUrl = category.image || category.imageUrl || (category as any).coverImage || (category as any).coverImageUrl || '/saree_model_individual.jpg';
+
+    if (imgUrl.startsWith('data:') || imgUrl.startsWith('blob:') || imgUrl.startsWith('file:')) {
+      throw new Error('Category image upload did not return a permanent image URL. Base64 persistence is disallowed.');
+    }
+
+    const updated: Category = {
+      ...category,
+      categoryCode: code,
+      image: imgUrl,
+      imageUrl: imgUrl,
+      coverImage: imgUrl,
+      coverImageUrl: imgUrl,
+      updatedAt: new Date().toISOString()
+    };
+
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+    if (db && !isTestEnv) {
+      try {
+        const batch = writeBatch(db);
+        batch.set(doc(db, 'categories', updated.id), updated, { merge: true });
+        batch.set(doc(db, 'categoryCodes', code), { categoryId: updated.id, code }, { merge: true });
+        await batch.commit();
+        if (import.meta.env.DEV) {
+          console.log('[FIRESTORE WRITE SUCCESS] Category updated:', updated.id, updated.name);
+        }
+      } catch (err: any) {
+        console.error('[FIRESTORE WRITE ERROR] Category update failed:', err);
+        throw new Error(`Firestore category update failed: ${err?.message || 'Permission denied or network failure.'}`);
+      }
+    }
+
+    storageService.updateCategory(updated);
+    return updated;
   },
 
   async deleteCategory(id: string): Promise<boolean> {
-    storageService.deleteCategory(id);
-
-    if (db) {
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+    if (db && !isTestEnv) {
       try {
         await deleteDoc(doc(db, 'categories', id));
-      } catch {}
+        if (import.meta.env.DEV) {
+          console.log('[FIRESTORE WRITE SUCCESS] Category deleted:', id);
+        }
+      } catch (err: any) {
+        console.error('[FIRESTORE WRITE ERROR] Category deletion failed:', err);
+        throw new Error(`Firestore category deletion failed: ${err?.message || 'Permission denied or network failure.'}`);
+      }
     }
 
+    storageService.deleteCategory(id);
     return true;
   },
 
-  subscribeToCategories(callback: (categories: Category[]) => void): Unsubscribe {
-    callback(storageService.getCategories());
-
-    if (db) {
+  subscribeToCategories(callback: (categories: Category[]) => void, onError?: (err: Error) => void): Unsubscribe {
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+    if (db && !isTestEnv) {
       try {
         const unsubscribe = onSnapshot(collection(db, 'categories'), (snapshot) => {
+          const cloudCats: Category[] = [];
           if (!snapshot.empty) {
-            const cloudCats: Category[] = [];
             snapshot.forEach(docSnap => {
-              const raw = docSnap.data() as Category;
+              const raw = docSnap.data() as any;
               if (raw && (raw.id || docSnap.id)) {
-                cloudCats.push({ ...raw, id: raw.id || docSnap.id });
+                let imgUrl = raw.imageUrl || raw.image || raw.coverImage || raw.coverImageUrl || '/saree_model_individual.jpg';
+                if (imgUrl.startsWith('data:') || imgUrl.startsWith('blob:') || imgUrl.startsWith('file:')) {
+                  imgUrl = 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1200&q=80';
+                }
+                cloudCats.push({ 
+                  ...raw, 
+                  id: docSnap.id || raw.id,
+                  image: imgUrl,
+                  imageUrl: imgUrl,
+                  categoryCode: raw.categoryCode || generateCategoryCodeSuggestion(raw.name) || 'XX'
+                });
               }
             });
-
-            storageService.saveCategories(cloudCats);
-            callback(cloudCats);
-          } else {
-            callback(storageService.getCategories());
           }
-        }, () => {
-          callback(storageService.getCategories());
+
+          if (import.meta.env.DEV) {
+            cloudCats.forEach(c => {
+              console.log('[CATEGORY IMAGE] Firestore category received', {
+                id: c.id,
+                name: c.name,
+                categoryCode: c.categoryCode,
+                image: (c.image || '').slice(0, 80) + ((c.image || '').length > 80 ? '...' : ''),
+                imageUrl: (c.imageUrl || '').slice(0, 80) + ((c.imageUrl || '').length > 80 ? '...' : ''),
+                coverImage: ((c as any).coverImage || '').slice(0, 80),
+                coverImageUrl: ((c as any).coverImageUrl || '').slice(0, 80)
+              });
+            });
+            console.log('[Firestore Categories]', {
+              snapshotSize: snapshot.size,
+              categories: cloudCats.map(category => ({
+                id: category.id,
+                name: category.name,
+                categoryCode: category.categoryCode,
+                imageUrl: category.imageUrl || category.image
+              }))
+            });
+          }
+
+          storageService.saveCategories(cloudCats);
+          callback(cloudCats);
+        }, (err) => {
+          console.error('[Firestore Categories] Live subscription read error:', err);
+          if (onError) onError(err as Error);
+          else callback(storageService.getCategories());
         });
 
         return unsubscribe;
-      } catch {}
+      } catch (err: any) {
+        console.error('[Firestore Categories] Live subscription init error:', err);
+        if (onError) onError(err as Error);
+      }
     }
 
-    return () => {};
+    callback(storageService.getCategories());
+    const unsubLocal = subscribeLocalCategories((updatedCats) => callback(updatedCats));
+    const handler = () => callback(storageService.getCategories());
+    if (typeof window !== 'undefined') {
+      window.addEventListener('muety_categories_updated', handler);
+      return () => {
+        unsubLocal();
+        window.removeEventListener('muety_categories_updated', handler);
+      };
+    }
+    return unsubLocal;
   },
 
-  async pushAllCategoriesToFirestore(): Promise<{ success: boolean; count: number; message: string }> {
-    if (!db) {
-      return { success: false, count: 0, message: 'Firebase Firestore is not initialized.' };
+  async setProductAvailability(productId: string, availability: 'available' | 'sold_out'): Promise<Product> {
+    const prod = storageService.getProductById(productId) || this.getProductById(productId);
+    if (!prod) {
+      throw new Error(`Product with ID "${productId}" not found.`);
     }
 
+    const previousAvailability = prod.availability || 'available';
+
+    const nowIso = new Date().toISOString();
+    const updatedProd: Product = {
+      ...prod,
+      availability,
+      updatedAt: nowIso
+    };
+
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+
+    if (db && !isTestEnv) {
+      try {
+        const productRef = doc(db, 'products', productId);
+        // Atomic update of availability field ONLY (and updatedAt if canonical model)
+        await setDoc(productRef, { availability, updatedAt: nowIso }, { merge: true });
+      } catch (err: any) {
+        console.warn('Firebase Firestore product availability update error:', err);
+        throw new Error(`Firestore availability update failed: ${err?.message || 'Update error'}`);
+      }
+    }
+
+    storageService.updateProduct(updatedProd);
+
+    // Create Audit Log
     try {
-      const categories = storageService.getCategories();
-      if (categories.length === 0) {
-        return { success: true, count: 0, message: 'No categories to push.' };
-      }
+      const currentUser = authService.getCurrentUser();
+      const authUser = auth?.currentUser;
+      const action = availability === 'sold_out' ? 'PRODUCT_MARKED_SOLD_OUT' : 'PRODUCT_MARKED_AVAILABLE';
 
-      const batch = writeBatch(db);
-      for (const cat of categories) {
-        const docRef = doc(db, 'categories', cat.id);
-        batch.set(docRef, cat, { merge: true });
-      }
-
-      await batch.commit();
-      return {
-        success: true,
-        count: categories.length,
-        message: `Successfully pushed ${categories.length} categories to Firestore collection "categories"!`
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        count: 0,
-        message: err?.message || 'Failed to push categories to Firestore.'
-      };
+      await auditService.logAction({
+        actorUid: authUser?.uid || currentUser?.uid || 'admin',
+        actorEmail: authUser?.email || currentUser?.email || 'admin@muety.in',
+        actorRole: (currentUser?.roles?.[0] as any) || 'catalog_manager',
+        action,
+        entityType: 'PRODUCT',
+        entityId: productId,
+        before: { availability: previousAvailability },
+        after: { availability },
+        reason: `Manually set product "${prod.name}" (SKU: ${prod.sku}) availability from ${previousAvailability} to ${availability}`
+      });
+    } catch (auditErr) {
+      console.warn('Audit log creation note:', auditErr);
     }
+
+    return updatedProd;
+  },
+
+  async markProductSoldOut(productId: string): Promise<Product> {
+    return this.setProductAvailability(productId, 'sold_out');
+  },
+
+  async markProductAvailable(productId: string): Promise<Product> {
+    return this.setProductAvailability(productId, 'available');
   }
 };
+
+export function validateSkuFormat(sku: string): { valid: boolean; error?: string } {
+  const clean = (sku || '').trim();
+  if (!clean) {
+    return { valid: false, error: 'SKU is required.' };
+  }
+  if (!/^[A-Z]{2}-[0-9]+$/.test(clean)) {
+    return { 
+      valid: false, 
+      error: `Invalid SKU format "${sku}". Expected canonical format XX-01 (e.g. KV-01, SS-02).` 
+    };
+  }
+  return { valid: true };
+}
+
+export interface SkuMigrationResult {
+  totalExamined: number;
+  migratedCount: number;
+  skippedCount: number;
+  collisions: Array<{ productId: string; oldSku: string; targetSku: string }>;
+  migratedItems: Array<{ productId: string; oldSku: string; newSku: string }>;
+}
+
+export async function migrateProductSkus(): Promise<SkuMigrationResult> {
+  const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+  const result: SkuMigrationResult = {
+    totalExamined: 0,
+    migratedCount: 0,
+    skippedCount: 0,
+    collisions: [],
+    migratedItems: []
+  };
+
+  const allProducts = storageService.getProducts();
+  result.totalExamined = allProducts.length;
+
+  const itemsToMigrate = allProducts.filter(p => p.sku && p.sku.toUpperCase().startsWith('MUETY-'));
+  if (itemsToMigrate.length === 0 && (!db || isTestEnv)) {
+    return result;
+  }
+
+  const existingSkuMap = new Map<string, string>();
+  allProducts.forEach(p => {
+    if (p.sku) existingSkuMap.set(p.sku.toUpperCase(), p.id);
+  });
+
+  const batchUpdates: Array<{ id: string; oldSku: string; newSku: string }> = [];
+
+  for (const p of itemsToMigrate) {
+    const oldSku = p.sku.trim();
+    const targetSku = oldSku.substring(6).toUpperCase();
+
+    if (!targetSku) {
+      result.skippedCount++;
+      continue;
+    }
+
+    const existingOwnerId = existingSkuMap.get(targetSku);
+    if (existingOwnerId && existingOwnerId !== p.id) {
+      result.collisions.push({ productId: p.id, oldSku, targetSku });
+      result.skippedCount++;
+      console.warn(`[SKU Migration Collision] Product ${p.id} target SKU "${targetSku}" already owned by product ${existingOwnerId}. Migration skipped.`);
+      continue;
+    }
+
+    batchUpdates.push({ id: p.id, oldSku, newSku: targetSku });
+    existingSkuMap.set(targetSku, p.id);
+  }
+
+  if (db && !isTestEnv && batchUpdates.length > 0) {
+    const firestoreDb = db;
+    try {
+      const batch = writeBatch(firestoreDb);
+      batchUpdates.forEach(u => {
+        const pRef = doc(firestoreDb, 'products', u.id);
+        batch.update(pRef, { sku: u.newSku, updatedAt: new Date().toISOString() });
+      });
+      await batch.commit();
+    } catch (err: any) {
+      console.error('[SKU Migration Error] Firestore batch update failed:', err);
+      throw new Error(`Firestore SKU migration failed: ${err?.message || 'Batch update error'}`);
+    }
+  }
+
+  batchUpdates.forEach(u => {
+    const prod = storageService.getProductById(u.id);
+    if (prod) {
+      const updated = { ...prod, sku: u.newSku, updatedAt: new Date().toISOString() };
+      storageService.updateProduct(updated);
+      result.migratedItems.push({ productId: u.id, oldSku: u.oldSku, newSku: u.newSku });
+      result.migratedCount++;
+    }
+  });
+
+  return result;
+}
+
+export interface CategoryAuditResult {
+  totalExamined: number;
+  affectedCategories: Array<{ id: string; name: string; hasBase64Image: boolean; sizeBytes: number }>;
+  repairedCount: number;
+}
+
+export async function auditAndRepairBadCategoryDocuments(): Promise<CategoryAuditResult> {
+  const result: CategoryAuditResult = {
+    totalExamined: 0,
+    affectedCategories: [],
+    repairedCount: 0
+  };
+
+  const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+  if (!db || isTestEnv) return result;
+
+  try {
+    const snap = await getDocs(collection(db, 'categories'));
+    result.totalExamined = snap.size;
+
+    for (const docSnap of snap.docs) {
+      const data = docSnap.data() as any;
+      const imgUrl = String(data.imageUrl || data.image || '');
+      const jsonStr = JSON.stringify(data);
+      const sizeBytes = new Blob([jsonStr]).size;
+
+      const hasBase64 = imgUrl.startsWith('data:') || imgUrl.startsWith('blob:') || sizeBytes > 10000;
+
+      if (hasBase64) {
+        result.affectedCategories.push({
+          id: docSnap.id,
+          name: data.name || 'Unnamed Category',
+          hasBase64Image: true,
+          sizeBytes
+        });
+
+        const cleanRemoteUrl = 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1200&q=80';
+        await setDoc(doc(db, 'categories', docSnap.id), {
+          image: cleanRemoteUrl,
+          imageUrl: cleanRemoteUrl,
+          coverImage: cleanRemoteUrl,
+          coverImageUrl: cleanRemoteUrl,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        result.repairedCount++;
+      }
+    }
+  } catch (err) {
+    console.warn('[Category Audit] Firestore check note:', err);
+  }
+
+  return result;
+}
+

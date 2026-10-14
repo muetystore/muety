@@ -10,7 +10,7 @@ import {
   writeBatch,
   Unsubscribe 
 } from 'firebase/firestore';
-import { db, isLiveFirebase } from '@/lib/firebase/firebase';
+import { db, auth, isLiveFirebase } from '@/lib/firebase/firebase';
 import { Order, OrderStatus, PaymentMethod } from '../types';
 import { CartItem } from '@/features/cart/types';
 import { Address } from '@/shared/types';
@@ -55,36 +55,82 @@ export const orderService = {
     total: number;
     paymentMethod: PaymentMethod;
     paymentStatus?: 'pending' | 'paid' | 'failed' | 'refunded';
+    codAdvanceAmount?: number;
+    codBalanceDue?: number;
     razorpayPaymentId?: string;
     notes?: string;
   }): Promise<Order> {
+    // Checkout Safety: Verify product availability before creating order
+    for (const item of params.items) {
+      const currentProd = storageService.getProductById(item.product.id);
+      if (currentProd?.availability === 'sold_out' || item.product.availability === 'sold_out') {
+        throw new Error(`Order placement rejected: Product "${currentProd?.name || item.product.name}" is currently sold out.`);
+      }
+    }
+
+    // Checkout Security: Verify patron account status
+    if (params.customerId) {
+      const patron = storageService.getUserById(params.customerId);
+      if (patron && (patron.isBlocked || patron.customerStatus === 'blocked')) {
+        throw new Error('Order placement rejected: Your patron account has been suspended by MUETY Security.');
+      }
+    }
+
+    // Checkout Payment Security: COD requires verified ₹89 advance
+    if (params.paymentMethod === 'cash_on_delivery' && (!params.razorpayPaymentId || !params.razorpayPaymentId.trim())) {
+      throw new Error('FAILED_PRECONDITION: Cash on Delivery orders require an upfront ₹89 courier advance payment authorization.');
+    }
+
+    // Checkout Security: Guard against duplicate payment ID replay attacks
+    if (params.razorpayPaymentId && params.razorpayPaymentId.trim()) {
+      const existingOrders = storageService.getOrders();
+      if (existingOrders.some(o => o.razorpayPaymentId === params.razorpayPaymentId?.trim())) {
+        throw new Error('FAILED_PRECONDITION: Payment authorization ID has already been utilized for an existing order.');
+      }
+    }
+
     let serverRes: any = null;
-    try {
-      const res = await fetch('/api/orders/create', {
-        method: 'POST',
-        headers: {
+    if (typeof window !== 'undefined') {
+      try {
+        const headers: Record<string, string> = {
           'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          customerId: params.customerId,
-          customerName: params.customerName,
-          customerEmail: params.customerEmail,
-          customerPhone: params.customerPhone,
-          shippingAddress: params.shippingAddress,
-          items: params.items.map(item => ({
-            productId: item.product.id,
-            quantity: item.quantity,
-            selectedColor: item.selectedColor
-          })),
-          couponCode: params.appliedCoupon,
-          paymentMethod: params.paymentMethod,
-          razorpayPaymentId: params.razorpayPaymentId,
-          notes: params.notes
-        })
-      });
-      serverRes = await res.json();
-    } catch (netErr) {
-      console.warn('Server order API note:', netErr);
+        };
+
+        if (auth?.currentUser) {
+          try {
+            const idToken = await auth.currentUser.getIdToken();
+            if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+          } catch {}
+        }
+
+        const res = await fetch('/api/orders/create', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            customerId: params.customerId,
+            customerName: params.customerName,
+            customerEmail: params.customerEmail,
+            customerPhone: params.customerPhone,
+            shippingAddress: params.shippingAddress,
+            items: params.items.map(item => ({
+              productId: item.product.id,
+              quantity: item.quantity,
+              selectedColor: item.selectedColor
+            })),
+            couponCode: params.appliedCoupon,
+            paymentMethod: params.paymentMethod,
+            razorpayPaymentId: params.razorpayPaymentId,
+            notes: params.notes
+          })
+        });
+        serverRes = await res.json();
+      } catch (netErr) {
+        console.warn('Server order API note:', netErr);
+      }
+    }
+
+    if (serverRes && !serverRes.success && serverRes.error) {
+      throw new Error(serverRes.error.message || 'Order creation rejected by server.');
     }
 
     if (serverRes && serverRes.success && serverRes.order) {
@@ -94,43 +140,49 @@ export const orderService = {
       return serverOrder;
     }
 
-    if (serverRes && serverRes.error) {
-      throw new Error(serverRes.error.message || 'Server rejected order creation.');
-    }
-
     // Local fallback
+    const isCod = params.paymentMethod === 'cash_on_delivery';
+    const canonicalShipping = params.shippingFee || 89;
     const orderNumber = `MT-${Math.floor(100000 + Math.random() * 900000)}`;
     const now = new Date().toISOString();
+    const fallbackTotal = Number((params.subtotal - params.discount + params.tax + canonicalShipping).toFixed(2));
+    const codAdvanceAmount = isCod ? 89 : 0;
+    const codBalanceDue = isCod ? Number((fallbackTotal - 89).toFixed(2)) : 0;
+
     const order: Order = {
       id: `ord-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       orderNumber,
       customerId: params.customerId,
       customerName: params.customerName,
       customerEmail: params.customerEmail,
-      customerPhone: params.customerPhone,
+      customerPhone: params.customerPhone || '',
       shippingAddress: params.shippingAddress,
       items: params.items,
       subtotal: params.subtotal,
-      discount: params.discount,
-      appliedCoupon: params.appliedCoupon,
+      discount: params.discount || 0,
+      appliedCoupon: params.appliedCoupon || '',
       tax: params.tax,
-      shippingFee: 100, // Canonical ₹100 flat shipping
-      total: Number((params.subtotal - params.discount + params.tax + 100).toFixed(2)),
+      shippingFee: canonicalShipping, // Canonical ₹89 flat courier fee
+      total: fallbackTotal,
       paymentMethod: params.paymentMethod,
-      paymentStatus: params.paymentStatus || (params.paymentMethod === 'cash_on_delivery' ? 'pending' : 'paid'),
+      paymentStatus: params.paymentStatus || (isCod ? 'pending' : 'paid'),
+      codAdvanceAmount,
+      codBalanceDue,
       orderStatus: 'pending',
       trackingNumber: `MUET-EXP-${Math.floor(10000000 + Math.random() * 90000000)}`,
       trackingCarrier: 'MUETY Global Express',
       timeline: [
         {
           status: 'pending',
-          label: 'Order Confirmed',
+          label: isCod ? 'COD Order Confirmed (Advance Paid)' : 'Order Confirmed',
           timestamp: new Date().toLocaleString(),
-          description: 'Payment authorized and order accepted.'
+          description: isCod 
+            ? `Order accepted with ₹89 advance paid online. Balance ₹${codBalanceDue} due upon delivery.`
+            : 'Payment authorized and order accepted.'
         }
       ],
-      razorpayPaymentId: params.razorpayPaymentId,
-      notes: params.notes,
+      razorpayPaymentId: params.razorpayPaymentId || '',
+      notes: params.notes || '',
       createdAt: now,
       updatedAt: now
     };
@@ -163,6 +215,49 @@ export const orderService = {
       }
     }
 
+    this.broadcastUpdate(updated);
+    return updated;
+  },
+
+  async requestCancellation(orderId: string, reason: string): Promise<Order | undefined> {
+    const order = storageService.getOrderById(orderId);
+    if (!order) return undefined;
+    if (order.orderStatus !== 'pending') {
+      throw new Error('Order cancellation is only permitted while your order is pending prior to atelier dispatch.');
+    }
+    const updated: Order = {
+      ...order,
+      cancellationRequested: true,
+      cancellationReason: reason,
+      orderStatus: 'cancelled',
+      timeline: [
+        ...order.timeline,
+        {
+          status: 'cancelled',
+          label: 'Cancellation Requested & Processed',
+          timestamp: new Date().toLocaleString(),
+          description: `Patron requested order cancellation: "${reason}". Statutory refund/release initiated.`
+        }
+      ],
+      updatedAt: new Date().toISOString()
+    };
+
+    const orders = storageService.getOrders();
+    const idx = orders.findIndex(o => o.id === orderId);
+    if (idx !== -1) {
+      orders[idx] = updated;
+      storageService.saveOrders(orders);
+    } else {
+      storageService.createOrder(updated);
+    }
+    if (db) {
+      try {
+        const orderRef = doc(db, 'orders', orderId);
+        await setDoc(orderRef, updated, { merge: true });
+      } catch (err: any) {
+        console.warn('Firebase Firestore cancellation write error:', err);
+      }
+    }
     this.broadcastUpdate(updated);
     return updated;
   },
@@ -214,9 +309,7 @@ export const orderService = {
     };
   },
 
-  subscribeToAllOrders(callback: (orders: Order[]) => void): () => void {
-    callback(storageService.getOrders());
-
+  subscribeToAllOrders(callback: (orders: Order[]) => void, onError?: (err: Error) => void): () => void {
     let firestoreUnsub: Unsubscribe | null = null;
 
     if (db) {
@@ -236,12 +329,23 @@ export const orderService = {
             storageService.saveOrders(cloudOrders);
             callback(cloudOrders);
           } else {
+            storageService.saveOrders([]);
+            callback([]);
+          }
+        }, (err) => {
+          console.error('[orderService] Firestore onSnapshot error on orders collection:', err?.message || err);
+          if (onError) {
+            onError(err);
+          } else {
             callback(storageService.getOrders());
           }
-        }, (_err) => {
-          callback(storageService.getOrders());
         });
-      } catch {}
+      } catch (e: any) {
+        console.error('[orderService] Failed to attach snapshot listener to orders:', e?.message || e);
+        if (onError) onError(e);
+      }
+    } else {
+      callback(storageService.getOrders());
     }
 
     const handleLocalSync = () => {
@@ -268,9 +372,7 @@ export const orderService = {
     };
   },
 
-  subscribeToCustomerOrders(customerId: string, callback: (orders: Order[]) => void): () => void {
-    callback(storageService.getCustomerOrders(customerId));
-
+  subscribeToCustomerOrders(customerId: string, callback: (orders: Order[]) => void, onError?: (err: Error) => void): () => void {
     let firestoreUnsub: Unsubscribe | null = null;
 
     if (db) {
@@ -279,13 +381,22 @@ export const orderService = {
         const q = query(ordersCol, where('customerId', '==', customerId));
         firestoreUnsub = onSnapshot(q, (snap) => {
           const userOrders: Order[] = [];
-          snap.forEach(d => userOrders.push(d.data() as Order));
-          if (userOrders.length > 0) {
-            userOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            callback(userOrders);
-          }
-        }, () => {});
-      } catch {}
+          snap.forEach(d => {
+            const raw = d.data() as Order;
+            if (raw) userOrders.push({ ...raw, id: raw.id || d.id });
+          });
+          userOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          callback(userOrders);
+        }, (err) => {
+          console.error('[orderService] Firestore customer orders onSnapshot error:', err?.message || err);
+          if (onError) onError(err);
+          else callback(storageService.getCustomerOrders(customerId));
+        });
+      } catch (e: any) {
+        if (onError) onError(e);
+      }
+    } else {
+      callback(storageService.getCustomerOrders(customerId));
     }
 
     const handleLocalSync = () => {
@@ -377,7 +488,9 @@ export const orderService = {
   },
 
   broadcastUpdate(order: Order) {
-    window.dispatchEvent(new CustomEvent('muety_orders_updated', { detail: order }));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('muety_orders_updated', { detail: order }));
+    }
     if (channel) {
       channel.postMessage({ type: 'ORDER_UPDATED', order });
     }

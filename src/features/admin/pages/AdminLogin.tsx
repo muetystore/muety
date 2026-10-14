@@ -22,15 +22,17 @@ export const AdminLogin: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      error('Please enter your admin credentials.');
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
+      error('Please enter your administrative credentials.');
       return;
     }
 
     setLoading(true);
     try {
-      const authenticatedUser = await login(email, password);
+      const authenticatedUser = await login(cleanEmail, password);
       const isAuthorized = hasAnyRole(authenticatedUser, [
+        'superadmin',
         'super_admin', 
         'admin', 
         'catalog_manager', 
@@ -39,14 +41,15 @@ export const AdminLogin: React.FC = () => {
       ]);
 
       if (!isAuthorized) {
-        error('Access Denied: This account lacks executive role authorization.');
+        error('Access Denied: This account lacks administrative authorization.');
         return;
       }
 
       success('Authorized. Welcome to the MUETY Executive Control Suite.', 'Access Granted');
       navigate(from, { replace: true });
     } catch (err: any) {
-      error(err.message || 'Administrative authentication failed.');
+      console.warn('[AdminLogin] Authentication attempt failed:', err?.message || err);
+      error(err?.message || 'Unable to sign in. Please check your credentials and try again.');
     } finally {
       setLoading(false);
     }
@@ -136,7 +139,7 @@ export const AdminLogin: React.FC = () => {
                 required 
                 value={email} 
                 onChange={e => setEmail(e.target.value)} 
-                placeholder="executive@muety.in"
+                placeholder="superadmin@muety.in"
                 className="form-input"
                 style={{
                   backgroundColor: '#161f33',

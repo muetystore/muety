@@ -50,19 +50,19 @@ export const AdminSettings: React.FC = () => {
       currency: 'INR',
       currencySymbol: '₹',
       taxRate: s.taxRate || 5,
-      freeShippingThreshold: s.freeShippingThreshold || 2000,
-      standardShippingFee: s.standardShippingFee || 100,
-      expressShippingFee: s.expressShippingFee || 250,
+      freeShippingThreshold: s.freeShippingThreshold !== undefined ? s.freeShippingThreshold : 0,
+      standardShippingFee: s.standardShippingFee !== undefined ? s.standardShippingFee : 89,
+      expressShippingFee: s.expressShippingFee !== undefined ? s.expressShippingFee : 89,
       shippingCountry: (s as any).shippingCountry || 'India',
       policy: (s as any).policy || {
-        returnsAccepted: false,
+        returnsAccepted: false, 
         refundsOffered: false,
         cancellationsOffered: false,
         disclaimerText: 'Orders are non-returnable, non-refundable, and non-cancellable, subject to mandatory consumer protection laws.'
       },
       announcementBanner: s.announcementBanner || {
         enabled: true,
-        text: 'Complimentary Pan-India Express Delivery on orders over ₹2,000'
+        text: 'Pan-India Insured Courier Delivery (₹89 Flat) | Silk Mark Certified Salem Handlooms'
       }
     };
   });

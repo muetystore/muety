@@ -29,6 +29,8 @@ export interface Product {
   title?: string;
   shortDescription: string;
   description: string;
+  categoryIds?: string[];
+  primaryCategoryId?: string;
   categoryId?: string;
   category: string;
   categorySlug: string;
@@ -79,6 +81,7 @@ export interface Product {
   weaveTechnique?: string;
   craftsmanship?: string;
   occasion?: string;
+  occasions?: string[];
   careInstructions?: string;
   authenticityInformation?: string;
 
@@ -96,7 +99,10 @@ export interface Product {
   newArrival?: boolean;
   isBestSeller?: boolean;
   bestseller?: boolean;
+  isMostWanted?: boolean;
+  mostWanted?: boolean;
   status?: 'active' | 'archived' | 'draft';
+  availability?: 'available' | 'sold_out';
 
   // Analytics & Reviews
   rating: number;
@@ -117,13 +123,17 @@ export interface Category {
   id: string;
   name: string;
   slug: string;
+  categoryCode: string;
   description: string;
   image: string;
+  imageUrl?: string;
   coverImage?: string;
+  coverImageUrl?: string;
   itemCount: number;
   displayOrder?: number;
   active?: boolean;
   featured?: boolean;
+  isTrending?: boolean;
   seoTitle?: string;
   seoDescription?: string;
   createdAt?: string;

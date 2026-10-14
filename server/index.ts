@@ -10,33 +10,75 @@
  */
 
 import http from 'http';
+import dotenv from 'dotenv';
+dotenv.config();
+
+// Diagnostic startup check for Cloudinary configuration (Requirement 12)
+const cloudNameConfigured = Boolean(process.env.CLOUDINARY_CLOUD_NAME || process.env.VITE_CLOUDINARY_CLOUD_NAME);
+const apiKeyConfigured = Boolean(process.env.CLOUDINARY_API_KEY || process.env.VITE_CLOUDINARY_API_KEY);
+const apiSecretConfigured = Boolean(process.env.CLOUDINARY_API_SECRET);
+
+if (cloudNameConfigured && apiKeyConfigured && apiSecretConfigured) {
+  console.log('[Cloudinary] configuration:\ncloudName: configured\napiKey: configured\napiSecret: configured');
+} else {
+  console.warn('[Cloudinary] configuration incomplete');
+}
+
 import {
   generateUploadSignatureServer,
   deleteCloudinaryAssetServer
 } from './media/cloudinaryServer';
-import { handleSetAdminRole, handleCreateAdminUser } from './adminApi';
+import { 
+  handleSetAdminRole, 
+  handleUpdateAdminRole,
+  handleCreateAdminUser,
+  handleResendInvitation,
+  handleDisableAdminUser,
+  handleCreateDepartment,
+  handleUpdateDepartment,
+  handleCreateRole,
+  handleUpdateRoleDefinition,
+  handleGetConfigStatus,
+  handleUpdateAdminProfile
+} from './adminApi';
 import { handleCreateServerOrder } from './orderApi';
+import { handleGetAnnouncements, handleSaveAnnouncements } from './announcementApi';
+import { handleVerifyPayment } from './paymentApi';
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:4173',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:4173',
+  'https://www.admin.muety.in',
+  'https://admin.muety.in',
+  'https://store.muety.in',
+  'https://www.store.muety.in',
+  'https://muety.in',
+  'https://www.muety.in',
   'https://muetystore-fdad2.web.app',
   'https://muetystore-fdad2.firebaseapp.com'
 ];
 
 export interface StructuredApiError {
   success: false;
+  code?: string;
   error: {
-    code: 'UNAUTHENTICATED' | 'PERMISSION_DENIED' | 'INVALID_ARGUMENT' | 'METHOD_NOT_ALLOWED' | 'NOT_FOUND' | 'FAILED_PRECONDITION' | 'INTERNAL';
+    code: 'UNAUTHENTICATED' | 'PERMISSION_DENIED' | 'INVALID_ARGUMENT' | 'METHOD_NOT_ALLOWED' | 'NOT_FOUND' | 'FAILED_PRECONDITION' | 'INVITATION_EMAIL_PROVIDER_REJECTED' | 'INTERNAL';
     message: string;
   };
 }
 
 function setCorsHeaders(req: any, res: any) {
   const origin = req.headers?.origin;
-  if (origin && (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.firebaseapp.com') || origin.endsWith('.web.app'))) {
+  if (
+    origin && 
+    (ALLOWED_ORIGINS.includes(origin) || 
+     origin.endsWith('.firebaseapp.com') || 
+     origin.endsWith('.web.app') || 
+     origin.endsWith('.muety.in') || 
+     origin === 'https://muety.in')
+  ) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else if (!origin) {
     res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0]);
@@ -59,6 +101,7 @@ function sendJsonResponse(res: any, statusCode: number, data: any) {
 function sendErrorResponse(res: any, statusCode: number, code: StructuredApiError['error']['code'], message: string) {
   sendJsonResponse(res, statusCode, {
     success: false,
+    code,
     error: {
       code,
       message
@@ -100,6 +143,32 @@ async function parseJsonBody(req: any): Promise<any> {
   });
 }
 
+async function dispatchRouteHandler(fn: Function, authHeader: string | undefined, body: any, res: any, defaultErrorMsg: string) {
+  try {
+    const result = await fn(authHeader, body);
+    sendJsonResponse(res, 200, result);
+  } catch (err: any) {
+    const msg = err?.message || defaultErrorMsg;
+    if (msg.startsWith('UNAUTHENTICATED')) {
+      sendErrorResponse(res, 401, 'UNAUTHENTICATED', msg);
+    } else if (msg.startsWith('PERMISSION_DENIED')) {
+      sendErrorResponse(res, 403, 'PERMISSION_DENIED', msg);
+    } else if (msg.startsWith('INVALID_ARGUMENT')) {
+      sendErrorResponse(res, 400, 'INVALID_ARGUMENT', msg);
+    } else if (msg.startsWith('FAILED_PRECONDITION')) {
+      const isMissingCreds = msg.includes('Firebase Admin server credentials are not configured');
+      const statusCode = isMissingCreds ? 503 : 400;
+      sendErrorResponse(res, statusCode, 'FAILED_PRECONDITION', msg);
+    } else if (msg.startsWith('INVITATION_EMAIL_PROVIDER_REJECTED')) {
+      sendErrorResponse(res, 400, 'INVITATION_EMAIL_PROVIDER_REJECTED', 'Admin account created, but invitation email could not be sent. Verify the MUETY sending domain in Resend.');
+    } else if (msg.startsWith('NOT_FOUND')) {
+      sendErrorResponse(res, 404, 'NOT_FOUND', msg);
+    } else {
+      sendErrorResponse(res, 500, 'INTERNAL', msg);
+    }
+  }
+}
+
 /**
  * Centralized API Router and Request Handler for MUETY Production API.
  */
@@ -120,11 +189,33 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
     return true;
   }
 
+  // Handle /api/announcements (GET and POST)
+  if (urlPath === '/api/announcements') {
+    if (req.method === 'GET') {
+      const data = await handleGetAnnouncements();
+      sendJsonResponse(res, 200, data);
+      return true;
+    }
+    if (req.method === 'POST') {
+      let body: any = {};
+      try {
+        body = await parseJsonBody(req);
+      } catch (err: any) {
+        sendErrorResponse(res, 400, 'INVALID_ARGUMENT', err?.message || 'Invalid JSON body');
+        return true;
+      }
+      const data = await handleSaveAnnouncements(body);
+      sendJsonResponse(res, 200, data);
+      return true;
+    }
+  }
+
   // Reject non-POST methods
   if (req.method !== 'POST') {
     sendErrorResponse(res, 405, 'METHOD_NOT_ALLOWED', `HTTP method ${req.method} is not allowed. Supported method: POST.`);
     return true;
   }
+
 
   // Content-Type validation
   const contentType = (req.headers['content-type'] || '').toLowerCase();
@@ -145,69 +236,82 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
 
   const authHeader = req.headers.authorization || req.headers.Authorization;
 
-  // ROUTE 1: POST /api/admin/set-role
-  if (urlPath === '/api/admin/set-role') {
-    try {
-      const result = await handleSetAdminRole(authHeader, body);
-      sendJsonResponse(res, 200, result);
-    } catch (err: any) {
-      const msg = err?.message || 'Failed to assign admin role claims.';
-      if (msg.startsWith('UNAUTHENTICATED')) {
-        sendErrorResponse(res, 401, 'UNAUTHENTICATED', msg);
-      } else if (msg.startsWith('PERMISSION_DENIED')) {
-        sendErrorResponse(res, 403, 'PERMISSION_DENIED', msg);
-      } else if (msg.startsWith('INVALID_ARGUMENT')) {
-        sendErrorResponse(res, 400, 'INVALID_ARGUMENT', msg);
-      } else {
-        sendErrorResponse(res, 500, 'INTERNAL', msg);
-      }
-    }
+  // ROUTE 0: POST /api/admin/config-status
+  if (urlPath === '/api/admin/config-status') {
+    const statusResult = await handleGetConfigStatus();
+    sendJsonResponse(res, 200, statusResult);
+    return true;
+  }
+
+  // ROUTE 1: POST /api/admin/set-role & POST /api/admin/update-role
+  if (urlPath === '/api/admin/set-role' || urlPath === '/api/admin/update-role') {
+    await dispatchRouteHandler(handleUpdateAdminRole, authHeader, body, res, 'Failed to update admin role claims.');
     return true;
   }
 
   // ROUTE 2: POST /api/admin/create-user
   if (urlPath === '/api/admin/create-user') {
-    try {
-      const result = await handleCreateAdminUser(authHeader, body);
-      sendJsonResponse(res, 200, result);
-    } catch (err: any) {
-      const msg = err?.message || 'Failed to provision admin account.';
-      if (msg.startsWith('UNAUTHENTICATED')) {
-        sendErrorResponse(res, 401, 'UNAUTHENTICATED', msg);
-      } else if (msg.startsWith('PERMISSION_DENIED')) {
-        sendErrorResponse(res, 403, 'PERMISSION_DENIED', msg);
-      } else if (msg.startsWith('INVALID_ARGUMENT')) {
-        sendErrorResponse(res, 400, 'INVALID_ARGUMENT', msg);
-      } else {
-        sendErrorResponse(res, 500, 'INTERNAL', msg);
-      }
-    }
+    await dispatchRouteHandler(handleCreateAdminUser, authHeader, body, res, 'Failed to provision admin account.');
+    return true;
+  }
+
+  // ROUTE 3: POST /api/admin/resend-invitation
+  if (urlPath === '/api/admin/resend-invitation') {
+    await dispatchRouteHandler(handleResendInvitation, authHeader, body, res, 'Failed to resend admin invitation.');
+    return true;
+  }
+
+  // ROUTE 4: POST /api/admin/disable-user
+  if (urlPath === '/api/admin/disable-user') {
+    await dispatchRouteHandler(handleDisableAdminUser, authHeader, body, res, 'Failed to update admin account status.');
+    return true;
+  }
+
+  // ROUTE 5: POST /api/admin/create-department
+  if (urlPath === '/api/admin/create-department') {
+    await dispatchRouteHandler(handleCreateDepartment, authHeader, body, res, 'Failed to create department.');
+    return true;
+  }
+
+  // ROUTE 6: POST /api/admin/update-department
+  if (urlPath === '/api/admin/update-department') {
+    await dispatchRouteHandler(handleUpdateDepartment, authHeader, body, res, 'Failed to update department.');
+    return true;
+  }
+
+  // ROUTE 7: POST /api/admin/create-role
+  if (urlPath === '/api/admin/create-role') {
+    await dispatchRouteHandler(handleCreateRole, authHeader, body, res, 'Failed to create role.');
+    return true;
+  }
+
+  // ROUTE 8: POST /api/admin/update-role-definition
+  if (urlPath === '/api/admin/update-role-definition') {
+    await dispatchRouteHandler(handleUpdateRoleDefinition, authHeader, body, res, 'Failed to update role definition.');
+    return true;
+  }
+
+  // ROUTE 9: POST /api/admin/profile
+  if (urlPath === '/api/admin/profile') {
+    await dispatchRouteHandler(handleUpdateAdminProfile, authHeader, body, res, 'Failed to update admin profile.');
     return true;
   }
 
   // ROUTE 3: POST /api/orders/create
   if (urlPath === '/api/orders/create') {
-    try {
-      const result = await handleCreateServerOrder(authHeader, body);
-      sendJsonResponse(res, 200, result);
-    } catch (err: any) {
-      const msg = err?.message || 'Failed to create order.';
-      if (msg.startsWith('FAILED_PRECONDITION')) {
-        sendErrorResponse(res, 400, 'FAILED_PRECONDITION', msg);
-      } else if (msg.startsWith('NOT_FOUND')) {
-        sendErrorResponse(res, 404, 'NOT_FOUND', msg);
-      } else if (msg.startsWith('INVALID_ARGUMENT')) {
-        sendErrorResponse(res, 400, 'INVALID_ARGUMENT', msg);
-      } else {
-        sendErrorResponse(res, 500, 'INTERNAL', msg);
-      }
-    }
+    await dispatchRouteHandler(handleCreateServerOrder, authHeader, body, res, 'Failed to create order.');
     return true;
   }
 
-  // ROUTE 4: POST /api/cloudinary/sign
-  if (urlPath === '/api/cloudinary/sign') {
-    const folder = typeof body?.folder === 'string' ? body.folder.trim() : 'muety/products';
+  // ROUTE 3.5: POST /api/payments/verify & POST /api/payments/verify-payment
+  if (urlPath === '/api/payments/verify' || urlPath === '/api/payments/verify-payment') {
+    await dispatchRouteHandler(handleVerifyPayment, authHeader, body, res, 'Failed to verify payment signature.');
+    return true;
+  }
+
+  // ROUTE 4: POST /api/media/cloudinary-signature & POST /api/cloudinary/sign
+  if (urlPath === '/api/media/cloudinary-signature' || urlPath === '/api/cloudinary/sign') {
+    const folder = typeof body?.folder === 'string' ? body.folder.trim() : 'muety/categories';
     const publicId = typeof body?.publicId === 'string' ? body.publicId.trim() : undefined;
 
     try {
@@ -222,15 +326,17 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
         sendErrorResponse(res, 401, 'UNAUTHENTICATED', msg);
       } else if (msg.startsWith('PERMISSION_DENIED')) {
         sendErrorResponse(res, 403, 'PERMISSION_DENIED', msg);
+      } else if (msg.startsWith('FAILED_PRECONDITION')) {
+        sendErrorResponse(res, 500, 'FAILED_PRECONDITION', msg);
       } else {
-        sendErrorResponse(res, 500, 'INTERNAL', 'Internal server error processing media signature.');
+        sendErrorResponse(res, 500, 'INTERNAL', `Internal server error processing media signature: ${msg}`);
       }
     }
     return true;
   }
 
-  // ROUTE 5: POST /api/cloudinary/delete
-  if (urlPath === '/api/cloudinary/delete') {
+  // ROUTE 5: POST /api/media/cloudinary-delete & POST /api/cloudinary/delete
+  if (urlPath === '/api/media/cloudinary-delete' || urlPath === '/api/cloudinary/delete') {
     const publicIds = body?.publicIds;
     if (!Array.isArray(publicIds) || publicIds.length === 0 || !publicIds.every(id => typeof id === 'string' && id.trim().length > 0)) {
       sendErrorResponse(res, 400, 'INVALID_ARGUMENT', 'Request payload must contain a non-empty array of publicId strings in "publicIds".');

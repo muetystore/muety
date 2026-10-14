@@ -9,23 +9,74 @@ export interface Address {
   id?: string;
   fullName: string;
   phone: string;
+  houseFlat?: string;
   streetAddress: string;
   apartment?: string;
+  landmark?: string;
   city: string;
   state: string;
   postalCode: string;
   country: string;
+  type?: 'home' | 'work' | 'other';
   isDefault?: boolean;
 }
+
+export interface Department {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  status: 'active' | 'disabled';
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface RoleDefinition {
+  id: string;
+  name: string;
+  slug: string;
+  departmentId: string;
+  departmentName: string;
+  description: string;
+  status: 'active' | 'disabled';
+  permissions: Record<string, boolean>;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export type AdminStatus = 'invited' | 'active' | 'disabled';
+export type InvitationStatus = 'pending' | 'sent' | 'accepted' | 'expired';
 
 export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
+  fullName?: string;
   photoURL?: string;
+  profilePhotoUrl?: string;
+  personalEmail?: string;
+  muetyEmail?: string;
+  departmentId?: string;
+  departmentName?: string;
+  roleId?: string;
+  roleName?: string;
+  roleSlug?: string;
   role?: AppRole;
   roles?: AppRole[];
+  status?: AdminStatus;
+  invitationStatus?: InvitationStatus;
+  invitationSentAt?: string;
+  invitationAcceptedAt?: string;
+  createdBy?: string;
+  phone?: string;
   phoneNumber?: string;
+  alternatePhone?: string;
+  whatsappNumber?: string;
+  jobTitle?: string;
+  bio?: string;
   whatsappPhone?: string;
   addresses?: Address[];
   defaultAddress?: Address;
@@ -39,6 +90,8 @@ export interface UserProfile {
   totalSpent?: number;
   customerStatus?: CustomerStatus;
 }
+
+export type AdminUser = UserProfile;
 
 export interface CustomerProfile {
   customerId: string;

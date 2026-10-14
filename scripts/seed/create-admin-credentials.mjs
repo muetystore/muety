@@ -47,46 +47,22 @@ const firebaseConfig = {
 
 const accountsToCreate = [
   {
-    role: 'super_admin',
+    role: 'superadmin',
     email: 'superadmin@muety.in',
-    password: 'SuperAdmin@2026',
+    password: process.env.SUPERADMIN_PASSWORD || 'SuperAdmin@2026',
     displayName: 'MUETY Executive Super Admin'
   },
   {
     role: 'admin',
     email: 'admin@muety.in',
-    password: 'AdminUser@2026',
+    password: process.env.ADMIN_PASSWORD || 'AdminUser@2026',
     displayName: 'MUETY Store Admin'
   },
   {
     role: 'catalog_manager',
     email: 'catalog@muety.in',
-    password: 'CatalogManager@2026',
+    password: process.env.CATALOG_PASSWORD || 'CatalogManager@2026',
     displayName: 'MUETY Catalog Manager'
-  },
-  {
-    role: 'super_admin',
-    email: 'superadmin@muetystore.com',
-    password: 'SuperAdmin@2026',
-    displayName: 'MUETY Executive Super Admin'
-  },
-  {
-    role: 'admin',
-    email: 'admin@muetystore.com',
-    password: 'AdminUser@2026',
-    displayName: 'MUETY Store Admin'
-  },
-  {
-    role: 'catalog_manager',
-    email: 'catalog@muetystore.com',
-    password: 'CatalogManager@2026',
-    displayName: 'MUETY Catalog Manager'
-  },
-  {
-    role: 'super_admin',
-    email: process.env.BOOTSTRAP_ADMIN_EMAIL || 'kalvimohan03@gmail.com',
-    password: process.env.BOOTSTRAP_ADMIN_PASSWORD || 'Nms@2026',
-    displayName: 'MUETY Executive Concierge'
   }
 ];
 
@@ -156,7 +132,7 @@ async function seedAccounts() {
   summary.forEach(s => {
     console.log(`Role        : ${s.role}`);
     console.log(`Email       : ${s.email}`);
-    console.log(`Password    : ${s.password}`);
+    console.log(`Password    : [REDACTED FOR SECURITY]`);
     console.log(`UID         : ${s.uid}`);
     console.log(`Status      : ${s.status}`);
     console.log(`Details     : ${s.details}`);

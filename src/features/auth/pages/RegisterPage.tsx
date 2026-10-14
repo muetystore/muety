@@ -17,10 +17,15 @@ export const RegisterPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!acceptedTerms) {
+      error('Please accept the Terms & Conditions and Privacy Policy to register.');
+      return;
+    }
     if (!fullName.trim() || !email.trim() || !password.trim()) {
       error('Please complete all required fields.');
       return;
@@ -47,6 +52,10 @@ export const RegisterPage: React.FC = () => {
   };
 
   const handleGoogleSignIn = async () => {
+    if (!acceptedTerms) {
+      error('Please accept the Terms & Conditions and Privacy Policy before registering with Google.');
+      return;
+    }
     setLoading(true);
     try {
       const user = await loginWithGoogle();
@@ -167,6 +176,26 @@ export const RegisterPage: React.FC = () => {
               />
               <Lock size={18} color="var(--brand-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
             </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginTop: '0.25rem' }}>
+            <input 
+              type="checkbox"
+              id="register-terms"
+              checked={acceptedTerms}
+              onChange={e => setAcceptedTerms(e.target.checked)}
+              style={{ marginTop: '3px', cursor: 'pointer', accentColor: 'var(--brand-accent)' }}
+            />
+            <label htmlFor="register-terms" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45, cursor: 'pointer' }}>
+              I have read and agree to the MUETY{' '}
+              <Link to="/terms-conditions" target="_blank" style={{ color: 'var(--brand-accent)', textDecoration: 'underline', fontWeight: 600 }}>
+                Terms & Conditions
+              </Link>{' '}
+              and{' '}
+              <Link to="/privacy-policy" target="_blank" style={{ color: 'var(--brand-accent)', textDecoration: 'underline', fontWeight: 600 }}>
+                Privacy Policy
+              </Link>.
+            </label>
           </div>
 
           <button 

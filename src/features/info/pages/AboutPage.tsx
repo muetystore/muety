@@ -59,23 +59,9 @@ export const AboutPage: React.FC = () => {
       <div className="container" style={{ marginTop: '4rem', maxWidth: '960px' }}>
         {/* Core Narrative */}
         <div style={{ fontSize: '1.1rem', lineHeight: 1.85, color: 'var(--text-secondary)' }}>
-          <p style={{ marginBottom: '2.5rem', fontSize: '1.15rem' }}>
+          <p style={{ marginBottom: '3rem', fontSize: '1.15rem' }}>
             <strong>MUETY</strong> is dedicated to honoring traditional Indian textile heritage. We curate pure Mulberry and Kanchipuram silk sarees hand-woven by master artisans, alongside hand-crafted ethnic wear created for life’s grandest celebrations.
           </p>
-
-          <div style={{
-            borderRadius: 'var(--radius-xl)',
-            overflow: 'hidden',
-            margin: '3rem 0',
-            boxShadow: 'var(--shadow-xl)',
-            border: '1px solid rgba(212, 175, 55, 0.2)'
-          }}>
-            <img 
-              src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=1200&q=80" 
-              alt="MUETY Pure Handloom Silk Saree Weaving"
-              style={{ width: '100%', height: '440px', objectFit: 'cover' }}
-            />
-          </div>
 
           <h2 style={{ fontSize: '2.25rem', color: 'var(--brand-primary)', marginBottom: '1.5rem', fontFamily: 'var(--font-heading)', textAlign: 'center', fontWeight: 800 }}>
             The Pillars of MUETY Artistry

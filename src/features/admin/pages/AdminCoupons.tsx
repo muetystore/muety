@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { couponService } from '@/features/coupons/services/couponService';
+import { auditService } from '@/shared/services/auditService';
+import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { Coupon } from '@/types';
-import { Plus, Tag, Trash2, Edit3, X, Cloud, Loader2 } from 'lucide-react';
+import { getUserRoles } from '@/shared/utils/permissions';
+import { AdminModal } from '@/features/admin/components/AdminModal';
+import { Plus, Tag, Trash2, Edit3, X } from 'lucide-react';
 
 export const AdminCoupons: React.FC = () => {
   useDocumentTitle('MUETY Admin | Coupons');
+  const { user } = useAuth();
   const { success, warning, error } = useNotification();
 
   const [coupons, setCoupons] = useState<Coupon[]>(() => couponService.getAllCoupons());
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
-  const [isPushing, setIsPushing] = useState(false);
 
   const [code, setCode] = useState('');
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
@@ -59,6 +63,15 @@ export const AdminCoupons: React.FC = () => {
   const handleDelete = async (id: string, codeName: string) => {
     if (window.confirm(`Delete promo code "${codeName}"?`)) {
       await couponService.deleteCoupon(id);
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'admin',
+        actorRole: getUserRoles(user)[0] || 'admin',
+        action: 'COUPON_DELETED',
+        entityType: 'SETTINGS',
+        entityId: id,
+        reason: `Deleted promo code ${codeName}`
+      });
       success(`Promo code "${codeName}" deleted from Firestore.`, 'Coupon Removed');
     }
   };
@@ -66,23 +79,16 @@ export const AdminCoupons: React.FC = () => {
   const handleToggleActive = async (coupon: Coupon) => {
     const updated = { ...coupon, isActive: !coupon.isActive };
     await couponService.updateCoupon(updated);
+    await auditService.logAction({
+      actorUid: user?.uid || 'system',
+      actorEmail: user?.email || 'admin',
+      actorRole: getUserRoles(user)[0] || 'admin',
+      action: 'COUPON_DISABLED',
+      entityType: 'SETTINGS',
+      entityId: coupon.id,
+      reason: `Toggled promo code ${coupon.code} active state to ${updated.isActive}`
+    });
     success(`Coupon ${coupon.code} is now ${updated.isActive ? 'Active' : 'Inactive'}. Synced to Firebase.`);
-  };
-
-  const handlePushAllToFirestore = async () => {
-    setIsPushing(true);
-    try {
-      const result = await couponService.pushAllCouponsToFirestore();
-      if (result.success) {
-        success(result.message, 'Firestore Synchronized');
-      } else {
-        error(result.message, 'Sync Failed');
-      }
-    } catch (err: any) {
-      error(err?.message || 'Failed to push coupons to Cloud Firestore.');
-    } finally {
-      setIsPushing(false);
-    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -104,10 +110,22 @@ export const AdminCoupons: React.FC = () => {
         isActive
       };
       await couponService.updateCoupon(updated);
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'admin',
+        actorRole: getUserRoles(user)[0] || 'admin',
+        action: 'COUPON_UPDATED',
+        entityType: 'SETTINGS',
+        entityId: editingCoupon.id,
+        before: editingCoupon,
+        after: updated,
+        reason: `Updated promo code ${code}`
+      });
       success(`Coupon "${code}" updated in Firebase.`, 'Coupon Saved');
     } else {
-      await couponService.addCoupon({
-        id: `coup-${Date.now()}`,
+      const couponId = `coup-${Date.now()}`;
+      const newCoupon: Coupon = {
+        id: couponId,
         code: code.toUpperCase().trim(),
         discountType,
         discountValue: Number(discountValue),
@@ -116,6 +134,17 @@ export const AdminCoupons: React.FC = () => {
         description,
         isActive,
         usageCount: 0
+      };
+      await couponService.addCoupon(newCoupon);
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'admin',
+        actorRole: getUserRoles(user)[0] || 'admin',
+        action: 'COUPON_CREATED',
+        entityType: 'SETTINGS',
+        entityId: couponId,
+        after: newCoupon,
+        reason: `Created promo code ${code}`
       });
       success(`Promo code "${code}" created and live on Firebase.`, 'Coupon Created');
     }
@@ -130,30 +159,20 @@ export const AdminCoupons: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <h1 style={{ fontSize: '1.8rem', color: 'var(--brand-primary)', margin: 0 }}>Promotions & Coupons</h1>
-            <span className="badge badge-gold" style={{ fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block', boxShadow: '0 0 8px #10b981' }} />
-              FIRESTORE "coupons" SYNC ACTIVE
-            </span>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
-            Configure percentage discounts, threshold incentives, and seasonal campaign promo codes synced to Firebase.
+            Configure percentage discounts, threshold incentives, and seasonal campaign promo codes directly on Firebase.
           </p>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button 
-            onClick={handlePushAllToFirestore} 
-            disabled={isPushing}
-            className="btn btn-outline"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', borderColor: 'var(--brand-accent)', color: 'var(--brand-primary)' }}
-            title="Push all coupon codes directly to Firebase Firestore collection 'coupons'"
+            onClick={openCreateModal}
+            className="btn btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}
           >
-            {isPushing ? <Loader2 size={16} className="animate-spin" /> : <Cloud size={16} color="var(--brand-accent)" />}
-            {isPushing ? 'Syncing to Cloud...' : `Push Coupons to Cloud (${coupons.length})`}
-          </button>
-
-          <button onClick={openCreateModal} className="btn btn-accent" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={18} /> Create Promo Code
+            <Plus size={18} />
+            <span>Create Promo Code</span>
           </button>
         </div>
       </div>
@@ -222,120 +241,109 @@ export const AdminCoupons: React.FC = () => {
       </div>
 
       {/* Modal */}
-      {modalOpen && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.75)',
-          backdropFilter: 'blur(6px)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1.5rem'
-        }}>
-          <div 
-            onClick={e => e.stopPropagation()}
-            style={{
-              backgroundColor: '#ffffff',
-              borderRadius: 'var(--radius-xl)',
-              maxWidth: '560px',
-              width: '100%',
-              padding: '2.5rem',
-              boxShadow: 'var(--shadow-xl)',
-              position: 'relative'
-            }}
-          >
-            <button onClick={() => setModalOpen(false)} style={{ position: 'absolute', top: '16px', right: '16px', color: 'var(--brand-muted)' }}>
-              <X size={20} />
-            </button>
+      <AdminModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingCoupon ? 'Edit Promo Code' : 'Create New Promo Code'}
+        subtitle="Configure discount rules, spend tiers, and expiration"
+        headerIcon={<Tag size={20} />}
+        maxWidth="580px"
+      >
+        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
+          <div className="admin-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Promo Code *</label>
+              <input 
+                type="text" 
+                required 
+                value={code} 
+                onChange={e => setCode(e.target.value.toUpperCase())} 
+                placeholder="e.g. VIP25" 
+                className="form-input" 
+                style={{ textTransform: 'uppercase', fontWeight: 700 }}
+              />
+            </div>
 
-            <h2 style={{ fontSize: '1.4rem', marginBottom: '1.5rem' }}>
-              {editingCoupon ? 'Edit Promo Code' : 'Create New Promo Code'}
-            </h2>
-
-            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div className="grid-2" style={{ gap: '1rem' }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Promo Code *</label>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Discount Type</label>
+                <select 
+                  value={discountType} 
+                  onChange={e => setDiscountType(e.target.value as any)} 
+                  className="form-select"
+                >
+                  <option value="percentage">Percentage (%)</option>
+                  <option value="fixed">Fixed Rupee Amount (₹)</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Discount Value *</label>
                 <input 
-                  type="text" 
+                  type="number" 
                   required 
-                  value={code} 
-                  onChange={e => setCode(e.target.value.toUpperCase())} 
-                  placeholder="e.g. VIP25" 
+                  min={1} 
+                  value={discountValue} 
+                  onChange={e => setDiscountValue(Number(e.target.value))} 
                   className="form-input" 
-                  style={{ textTransform: 'uppercase', fontWeight: 700 }}
                 />
               </div>
+            </div>
 
-              <div className="grid-2">
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Discount Type</label>
-                  <select 
-                    value={discountType} 
-                    onChange={e => setDiscountType(e.target.value as any)} 
-                    className="form-select"
-                  >
-                    <option value="percentage">Percentage (%)</option>
-                    <option value="fixed">Fixed Rupee Amount (₹)</option>
-                  </select>
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Discount Value *</label>
-                  <input 
-                    type="number" 
-                    required 
-                    min={1} 
-                    value={discountValue} 
-                    onChange={e => setDiscountValue(Number(e.target.value))} 
-                    className="form-input" 
-                  />
-                </div>
-              </div>
-
-              <div className="grid-2">
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Minimum Order Spend (₹)</label>
-                  <input 
-                    type="number" 
-                    min={0} 
-                    value={minSpend} 
-                    onChange={e => setMinSpend(Number(e.target.value))} 
-                    className="form-input" 
-                  />
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Expiration Date</label>
-                  <input 
-                    type="date" 
-                    value={expiresAt} 
-                    onChange={e => setExpiresAt(e.target.value)} 
-                    className="form-input" 
-                  />
-                </div>
+            <div className="grid-2" style={{ gap: '1rem' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Minimum Order Spend (₹)</label>
+                <input 
+                  type="number" 
+                  min={0} 
+                  value={minSpend} 
+                  onChange={e => setMinSpend(Number(e.target.value))} 
+                  className="form-input" 
+                />
               </div>
 
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Internal Description / Notes</label>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Expiration Date</label>
                 <input 
-                  type="text" 
-                  value={description} 
-                  onChange={e => setDescription(e.target.value)} 
-                  placeholder="e.g. 15% VIP holiday discount" 
+                  type="date" 
+                  value={expiresAt} 
+                  onChange={e => setExpiresAt(e.target.value)} 
                   className="form-input" 
                 />
               </div>
+            </div>
 
-              <div style={{ display: 'flex', gap: '10px', marginTop: '0.5rem' }}>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Promo Code</button>
-                <button type="button" onClick={() => setModalOpen(false)} className="btn btn-secondary">Cancel</button>
-              </div>
-            </form>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Internal Description / Notes</label>
+              <input 
+                type="text" 
+                value={description} 
+                onChange={e => setDescription(e.target.value)} 
+                placeholder="e.g. 15% VIP holiday discount" 
+                className="form-input" 
+              />
+            </div>
           </div>
-        </div>
-      )}
+
+          <div className="admin-modal-footer">
+            <button 
+              type="button" 
+              onClick={() => setModalOpen(false)} 
+              className="btn btn-outline"
+              style={{ fontWeight: 600, color: '#475569' }}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              className="btn btn-primary"
+              style={{ fontWeight: 700 }}
+            >
+              {editingCoupon ? 'Save Changes' : 'Save Promo Code'}
+            </button>
+          </div>
+        </form>
+      </AdminModal>
     </div>
   );
 };

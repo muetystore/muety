@@ -8,11 +8,54 @@ service cloud.firestore {
     }
 
     function getRoles() {
-      return isSignedIn() && request.auth.token.keys().hasAll(['roles'])
-        ? request.auth.token.roles
-        : (isSignedIn() && request.auth.token.keys().hasAll(['role'])
-            ? [request.auth.token.role]
-            : []);
+      return isSignedIn()
+        ? (
+            ('roles' in request.auth.token && request.auth.token.roles is list && request.auth.token.roles.size() > 0)
+              ? request.auth.token.roles
+              : (('role' in request.auth.token && request.auth.token.role is string && request.auth.token.role.size() > 0)
+                  ? [request.auth.token.role]
+                  : (exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+                      ? (
+                          ('roles' in get(/databases/$(database)/documents/admins/$(request.auth.uid)).data && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.roles is list && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.roles.size() > 0)
+                            ? get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.roles
+                            : (('role' in get(/databases/$(database)/documents/admins/$(request.auth.uid)).data && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role is string && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role.size() > 0)
+                                ? [get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role]
+                                : (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                                    ? (
+                                        ('roles' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles is list && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.size() > 0)
+                                          ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+                                          : (('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role is string && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role.size() > 0)
+                                              ? [get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role]
+                                              : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in', 'kalvimohan03@gmail.com'])
+                                                  ? ['superadmin', 'admin', 'catalog_manager']
+                                                  : [])
+                                            )
+                                      )
+                                    : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in', 'kalvimohan03@gmail.com'])
+                                        ? ['superadmin', 'admin', 'catalog_manager']
+                                        : [])
+                                  )
+                              )
+                        )
+                      : (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                          ? (
+                              ('roles' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles is list && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.size() > 0)
+                                ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+                                : (('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role is string && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role.size() > 0)
+                                    ? [get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role]
+                                    : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in', 'kalvimohan03@gmail.com'])
+                                        ? ['superadmin', 'admin', 'catalog_manager']
+                                        : [])
+                                  )
+                            )
+                          : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in', 'kalvimohan03@gmail.com'])
+                              ? ['superadmin', 'admin', 'catalog_manager']
+                              : [])
+                        )
+                    )
+              )
+        )
+    : [];
     }
 
     function hasRole(targetRole) {
@@ -24,23 +67,23 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return hasRole('super_admin');
+      return hasAnyRole(['superadmin', 'super_admin']);
     }
 
     function isAdmin() {
-      return hasAnyRole(['super_admin', 'admin']);
+      return hasAnyRole(['superadmin', 'super_admin', 'admin']);
     }
 
     function isCatalogManager() {
-      return hasAnyRole(['super_admin', 'admin', 'catalog_manager']);
+      return hasAnyRole(['superadmin', 'super_admin', 'admin', 'catalog_manager']);
     }
 
     function isOrderManager() {
-      return hasAnyRole(['super_admin', 'admin', 'order_manager']);
+      return hasAnyRole(['superadmin', 'super_admin', 'admin', 'order_manager']);
     }
 
     function isSupportManager() {
-      return hasAnyRole(['super_admin', 'admin', 'support_manager', 'support_agent']);
+      return hasAnyRole(['superadmin', 'super_admin', 'admin', 'support_manager', 'support_agent']);
     }
 
     function isOwner(userId) {
@@ -50,11 +93,28 @@ service cloud.firestore {
     // --- USERS COLLECTION ---
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin() || isSupportManager() || isOrderManager();
-      allow create: if isSignedIn() && (!request.resource.data.keys().hasAll(['roles']) || isAdmin());
+      allow create: if isSignedIn() && (!request.resource.data.keys().hasAny(['roles', 'role', 'isBlocked', 'customerStatus']) || isAdmin());
       allow update: if isOwner(userId) 
-        ? (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['roles', 'role', 'isBlocked']))
-        : isAdmin();
+        ? (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'roles', 'role', 'roleId', 'roleSlug', 'roleName', 
+            'departmentId', 'departmentName', 'department', 
+            'permissions', 'status', 'invitationStatus', 'isBlocked', 'customerStatus',
+            'ordersCount', 'totalSpent', 'uid', 'createdAt'
+          ]))
+        : (isSupportManager() || isAdmin());
       allow delete: if isSuperAdmin();
+    }
+
+    // --- DEPARTMENTS COLLECTION ---
+    match /departments/{departmentId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // --- ROLES COLLECTION ---
+    match /roles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
     }
 
     // --- ADMINS COLLECTION ---
@@ -68,7 +128,10 @@ service cloud.firestore {
       allow read: if isOwner(customerId) || isSupportManager() || isOrderManager() || isAdmin();
       allow create: if isSignedIn() || isSupportManager() || isAdmin();
       allow update: if isOwner(customerId)
-        ? (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['customerStatus', 'internalNotes', 'totalSpend']))
+        ? (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'customerStatus', 'isBlocked', 'internalNotes', 'totalSpend', 'orderCount', 
+            'ordersCount', 'totalSpent', 'roles', 'role', 'uid', 'createdAt'
+          ]))
         : (isSupportManager() || isAdmin());
       allow delete: if isSuperAdmin();
 
@@ -90,6 +153,18 @@ service cloud.firestore {
       allow write: if isCatalogManager();
     }
 
+    // --- CATEGORY CODES INDEX COLLECTION ---
+    match /categoryCodes/{code} {
+      allow read: if true;
+      allow write: if isCatalogManager();
+    }
+
+    // --- COUNTERS COLLECTION (FOR SKU AUTO-INCREMENT) ---
+    match /counters/{counterId} {
+      allow read: if true;
+      allow write: if isCatalogManager();
+    }
+
     // --- COLLECTIONS COLLECTION ---
     match /collections/{collectionId} {
       allow read: if true;
@@ -99,8 +174,19 @@ service cloud.firestore {
     // --- ORDERS COLLECTION ---
     match /orders/{orderId} {
       allow read: if isOrderManager() || isSupportManager() || (isSignedIn() && resource.data.customerId == request.auth.uid);
-      allow create: if true; // Public checkout creation
-      allow update: if isOrderManager() || isAdmin();
+      allow create: if (
+        request.resource.data.keys().hasAll(['id', 'customerId', 'customerEmail', 'customerName', 'total', 'orderStatus']) &&
+        request.resource.data.total is number && request.resource.data.total >= 0 &&
+        request.resource.data.orderStatus == 'pending' &&
+        (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus in ['pending', 'paid']) &&
+        (!isSignedIn() || request.resource.data.customerId == request.auth.uid)
+      );
+      allow update: if isOrderManager() || isAdmin() || (
+        isSignedIn() && resource.data.customerId == request.auth.uid &&
+        resource.data.orderStatus == 'pending' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cancellationRequested', 'cancellationReason', 'orderStatus', 'timeline', 'updatedAt']) &&
+        request.resource.data.orderStatus == 'cancelled'
+      );
       allow delete: if isSuperAdmin();
     }
 
@@ -123,18 +209,33 @@ service cloud.firestore {
     // --- REVIEWS COLLECTION ---
     match /reviews/{reviewId} {
       allow read: if true;
-      allow create: if true;
+      allow create: if request.resource.data.keys().hasAll(['productId', 'rating']) &&
+        request.resource.data.rating is number &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5 &&
+        (!('comment' in request.resource.data) || (request.resource.data.comment is string && request.resource.data.comment.size() <= 5000)) &&
+        (!('reviewText' in request.resource.data) || (request.resource.data.reviewText is string && request.resource.data.reviewText.size() <= 5000));
       allow update, delete: if isSupportManager();
     }
 
     // --- INQUIRIES COLLECTION ---
     match /inquiries/{inquiryId} {
-      allow create: if true; // Public inquiry/contact submission
+      allow create: if request.resource.data.keys().hasAll(['email', 'name', 'message']) &&
+        request.resource.data.email is string &&
+        request.resource.data.name is string &&
+        request.resource.data.message is string &&
+        request.resource.data.message.size() <= 5000;
       allow read, update, delete: if isSupportManager();
     }
 
     // --- AUDIT LOGS COLLECTION (IMMUTABLE RECORD) ---
     match /adminAuditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() || isCatalogManager() || isOrderManager() || isSupportManager();
+      allow update, delete: if false; // Immutable audit log
+    }
+
+    match /audit_logs/{logId} {
       allow read: if isAdmin();
       allow create: if isAdmin() || isCatalogManager() || isOrderManager() || isSupportManager();
       allow update, delete: if false; // Immutable audit log
@@ -161,6 +262,13 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    // --- ANNOUNCEMENTS COLLECTION ---
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
 
     // --- NOTIFICATIONS ---
     match /notifications/{notificationId} {
