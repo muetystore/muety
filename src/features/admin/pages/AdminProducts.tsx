@@ -35,6 +35,7 @@ export const AdminProducts: React.FC = () => {
   const [selectedCat, setSelectedCat] = useState('all');
   const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'sold_out'>('all');
   const [togglingAvailabilityId, setTogglingAvailabilityId] = useState<string | null>(null);
+  const [togglingFlagKey, setTogglingFlagKey] = useState<string | null>(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   const loadCatalogData = () => {
@@ -75,20 +76,22 @@ export const AdminProducts: React.FC = () => {
   const handleToggleFlag = async (prod: Product, flag: 'isNewArrival' | 'isBestSeller' | 'isMostWanted') => {
     const currentVal = !!(prod[flag] || (flag === 'isNewArrival' && prod.newArrival) || (flag === 'isBestSeller' && prod.bestseller) || (flag === 'isMostWanted' && prod.mostWanted));
     const nextVal = !currentVal;
+    const actionKey = `${prod.id}_${flag}`;
+    setTogglingFlagKey(actionKey);
     try {
-      const updated: Product = {
-        ...prod,
+      await productService.updateProductFlags(prod.id, {
         [flag]: nextVal,
         ...(flag === 'isNewArrival' ? { newArrival: nextVal } : {}),
         ...(flag === 'isBestSeller' ? { bestseller: nextVal } : {}),
         ...(flag === 'isMostWanted' ? { mostWanted: nextVal } : {})
-      };
-      await productService.updateProduct(updated);
+      });
       const label = flag === 'isNewArrival' ? 'New Arrival' : flag === 'isBestSeller' ? 'Bestseller' : 'Most Wanted';
       success(`"${prod.name}" ${nextVal ? 'added to' : 'removed from'} ${label}.`);
       loadCatalogData();
     } catch (err: any) {
       error(err?.message || 'Failed to update flag.');
+    } finally {
+      setTogglingFlagKey(null);
     }
   };
 
@@ -420,6 +423,7 @@ export const AdminProducts: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleToggleFlag(prod, 'isNewArrival')}
+                            disabled={togglingFlagKey === `${prod.id}_isNewArrival`}
                             style={{
                               fontSize: '0.65rem',
                               fontWeight: 700,
@@ -429,7 +433,8 @@ export const AdminProducts: React.FC = () => {
                               borderColor: (prod.isNewArrival || prod.newArrival) ? '#0284c7' : '#cbd5e1',
                               backgroundColor: (prod.isNewArrival || prod.newArrival) ? '#e0f2fe' : '#ffffff',
                               color: (prod.isNewArrival || prod.newArrival) ? '#0369a1' : '#64748b',
-                              cursor: 'pointer'
+                              cursor: togglingFlagKey === `${prod.id}_isNewArrival` ? 'wait' : 'pointer',
+                              opacity: togglingFlagKey === `${prod.id}_isNewArrival` ? 0.6 : 1
                             }}
                             title="Toggle in Home Page 'New Arrivals' row"
                           >
@@ -439,6 +444,7 @@ export const AdminProducts: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleToggleFlag(prod, 'isBestSeller')}
+                            disabled={togglingFlagKey === `${prod.id}_isBestSeller`}
                             style={{
                               fontSize: '0.65rem',
                               fontWeight: 700,
@@ -448,7 +454,8 @@ export const AdminProducts: React.FC = () => {
                               borderColor: (prod.isBestSeller || prod.bestseller) ? '#ca8a04' : '#cbd5e1',
                               backgroundColor: (prod.isBestSeller || prod.bestseller) ? '#fef9c3' : '#ffffff',
                               color: (prod.isBestSeller || prod.bestseller) ? '#854d0e' : '#64748b',
-                              cursor: 'pointer'
+                              cursor: togglingFlagKey === `${prod.id}_isBestSeller` ? 'wait' : 'pointer',
+                              opacity: togglingFlagKey === `${prod.id}_isBestSeller` ? 0.6 : 1
                             }}
                             title="Toggle in Home Page 'Bestsellers & Top Picks' row"
                           >
@@ -458,6 +465,7 @@ export const AdminProducts: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleToggleFlag(prod, 'isMostWanted')}
+                            disabled={togglingFlagKey === `${prod.id}_isMostWanted`}
                             style={{
                               fontSize: '0.65rem',
                               fontWeight: 700,
@@ -467,7 +475,8 @@ export const AdminProducts: React.FC = () => {
                               borderColor: (prod.isMostWanted || prod.mostWanted) ? '#dc2626' : '#cbd5e1',
                               backgroundColor: (prod.isMostWanted || prod.mostWanted) ? '#fee2e2' : '#ffffff',
                               color: (prod.isMostWanted || prod.mostWanted) ? '#991b1b' : '#64748b',
-                              cursor: 'pointer'
+                              cursor: togglingFlagKey === `${prod.id}_isMostWanted` ? 'wait' : 'pointer',
+                              opacity: togglingFlagKey === `${prod.id}_isMostWanted` ? 0.6 : 1
                             }}
                             title="Toggle in Home Page 'Most Wanted' row"
                           >
@@ -548,6 +557,67 @@ export const AdminProducts: React.FC = () => {
                     <span style={{ color: '#ef4444', fontWeight: 700, fontSize: '0.75rem' }}>• Sold Out</span>
                   )}
                 </div>
+              </div>
+
+              {/* Homepage Row Authority Toggles on Mobile */}
+              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', paddingTop: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => handleToggleFlag(prod, 'isNewArrival')}
+                  disabled={togglingFlagKey === `${prod.id}_isNewArrival`}
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid',
+                    borderColor: (prod.isNewArrival || prod.newArrival) ? '#0284c7' : '#cbd5e1',
+                    backgroundColor: (prod.isNewArrival || prod.newArrival) ? '#e0f2fe' : '#ffffff',
+                    color: (prod.isNewArrival || prod.newArrival) ? '#0369a1' : '#64748b',
+                    cursor: togglingFlagKey === `${prod.id}_isNewArrival` ? 'wait' : 'pointer',
+                    opacity: togglingFlagKey === `${prod.id}_isNewArrival` ? 0.6 : 1
+                  }}
+                >
+                  {(prod.isNewArrival || prod.newArrival) ? '✓ New' : '+ New'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleFlag(prod, 'isBestSeller')}
+                  disabled={togglingFlagKey === `${prod.id}_isBestSeller`}
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid',
+                    borderColor: (prod.isBestSeller || prod.bestseller) ? '#ca8a04' : '#cbd5e1',
+                    backgroundColor: (prod.isBestSeller || prod.bestseller) ? '#fef9c3' : '#ffffff',
+                    color: (prod.isBestSeller || prod.bestseller) ? '#854d0e' : '#64748b',
+                    cursor: togglingFlagKey === `${prod.id}_isBestSeller` ? 'wait' : 'pointer',
+                    opacity: togglingFlagKey === `${prod.id}_isBestSeller` ? 0.6 : 1
+                  }}
+                >
+                  {(prod.isBestSeller || prod.bestseller) ? '✓ Best' : '+ Best'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleFlag(prod, 'isMostWanted')}
+                  disabled={togglingFlagKey === `${prod.id}_isMostWanted`}
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid',
+                    borderColor: (prod.isMostWanted || prod.mostWanted) ? '#dc2626' : '#cbd5e1',
+                    backgroundColor: (prod.isMostWanted || prod.mostWanted) ? '#fee2e2' : '#ffffff',
+                    color: (prod.isMostWanted || prod.mostWanted) ? '#991b1b' : '#64748b',
+                    cursor: togglingFlagKey === `${prod.id}_isMostWanted` ? 'wait' : 'pointer',
+                    opacity: togglingFlagKey === `${prod.id}_isMostWanted` ? 0.6 : 1
+                  }}
+                >
+                  {(prod.isMostWanted || prod.mostWanted) ? '✓ Wanted' : '+ Wanted'}
+                </button>
               </div>
 
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '4px' }}>

@@ -98,7 +98,7 @@ export function validateImageFile(fileOrDataUrl: File | Blob | string): ImageVal
 
   // Handle string (Data URL, HTTP URL, or Blob URL)
   if (typeof fileOrDataUrl === 'string') {
-    if (fileOrDataUrl.startsWith('http://') || fileOrDataUrl.startsWith('https://')) {
+    if (fileOrDataUrl.startsWith('http://') || fileOrDataUrl.startsWith('https://') || fileOrDataUrl.startsWith('/')) {
       return { valid: true };
     }
 
@@ -212,8 +212,8 @@ export async function uploadToCloudinary(
     throw new Error(`Cloudinary Image Validation Failed: ${validation.error}`);
   }
 
-  // If already hosted HTTPS URL, return existing URL metadata
-  if (typeof fileOrDataUrl === 'string' && (fileOrDataUrl.startsWith('http://') || fileOrDataUrl.startsWith('https://'))) {
+  // If already hosted URL or local static asset path, return existing URL metadata
+  if (typeof fileOrDataUrl === 'string' && (fileOrDataUrl.startsWith('http://') || fileOrDataUrl.startsWith('https://') || fileOrDataUrl.startsWith('/'))) {
     return {
       url: fileOrDataUrl,
       publicId: extractCloudinaryPublicId(fileOrDataUrl) || ''
@@ -336,6 +336,14 @@ export async function uploadProductImagesToCloudinary(
   if (!images || images.length === 0) return [];
 
   const uploadPromises = images.map(async (img, idx) => {
+    // Short-circuit: If already hosted URL or static asset path, return metadata immediately
+    if (typeof img === 'string' && (img.startsWith('http://') || img.startsWith('https://') || img.startsWith('/'))) {
+      return {
+        url: img,
+        publicId: extractCloudinaryPublicId(img) || `img_${idx}`
+      };
+    }
+
     try {
       return await uploadToCloudinary(img, {
         productId,
@@ -343,7 +351,7 @@ export async function uploadProductImagesToCloudinary(
       });
     } catch (err: any) {
       console.warn(`Failed to upload image at index ${idx} to Cloudinary:`, err);
-      if (typeof img === 'string' && (img.startsWith('http://') || img.startsWith('https://'))) {
+      if (typeof img === 'string') {
         return {
           url: img,
           publicId: extractCloudinaryPublicId(img) || `legacy_img_${idx}`

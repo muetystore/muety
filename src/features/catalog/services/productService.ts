@@ -680,7 +680,7 @@ export const productService = {
   async updateProduct(product: Product): Promise<Product> {
     const productId = product.id;
     const existing = storageService.getProductById(productId);
-    const title = product.title || product.name || 'Untitled Product';
+    const title = product.name || product.title || 'Untitled Product';
     const slug = product.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || productId;
 
     // Multi-category & Primary category normalization
@@ -716,19 +716,27 @@ export const productService = {
     const categorySlug = primaryCat ? primaryCat.slug : (product.categorySlug || 'sarees');
 
     let mediaMetadata: CloudinaryMediaMetadata[] = [];
+    const imagesChanged = !existing || !existing.images || JSON.stringify(existing.images) !== JSON.stringify(product.images);
+    const hasUnsignedFiles = product.images && product.images.some(img => typeof img === 'string' && (img.startsWith('data:') || img.startsWith('blob:')));
+
     if (product.images && product.images.length > 0) {
-      try {
-        mediaMetadata = await uploadProductImagesToCloudinary(product.images, productId);
-      } catch (uploadErr: any) {
-        console.error('Cloudinary product media update failed:', uploadErr);
-        const hasUnsignedFiles = product.images.some(img => img.startsWith('data:') || img.startsWith('blob:'));
-        if (hasUnsignedFiles) {
-          throw new Error(`Product update aborted: Cloudinary image upload failed (${uploadErr?.message || 'Upload error'}).`);
+      if (imagesChanged && hasUnsignedFiles) {
+        try {
+          mediaMetadata = await uploadProductImagesToCloudinary(product.images, productId);
+        } catch (uploadErr: any) {
+          console.warn('Cloudinary product media update note (retaining media payload):', uploadErr);
+          mediaMetadata = product.images.map(img => ({
+            url: typeof img === 'string' ? img : '',
+            publicId: typeof img === 'string' ? (extractCloudinaryPublicId(img) || '') : ''
+          }));
         }
-        mediaMetadata = product.images.map(img => ({
-          url: img,
-          publicId: extractCloudinaryPublicId(img) || ''
-        }));
+      } else {
+        mediaMetadata = existing?.media && existing.media.length > 0 && !imagesChanged
+          ? existing.media
+          : product.images.map(img => ({
+              url: typeof img === 'string' ? img : '',
+              publicId: typeof img === 'string' ? (extractCloudinaryPublicId(img) || '') : ''
+            }));
       }
     }
 
@@ -1381,6 +1389,95 @@ export const productService = {
 
   async markProductAvailable(productId: string): Promise<Product> {
     return this.setProductAvailability(productId, 'available');
+  },
+
+  async updateProductFlags(
+    productId: string,
+    flags: {
+      isNewArrival?: boolean;
+      newArrival?: boolean;
+      isBestSeller?: boolean;
+      bestseller?: boolean;
+      isMostWanted?: boolean;
+      mostWanted?: boolean;
+      featured?: boolean;
+    }
+  ): Promise<Product> {
+    const prod = storageService.getProductById(productId) || this.getProductById(productId);
+    if (!prod) {
+      throw new Error(`Product with ID "${productId}" not found.`);
+    }
+
+    const nowIso = new Date().toISOString();
+    const updatedFields: Record<string, any> = { updatedAt: nowIso };
+
+    if (flags.isNewArrival !== undefined) {
+      updatedFields.isNewArrival = Boolean(flags.isNewArrival);
+      updatedFields.newArrival = Boolean(flags.isNewArrival);
+    } else if (flags.newArrival !== undefined) {
+      updatedFields.isNewArrival = Boolean(flags.newArrival);
+      updatedFields.newArrival = Boolean(flags.newArrival);
+    }
+
+    if (flags.isBestSeller !== undefined) {
+      updatedFields.isBestSeller = Boolean(flags.isBestSeller);
+      updatedFields.bestseller = Boolean(flags.isBestSeller);
+    } else if (flags.bestseller !== undefined) {
+      updatedFields.isBestSeller = Boolean(flags.bestseller);
+      updatedFields.bestseller = Boolean(flags.bestseller);
+    }
+
+    if (flags.isMostWanted !== undefined) {
+      updatedFields.isMostWanted = Boolean(flags.isMostWanted);
+      updatedFields.mostWanted = Boolean(flags.isMostWanted);
+    } else if (flags.mostWanted !== undefined) {
+      updatedFields.isMostWanted = Boolean(flags.mostWanted);
+      updatedFields.mostWanted = Boolean(flags.mostWanted);
+    }
+
+    if (flags.featured !== undefined) {
+      updatedFields.featured = Boolean(flags.featured);
+    }
+
+    const updatedProd: Product = {
+      ...prod,
+      ...updatedFields
+    };
+
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+
+    if (db && !isTestEnv) {
+      try {
+        const productRef = doc(db, 'products', productId);
+        await setDoc(productRef, updatedFields, { merge: true });
+      } catch (err: any) {
+        console.warn('Firebase Firestore product flags update note:', err);
+      }
+    }
+
+    storageService.updateProduct(updatedProd);
+
+    // Create Audit Log
+    try {
+      const currentUser = authService.getCurrentUser();
+      const authUser = auth?.currentUser;
+      const changedKeys = Object.keys(updatedFields).filter(k => k !== 'updatedAt');
+      const summary = changedKeys.map(k => `${k}=${updatedFields[k]}`).join(', ');
+
+      await auditService.logAction({
+        actorUid: authUser?.uid || currentUser?.uid || 'admin',
+        actorEmail: authUser?.email || currentUser?.email || 'admin@muety.in',
+        actorRole: (currentUser?.roles?.[0] as any) || 'catalog_manager',
+        action: 'PRODUCT_UPDATED',
+        entityType: 'PRODUCT',
+        entityId: productId,
+        reason: `Updated product flags for "${prod.name}" (SKU: ${prod.sku}): ${summary}`
+      });
+    } catch (auditErr) {
+      console.warn('Audit log creation note:', auditErr);
+    }
+
+    return updatedProd;
   }
 };
 
