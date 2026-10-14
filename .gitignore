@@ -3,7 +3,8 @@ node_modules/
 
 # Builds
 dist/
-build/
+/build/
+!scripts/build/
 coverage/
 
 # Environment
