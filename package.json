@@ -10,7 +10,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json,md}\"",
     "test": "vitest run",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/build/prepare-dist.mjs",
     "check": "npm run typecheck && npm run lint",
     "preview": "vite preview",
     "firebase:setup": "node scripts/firebase/bootstrap.mjs",
