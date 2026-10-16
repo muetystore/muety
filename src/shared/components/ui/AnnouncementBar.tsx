@@ -252,7 +252,7 @@ export const AnnouncementBar: React.FC = () => {
           onMouseEnter={(e) => (e.currentTarget.style.color = '#facc15')}
           onMouseLeave={(e) => (e.currentTarget.style.color = '#e2e8f0')}
         >
-          Salem Atelier
+          Muety Atelier
         </Link>
         <span style={{ opacity: 0.35 }}>|</span>
         <Link 

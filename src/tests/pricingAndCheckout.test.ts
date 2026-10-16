@@ -9,6 +9,19 @@ vi.mock('../../server/firebaseAdmin', () => ({
   getAdminFirestore: vi.fn().mockReturnValue(null)
 }));
 
+vi.mock('@/lib/firebase/firebase', () => ({
+  db: null,
+  auth: null,
+  isLiveFirebase: false,
+  firebaseConfig: {}
+}));
+vi.mock('../lib/firebase/firebase', () => ({
+  db: null,
+  auth: null,
+  isLiveFirebase: false,
+  firebaseConfig: {}
+}));
+
 import { calculateOrderFinancials, CANONICAL_SHIPPING_FEE, COD_ADVANCE_AMOUNT } from '../shared/utils/pricingEngine';
 import { orderService } from '../features/orders/services/orderService';
 import { storageService } from '../lib/storage/storageService';

@@ -78,7 +78,7 @@ export const CategoriesPage: React.FC = () => {
             <Sparkles size={36} color="var(--brand-accent)" style={{ marginBottom: '1rem' }} />
             <h3>Categories are being prepared for launch.</h3>
             <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', marginBottom: '1.5rem' }}>
-              Our Salem atelier is updating collection classifications.
+              Our Muety atelier is updating collection classifications.
             </p>
             <Link to="/products" className="btn btn-primary btn-sm">Explore All Products</Link>
           </div>

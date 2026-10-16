@@ -341,14 +341,17 @@ export const AdminSettings: React.FC = () => {
           </div>
 
           <div style={{ padding: '1.25rem', backgroundColor: '#fffdf5', border: '1px solid #fde68a', borderRadius: 'var(--radius-lg)' }}>
-            <h4 style={{ margin: '0 0 8px', color: '#92400e', fontSize: '0.95rem' }}>Official Customer Policy Position</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', fontSize: '0.88rem', color: '#b45309' }}>
-              <div>Returns: <strong>Not Accepted</strong></div>
-              <div>Refunds: <strong>Not Offered</strong></div>
-              <div>Cancellations: <strong>Not Offered</strong></div>
+            <h4 style={{ margin: '0 0 8px', color: '#92400e', fontSize: '0.95rem' }}>Official Customer Policy Position (Effective 18 Oct 2026)</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', fontSize: '0.85rem', color: '#b45309' }}>
+              <div>Review Window: <strong>3 Days (Damaged/Defective)</strong></div>
+              <div>Change of Mind: <strong>Not Accepted</strong></div>
+              <div>Cancellation: <strong>Before Dispatch / Processing</strong></div>
+              <div>Evidence: <strong>Unboxing Video Required</strong></div>
+              <div>COD Advance: <strong>₹89 Online Confirmation Fee</strong></div>
+              <div>Statutory Rights: <strong>Fully Preserved per Law</strong></div>
             </div>
-            <p style={{ fontSize: '0.8rem', color: '#78350f', marginTop: '8px', margin: 0 }}>
-              Client policy position is declared upfront across product pages, cart drawers, policy documents, and receipts.
+            <p style={{ fontSize: '0.8rem', color: '#78350f', marginTop: '10px', margin: 0 }}>
+              Published policies are live at <code>/shipping-policy</code>, <code>/return-refund-policy</code>, <code>/privacy-policy</code>, and <code>/terms-conditions</code>.
             </p>
           </div>
         </div>

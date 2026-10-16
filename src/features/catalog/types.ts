@@ -35,6 +35,7 @@ export interface Product {
   category: string;
   categorySlug: string;
   collectionId?: string;
+  collectionIds?: string[];
   tags: string[];
 
   // Pricing & Tax
@@ -150,6 +151,10 @@ export interface SareeCollection {
   featured: boolean;
   productCount: number;
   displayOrder?: number;
+  type?: 'occasion' | 'collection' | 'fabric' | 'style' | 'curated';
+  badge?: string;
+  showInShopBy?: boolean;
+  showInFestiveEdits?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

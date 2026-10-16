@@ -23,9 +23,14 @@ try {
   }
 } catch {}
 
+const isTestEnv = (): boolean => {
+  return (typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || Boolean(process.env?.VITEST))) ||
+    (typeof import.meta !== 'undefined' && Boolean((import.meta as any).env?.MODE === 'test'));
+};
+
 export const orderService = {
   isLiveCloud(): boolean {
-    return isLiveFirebase && db !== null;
+    return isLiveFirebase && db !== null && !isTestEnv();
   },
 
   getAllOrders(): Order[] {
@@ -149,6 +154,19 @@ export const orderService = {
     const codAdvanceAmount = isCod ? 89 : 0;
     const codBalanceDue = isCod ? Number((fallbackTotal - 89).toFixed(2)) : 0;
 
+    // Enrich items with catalog SKU if available
+    const enrichedItems = params.items.map(item => {
+      const catProd = storageService.getProductById(item.product?.id);
+      const sku = item.product?.sku || catProd?.sku || (item as any).sku || `MUETY-SR-${String(item.product?.id || '01').slice(-4).toUpperCase()}`;
+      return {
+        ...item,
+        product: {
+          ...item.product,
+          sku
+        }
+      };
+    });
+
     const order: Order = {
       id: `ord-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       orderNumber,
@@ -157,7 +175,7 @@ export const orderService = {
       customerEmail: params.customerEmail,
       customerPhone: params.customerPhone || '',
       shippingAddress: params.shippingAddress,
-      items: params.items,
+      items: enrichedItems,
       subtotal: params.subtotal,
       discount: params.discount || 0,
       appliedCoupon: params.appliedCoupon || '',
@@ -189,7 +207,7 @@ export const orderService = {
 
     storageService.createOrder(order);
 
-    if (db) {
+    if (db && !isTestEnv()) {
       try {
         const orderRef = doc(db, 'orders', order.id);
         await setDoc(orderRef, order);
@@ -206,7 +224,7 @@ export const orderService = {
     const updated = storageService.updateOrderStatus(orderId, status, customNote);
     if (!updated) return undefined;
 
-    if (db) {
+    if (db && !isTestEnv()) {
       try {
         const orderRef = doc(db, 'orders', orderId);
         await setDoc(orderRef, updated, { merge: true });
@@ -223,8 +241,13 @@ export const orderService = {
     const order = storageService.getOrderById(orderId);
     if (!order) return undefined;
     if (order.orderStatus !== 'pending') {
-      throw new Error('Order cancellation is only permitted while your order is pending prior to atelier dispatch.');
+      throw new Error('Order cancellation is only permitted while your order is pending prior to processing or dispatch.');
     }
+    const isCod = order.paymentMethod === 'cash_on_delivery';
+    const cancellationNote = isCod
+      ? `Customer requested order cancellation: "${reason}". COD advance confirmation fee (₹89) handled per Return, Refund & Cancellation Policy.`
+      : `Customer requested order cancellation: "${reason}". Refund review initiated per policy.`;
+
     const updated: Order = {
       ...order,
       cancellationRequested: true,
@@ -236,7 +259,7 @@ export const orderService = {
           status: 'cancelled',
           label: 'Cancellation Requested & Processed',
           timestamp: new Date().toLocaleString(),
-          description: `Patron requested order cancellation: "${reason}". Statutory refund/release initiated.`
+          description: cancellationNote
         }
       ],
       updatedAt: new Date().toISOString()
@@ -250,7 +273,7 @@ export const orderService = {
     } else {
       storageService.createOrder(updated);
     }
-    if (db) {
+    if (db && !isTestEnv()) {
       try {
         const orderRef = doc(db, 'orders', orderId);
         await setDoc(orderRef, updated, { merge: true });
@@ -420,7 +443,7 @@ export const orderService = {
   async deleteOrder(id: string): Promise<boolean> {
     storageService.deleteOrder(id);
 
-    if (db) {
+    if (db && !isTestEnv()) {
       try {
         await deleteDoc(doc(db, 'orders', id));
       } catch {}

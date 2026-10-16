@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Logo } from './Logo';
 import { useCart } from '@/shared/context/CartContext';
@@ -19,7 +19,8 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { productService } from '@/features/catalog/services/productService';
-import { Category } from '@/types';
+import { collectionService } from '@/features/catalog/services/collectionService';
+import { Category, SareeCollection } from '@/types';
 import { SearchOverlay } from './SearchOverlay';
 
 export const Header: React.FC = () => {
@@ -37,6 +38,7 @@ export const Header: React.FC = () => {
   const [mobileShopByOpen, setMobileShopByOpen] = useState(false);
   const [mobileCollectionsOpen, setMobileCollectionsOpen] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [collections, setCollections] = useState<SareeCollection[]>(() => collectionService.getCollections());
   const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => 
     typeof window !== 'undefined' ? window.innerWidth < 992 : false
   );
@@ -79,13 +81,17 @@ export const Header: React.FC = () => {
     };
   }, []);
 
-  // Fetch real categories
+  // Fetch real categories & collections
   useEffect(() => {
-    const unsub = productService.subscribeToCategories((cats) => {
+    const unsubCats = productService.subscribeToCategories((cats) => {
       setCategories(cats || []);
     });
+    const unsubCols = collectionService.subscribeToCollections((cols) => {
+      setCollections(cols || []);
+    });
     return () => {
-      if (typeof unsub === 'function') unsub();
+      if (typeof unsubCats === 'function') unsubCats();
+      if (typeof unsubCols === 'function') unsubCols();
     };
   }, []);
 
@@ -129,6 +135,44 @@ export const Header: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Memoized collections for Shop By dropdown
+  const shopByOccasions = useMemo(() => {
+    const list = collections.filter(c => c.showInShopBy !== false && (c.type === 'occasion' || !c.type));
+    if (list.length > 0) return list;
+    return [
+      { id: 'col-bridal', slug: 'bridal', name: 'Wedding & Bridal Sarees' },
+      { id: 'col-festive', slug: 'festive', name: 'Festive Handlooms' },
+      { id: 'col-reception', slug: 'reception', name: 'Party & Reception Wear' },
+      { id: 'col-temple', slug: 'temple', name: 'Grand Celebrations' }
+    ];
+  }, [collections]);
+
+  const shopByFabrics = useMemo(() => {
+    const list = collections.filter(c => c.showInShopBy !== false && c.type === 'fabric');
+    if (list.length > 0) return list;
+    return [
+      { id: 'col-fab-mulberry', slug: 'pure-silk', name: 'Pure Mulberry Silk' },
+      { id: 'col-fab-kanchi', slug: 'kanchipuram', name: 'Kanchipuram Silk' },
+      { id: 'col-fab-cotton', slug: 'cotton', name: 'Traditional Cotton Handloom' },
+      { id: 'col-fab-georgette', slug: 'georgette', name: 'Georgette & Soft Crepe' }
+    ];
+  }, [collections]);
+
+  const shopByStyles = useMemo(() => {
+    const list = collections.filter(c => c.showInShopBy !== false && c.type === 'style');
+    if (list.length > 0) return list;
+    return [
+      { id: 'col-style-classic', slug: 'traditional', name: 'Traditional Classic' },
+      { id: 'col-style-designer', slug: 'contemporary', name: 'Contemporary Designer' },
+      { id: 'col-style-temple', slug: 'temple-borders', name: 'Royal Temple Borders' },
+      { id: 'col-style-gold-zari', slug: 'gold-zari', name: 'Pure Gold Zari Handlooms' }
+    ];
+  }, [collections]);
+
+  const shopByCurated = useMemo(() => {
+    return collections.filter(c => c.showInShopBy !== false && (c.type === 'curated' || c.type === 'collection'));
+  }, [collections]);
 
   // Collections hover handlers with debounce bridge
   const handleCollectionsEnter = () => {
@@ -228,26 +272,13 @@ export const Header: React.FC = () => {
                       <div className="shopby-column">
                         <div className="shopby-column-title">Shop by Occasion</div>
                         <ul className="shopby-link-list">
-                          <li>
-                            <Link to="/products?occasion=wedding" onClick={() => setShopByMenuOpen(false)}>
-                              Wedding & Bridal Sarees
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="/products?occasion=festive" onClick={() => setShopByMenuOpen(false)}>
-                              Festive Handlooms
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="/products?occasion=party" onClick={() => setShopByMenuOpen(false)}>
-                              Party & Reception Wear
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="/products?occasion=celebration" onClick={() => setShopByMenuOpen(false)}>
-                              Grand Celebrations
-                            </Link>
-                          </li>
+                          {shopByOccasions.map(col => (
+                            <li key={col.id}>
+                              <Link to={`/products?occasion=${col.slug}`} onClick={() => setShopByMenuOpen(false)}>
+                                {col.name}
+                              </Link>
+                            </li>
+                          ))}
                         </ul>
                       </div>
 
@@ -255,26 +286,13 @@ export const Header: React.FC = () => {
                       <div className="shopby-column">
                         <div className="shopby-column-title">Shop by Fabric</div>
                         <ul className="shopby-link-list">
-                          <li>
-                            <Link to="/products?fabric=pure-silk" onClick={() => setShopByMenuOpen(false)}>
-                              Pure Mulberry Silk
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="/products?fabric=kanchipuram" onClick={() => setShopByMenuOpen(false)}>
-                              Kanchipuram Silk
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="/products?fabric=cotton" onClick={() => setShopByMenuOpen(false)}>
-                              Traditional Cotton Handloom
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="/products?fabric=georgette" onClick={() => setShopByMenuOpen(false)}>
-                              Georgette & Soft Crepe
-                            </Link>
-                          </li>
+                          {shopByFabrics.map(col => (
+                            <li key={col.id}>
+                              <Link to={`/products?fabric=${col.slug}`} onClick={() => setShopByMenuOpen(false)}>
+                                {col.name}
+                              </Link>
+                            </li>
+                          ))}
                         </ul>
                       </div>
 
@@ -282,26 +300,13 @@ export const Header: React.FC = () => {
                       <div className="shopby-column">
                         <div className="shopby-column-title">Shop by Style</div>
                         <ul className="shopby-link-list">
-                          <li>
-                            <Link to="/products?style=traditional" onClick={() => setShopByMenuOpen(false)}>
-                              Traditional Classic
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="/products?style=contemporary" onClick={() => setShopByMenuOpen(false)}>
-                              Contemporary Designer
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="/products?style=temple" onClick={() => setShopByMenuOpen(false)}>
-                              Royal Temple Borders
-                            </Link>
-                          </li>
-                          <li>
-                            <Link to="/products?tag=zari" onClick={() => setShopByMenuOpen(false)}>
-                              Pure Gold Zari Handlooms
-                            </Link>
-                          </li>
+                          {shopByStyles.map(col => (
+                            <li key={col.id}>
+                              <Link to={`/products?style=${col.slug}`} onClick={() => setShopByMenuOpen(false)}>
+                                {col.name}
+                              </Link>
+                            </li>
+                          ))}
                         </ul>
                       </div>
 
@@ -340,6 +345,13 @@ export const Header: React.FC = () => {
                               🔥 Festive Special Edit
                             </Link>
                           </li>
+                          {shopByCurated.map(col => (
+                            <li key={col.id}>
+                              <Link to={`/products?collection=${col.slug}`} className="highlight-gold" onClick={() => setShopByMenuOpen(false)}>
+                                ✨ {col.name}
+                              </Link>
+                            </li>
+                          ))}
                         </ul>
                       </div>
                     </div>
@@ -384,30 +396,51 @@ export const Header: React.FC = () => {
                     onMouseLeave={handleCollectionsLeave}
                   >
                     <div className="dropdown-section-header">
-                      Explore Handloom Categories
+                      <div className="dropdown-section-title">
+                        <Layers size={13} color="var(--brand-accent)" />
+                        <span>Explore Categories</span>
+                      </div>
+                      {categories.length > 0 && (
+                        <span className="dropdown-count-pill">{categories.length}</span>
+                      )}
                     </div>
 
                     <div className="dropdown-scroll-list">
                       {categories.length > 0 ? (
-                        categories.map((cat) => (
-                          <Link
-                            key={cat.id}
-                            to={`/products?cat=${cat.slug}`}
-                            onClick={() => setCollectionsMenuOpen(false)}
-                            className="dropdown-item-link"
-                          >
-                            <span>{cat.name}</span>
-                            <span className="dropdown-item-arrow">&rarr;</span>
-                          </Link>
-                        ))
+                        categories.map((cat) => {
+                          const displayName = cat.name
+                            ? cat.name.replace(/[-_]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+                            : 'Category';
+                          return (
+                            <Link
+                              key={cat.id}
+                              to={`/products?cat=${cat.slug}`}
+                              onClick={() => setCollectionsMenuOpen(false)}
+                              className="dropdown-item-link"
+                            >
+                              <div className="dropdown-item-content">
+                                <span className="dropdown-item-bullet" />
+                                <span>{displayName}</span>
+                              </div>
+                              <span className="dropdown-item-arrow">
+                                <ChevronRight size={14} />
+                              </span>
+                            </Link>
+                          );
+                        })
                       ) : (
                         <Link
                           to="/categories"
                           onClick={() => setCollectionsMenuOpen(false)}
                           className="dropdown-item-link"
                         >
-                          <span>All Categories</span>
-                          <span className="dropdown-item-arrow">&rarr;</span>
+                          <div className="dropdown-item-content">
+                            <span className="dropdown-item-bullet" />
+                            <span>All Categories</span>
+                          </div>
+                          <span className="dropdown-item-arrow">
+                            <ChevronRight size={14} />
+                          </span>
                         </Link>
                       )}
                     </div>
@@ -418,14 +451,16 @@ export const Header: React.FC = () => {
                         onClick={() => setCollectionsMenuOpen(false)}
                         className="dropdown-footer-link"
                       >
-                        Browse Category Directory &rarr;
+                        <span>Browse Category Directory</span>
+                        <ChevronRight size={13} />
                       </Link>
                       <Link
                         to="/products"
                         onClick={() => setCollectionsMenuOpen(false)}
                         className="dropdown-footer-link gold"
                       >
-                        View Complete Catalog &rarr;
+                        <span>View Complete Catalog</span>
+                        <ChevronRight size={13} />
                       </Link>
                     </div>
                   </div>
@@ -641,18 +676,33 @@ export const Header: React.FC = () => {
                     <div>
                       <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Occasion</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
-                        <Link to="/products?occasion=wedding" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Wedding & Bridal</Link>
-                        <Link to="/products?occasion=festive" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Festive Handlooms</Link>
-                        <Link to="/products?occasion=party" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Party Wear</Link>
+                        {shopByOccasions.map(col => (
+                          <Link key={col.id} to={`/products?occasion=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
+                            {col.name}
+                          </Link>
+                        ))}
                       </div>
                     </div>
 
                     <div>
                       <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Fabric</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
-                        <Link to="/products?fabric=pure-silk" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Pure Mulberry Silk</Link>
-                        <Link to="/products?fabric=kanchipuram" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Kanchipuram Silk</Link>
-                        <Link to="/products?fabric=cotton" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Handloom Cotton</Link>
+                        {shopByFabrics.map(col => (
+                          <Link key={col.id} to={`/products?fabric=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
+                            {col.name}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Style</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
+                        {shopByStyles.map(col => (
+                          <Link key={col.id} to={`/products?style=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
+                            {col.name}
+                          </Link>
+                        ))}
                       </div>
                     </div>
 
@@ -715,7 +765,7 @@ export const Header: React.FC = () => {
                 onClick={() => setMobileMenuOpen(false)} 
                 style={({ isActive }) => ({ color: isActive ? '#c9a227' : '#10182d', padding: '6px 0', textDecoration: 'none' })}
               >
-                Salem Atelier
+                Muety Atelier
               </NavLink>
 
               <NavLink 

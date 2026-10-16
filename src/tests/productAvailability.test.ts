@@ -1,4 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+vi.mock('@/lib/firebase/firebase', () => ({
+  db: null,
+  auth: null,
+  isLiveFirebase: false,
+  firebaseConfig: {}
+}));
+vi.mock('../lib/firebase/firebase', () => ({
+  db: null,
+  auth: null,
+  isLiveFirebase: false,
+  firebaseConfig: {}
+}));
 import { productService } from '../features/catalog/services/productService';
 import { storageService } from '../lib/storage/storageService';
 import { auditService } from '../shared/services/auditService';

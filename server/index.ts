@@ -206,6 +206,38 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
     }
   }
 
+  // Handle /api/launch-status (GET)
+  if (urlPath === '/api/launch-status' && req.method === 'GET') {
+    const launchDateIso = process.env.LAUNCH_DATE || process.env.VITE_LAUNCH_DATE || '2026-10-18T08:00:00+05:30';
+    const establishment = process.env.LAUNCH_ESTABLISHMENT || process.env.VITE_LAUNCH_ESTABLISHMENT || process.env.ESTABLISHMENT_YEAR || '2026';
+    const mode = (process.env.MUETY_LAUNCH_MODE || 'production').toLowerCase();
+    const launchTimestamp = new Date(launchDateIso).getTime();
+    const now = Date.now();
+    let status = 'PRE_LAUNCH';
+    if (mode === 'preview' || mode === 'force_live' || mode === 'live') {
+      status = 'LIVE';
+    } else {
+      status = now >= launchTimestamp ? 'LIVE' : 'PRE_LAUNCH';
+    }
+    const establishmentDisplay = isNaN(Number(establishment))
+      ? establishment
+      : `Est. ${establishment} • Royal Weaves`;
+
+    sendJsonResponse(res, 200, {
+      status,
+      launchAt: launchDateIso,
+      launchTimestamp,
+      establishment,
+      establishmentDisplay,
+      serverTime: new Date(now).toISOString(),
+      serverTimestamp: now,
+      timeRemainingMs: Math.max(0, launchTimestamp - now),
+      storeUrl: process.env.MUETY_STORE_URL || process.env.STORE_URL || 'http://localhost:5173',
+      mode
+    });
+    return true;
+  }
+
   // Reject non-POST methods
   if (req.method !== 'POST') {
     sendErrorResponse(res, 405, 'METHOD_NOT_ALLOWED', `HTTP method ${req.method} is not allowed. Supported method: POST.`);

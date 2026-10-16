@@ -1,44 +1,55 @@
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const https = require('https');
-const { URL } = require('url');
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import https from 'node:https';
+import { fileURLToPath, URL } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 3000;
 
 // Load .env environment variables manually without external dependencies
 function loadEnv() {
-  try {
-    const envPath = path.join(__dirname, '.env');
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, 'utf8');
-      content.split(/\r?\n/).forEach(line => {
-        line = line.trim();
-        if (line && !line.startsWith('#')) {
-          const eqIdx = line.indexOf('=');
-          if (eqIdx > 0) {
-            const key = line.substring(0, eqIdx).trim();
-            const val = line.substring(eqIdx + 1).trim();
-            if (key && !(key in process.env)) {
-              process.env[key] = val;
+  const envPaths = [
+    path.join(__dirname, '..', '.env'),
+    path.join(__dirname, '.env')
+  ];
+
+  envPaths.forEach(envPath => {
+    try {
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf8');
+        content.split(/\r?\n/).forEach(line => {
+          line = line.trim();
+          if (line && !line.startsWith('#')) {
+            const eqIdx = line.indexOf('=');
+            if (eqIdx > 0) {
+              const key = line.substring(0, eqIdx).trim();
+              let val = line.substring(eqIdx + 1).trim();
+              if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+                val = val.substring(1, val.length - 1);
+              }
+              if (key) {
+                process.env[key] = val;
+              }
             }
           }
-        }
-      });
+        });
+      }
+    } catch (err) {
+      console.error(`Failed to load ${envPath}:`, err.message);
     }
-  } catch (err) {
-    console.error('Failed to load .env file:', err.message);
-  }
+  });
 }
 
 loadEnv();
 
-// Centralized Official Launch Configuration (Single Source of Truth)
-const LAUNCH_DATE_ISO = process.env.LAUNCH_DATE || '2026-10-18T08:00:00+05:30';
-
 function getLaunchState() {
+  const launchDateIso = process.env.LAUNCH_DATE || process.env.VITE_LAUNCH_DATE || '2026-10-18T08:00:00+05:30';
+  const establishment = process.env.LAUNCH_ESTABLISHMENT || process.env.VITE_LAUNCH_ESTABLISHMENT || process.env.ESTABLISHMENT_YEAR || '2026';
   const mode = (process.env.MUETY_LAUNCH_MODE || 'production').toLowerCase();
-  const launchTimestamp = new Date(LAUNCH_DATE_ISO).getTime();
+  const launchTimestamp = new Date(launchDateIso).getTime();
   const now = Date.now();
 
   let status = 'PRE_LAUNCH';
@@ -50,14 +61,20 @@ function getLaunchState() {
     status = now >= launchTimestamp ? 'LIVE' : 'PRE_LAUNCH';
   }
 
+  const establishmentDisplay = isNaN(Number(establishment))
+    ? establishment
+    : `Est. ${establishment} • Royal Weaves`;
+
   return {
     status,
-    launchAt: LAUNCH_DATE_ISO,
+    launchAt: launchDateIso,
     launchTimestamp,
+    establishment,
+    establishmentDisplay,
     serverTime: new Date(now).toISOString(),
     serverTimestamp: now,
     timeRemainingMs: Math.max(0, launchTimestamp - now),
-    storeUrl: process.env.MUETY_STORE_URL || '',
+    storeUrl: process.env.MUETY_STORE_URL || process.env.STORE_URL || '',
     mode
   };
 }
@@ -285,7 +302,7 @@ const server = http.createServer((req, res) => {
 
   let filePath = path.join(__dirname, reqPath);
 
-  // If live and file not found in Countown directory, try parent dist directory (store assets)
+  // If live and file not found in countdown directory, try parent dist directory (store assets)
   if (!fs.existsSync(filePath) && currentLaunchState.status === 'LIVE') {
     const distFilePath = path.join(__dirname, '..', 'dist', reqPath);
     if (fs.existsSync(distFilePath)) {
@@ -306,6 +323,18 @@ const server = http.createServer((req, res) => {
         res.end(`Server Error: ${err.code}`);
       }
     } else {
+      if (ext === '.html') {
+        let htmlStr = content.toString('utf8');
+        const state = getLaunchState();
+        const injection = `<script id="__MUETY_ENV__">window.__MUETY_LAUNCH_CONFIG__ = ${JSON.stringify(state)};</script>`;
+        if (htmlStr.includes('</head>')) {
+          htmlStr = htmlStr.replace('</head>', `${injection}\n</head>`);
+        } else {
+          htmlStr = injection + '\n' + htmlStr;
+        }
+        res.writeHead(200, { 'Content-Type': contentType });
+        return res.end(htmlStr);
+      }
       res.writeHead(200, { 'Content-Type': contentType });
       res.end(content);
     }

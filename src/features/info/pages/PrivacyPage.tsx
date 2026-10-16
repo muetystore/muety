@@ -2,53 +2,141 @@ import React from 'react';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 
 export const PrivacyPage: React.FC = () => {
-  useDocumentTitle('Privacy Policy');
+  useDocumentTitle('Privacy Policy | MUETY');
 
   return (
     <div className="policy-page animate-fade-in" style={{ paddingBottom: '6rem' }}>
-      <div style={{ backgroundColor: '#0f172a', color: '#ffffff', padding: '3.5rem 0' }}>
-        <div className="container">
-          <span style={{ fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.12em', color: '#d4af37', textTransform: 'uppercase' }}>
-            LEGAL & SECURITY
+      {/* Header */}
+      <div style={{ backgroundColor: '#090d16', color: '#ffffff', padding: '4rem 1.5rem', textAlign: 'center', borderBottom: '1px solid rgba(212, 175, 55, 0.2)' }}>
+        <div className="container" style={{ maxWidth: '850px', margin: '0 auto' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 800, letterSpacing: '0.15em', color: '#d4af37', textTransform: 'uppercase' }}>
+            MUETY • LEGAL &amp; SECURITY
           </span>
-          <h1 style={{ color: '#ffffff', fontSize: '2.5rem', marginTop: '4px', marginBottom: '0.5rem' }}>
-            MUETY Privacy Policy
+          <h1 style={{ color: '#ffffff', fontSize: 'clamp(2rem, 4vw, 2.75rem)', marginTop: '8px', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            Privacy Policy
           </h1>
-          <p style={{ color: '#94a3b8', fontSize: '0.95rem' }}>
-            Last Updated: August 2026 • Effective Worldwide
+          <p style={{ color: '#94a3b8', fontSize: '1rem', lineHeight: 1.6 }}>
+            Effective Date: <strong>18 October 2026</strong> • Your information, handled with care
           </p>
         </div>
       </div>
 
       <div className="container" style={{ marginTop: '3.5rem', maxWidth: '850px' }}>
-        <div className="card" style={{ padding: '3rem 2.5rem', fontSize: '1rem', lineHeight: 1.8, color: 'var(--text-secondary)' }}>
-          <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem' }}>
-            1. Commitment to Patron Confidentiality
+        <div className="card" style={{ padding: '3rem 2.5rem', fontSize: '0.98rem', lineHeight: 1.8, color: 'var(--text-secondary)' }}>
+
+          {/* Important Notice */}
+          <div style={{ backgroundColor: 'rgba(212, 175, 55, 0.08)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(212, 175, 55, 0.3)', marginBottom: '2rem' }}>
+            <p style={{ margin: 0, fontSize: '0.88rem', color: '#92400e', fontWeight: 600 }}>
+              This Privacy Policy explains how MUETY handles information when you visit https://www.muety.in or place an order for sarees and traditional wear. These policies do not remove consumer rights or remedies that cannot legally be excluded under Indian law.
+            </p>
+          </div>
+
+          {/* Section 1 */}
+          <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            1. Information We May Collect
           </h2>
+          <p style={{ marginBottom: '1rem' }}>
+            MUETY may collect your name, mobile number, email address, shipping or billing address, order history, transaction status and information you provide when contacting customer support.
+          </p>
           <p style={{ marginBottom: '1.5rem' }}>
-            At <strong>MUETY</strong>, we treat the personal data and purchasing habits of our clientele with the highest discretion. We do not sell, license, or barter customer information to third-party data brokers under any circumstance.
+            We do not intend to collect or store your full payment-card credentials, UPI PIN or card PIN. Payment details are handled by the relevant payment provider.
           </p>
 
-          <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem' }}>
-            2. Data Collection and Usage
+          {/* Section 2 */}
+          <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            2. How We Use Information
           </h2>
+          <p style={{ marginBottom: '0.5rem' }}>
+            We use information to:
+          </p>
+          <ul style={{ listStyle: 'disc', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '1.5rem' }}>
+            <li>Process and deliver orders</li>
+            <li>Verify payments and COD orders</li>
+            <li>Send order or delivery updates</li>
+            <li>Respond to enquiries</li>
+            <li>Review return/refund requests</li>
+            <li>Prevent fraud</li>
+            <li>Improve our services</li>
+            <li>Meet applicable legal obligations</li>
+          </ul>
+
+          {/* Section 3 */}
+          <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            3. Sharing Information
+          </h2>
+          <p style={{ marginBottom: '0.5rem' }}>
+            Information may be shared as reasonably necessary with:
+          </p>
+          <ul style={{ listStyle: 'disc', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '1rem' }}>
+            <li>Authorised payment providers</li>
+            <li>Courier and delivery partners</li>
+            <li>Website/technology service providers</li>
+            <li>Authorities where required by law</li>
+          </ul>
           <p style={{ marginBottom: '1.5rem' }}>
-            We collect information solely to fulfill your bespoke orders, coordinate courier deliveries, provide tailored concierge support, and issue official quality certificates for your pure silk sarees and temple jewelry.
+            Relevant order details and customer-submitted videos or photographs may be accessed by authorised MUETY personnel to review a return/refund request.
           </p>
 
-          <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem' }}>
-            3. 256-Bit Vault Security & Encryption
+          {/* Section 4 */}
+          <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            4. Security and Retention
           </h2>
+          <p style={{ marginBottom: '1rem' }}>
+            MUETY takes reasonable steps to protect personal information and submitted evidence against unauthorised access, loss or misuse. No online system can be guaranteed completely secure.
+          </p>
           <p style={{ marginBottom: '1.5rem' }}>
-            All payment card details, billing addresses, and authentication tokens are encrypted in transit and at rest using banking-grade AES-256 protocols and Firebase cloud security compliance.
+            We retain information for as long as reasonably needed for order fulfilment, customer support, return/refund review, accounting, dispute resolution and legal compliance.
           </p>
 
-          <h2 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', marginBottom: '1rem' }}>
-            4. Your Rights as a MUETY Patron
+          {/* Section 5 */}
+          <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            5. Cookies and Website Technologies
           </h2>
-          <p>
-            You retain the unconditional right to request access to, rectify, or request permanent deletion of your customer records by submitting a formal request to our Data Protection Concierge at <strong style={{ color: 'var(--brand-primary)' }}>privacy@muety.com</strong>.
+          <p style={{ marginBottom: '1.5rem' }}>
+            The website or its service providers may use cookies or similar technologies for essential site functions, security and performance. Browser settings may allow you to control cookies, although some features may not work properly if disabled.
           </p>
+
+          {/* Section 6 */}
+          <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            6. Your Requests and Choices
+          </h2>
+          <p style={{ marginBottom: '1.5rem' }}>
+            You may contact MUETY to request access to, correction of, or help with personal information associated with an order, subject to identity verification and applicable law. Certain records may need to be retained where legally required.
+          </p>
+
+          {/* Section 7 */}
+          <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            7. Children's Information
+          </h2>
+          <p style={{ marginBottom: '1.5rem' }}>
+            Please place orders only if you are legally able to enter into a purchase transaction, or with a parent or lawful guardian where required.
+          </p>
+
+          {/* Section 8 */}
+          <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            8. Changes to This Policy
+          </h2>
+          <p style={{ marginBottom: '1.5rem' }}>
+            We may update this policy to reflect operational or legal changes. The latest version and effective date will be published on the website.
+          </p>
+
+          {/* Section 9 */}
+          <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
+            9. Contact
+          </h2>
+          <div style={{ backgroundColor: 'var(--bg-main)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)' }}>
+            <p style={{ fontSize: '0.92rem', margin: 0, lineHeight: 1.7 }}>
+              For privacy questions or requests, contact <strong style={{ color: 'var(--brand-primary)' }}>support@muety.in</strong> and include your order number where relevant.
+            </p>
+          </div>
+
+        </div>
+
+        {/* Brand Footer */}
+        <div style={{ textAlign: 'center', marginTop: '2.5rem', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
+          <p style={{ marginBottom: '4px' }}><strong>MUETY — Traditional Sarees &amp; Wear</strong></p>
+          <p style={{ marginBottom: '4px' }}>Website: <a href="https://www.muety.in" style={{ color: 'var(--brand-accent)' }}>https://www.muety.in</a></p>
+          <p>Email: <strong style={{ color: 'var(--brand-primary)' }}>support@muety.in</strong></p>
         </div>
       </div>
     </div>

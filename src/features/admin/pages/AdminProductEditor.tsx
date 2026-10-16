@@ -7,7 +7,8 @@ import { auditService } from '@/shared/services/auditService';
 import { inventoryService } from '@/shared/services/inventoryService';
 import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
-import { Product, Category } from '@/types';
+import { Product, Category, SareeCollection } from '@/types';
+import { collectionService } from '@/features/catalog/services/collectionService';
 import { getUserRoles } from '@/shared/utils/permissions';
 import { compressImageFile } from '@/shared/utils/imageCompressor';
 import { 
@@ -26,7 +27,8 @@ import {
   DollarSign, 
   Layers, 
   Globe, 
-  RefreshCw 
+  RefreshCw,
+  Sparkles 
 } from 'lucide-react';
 
 interface SectionConfig {
@@ -57,6 +59,9 @@ export const AdminProductEditor: React.FC = () => {
   const { success, warning, error } = useNotification();
 
   const [categories, setCategories] = useState<Category[]>(storageService.getCategories());
+  const [collections, setCollections] = useState<SareeCollection[]>(() => collectionService.getCollections());
+  const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
+  const [primaryCollectionId, setPrimaryCollectionId] = useState<string>('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isLoadingProduct, setIsLoadingProduct] = useState<boolean>(isEditMode);
   const [isSaving, setIsSaving] = useState(false);
@@ -198,6 +203,12 @@ export const AdminProductEditor: React.FC = () => {
         setSelectedCategoryIds(catIds);
         setPrimaryCategoryId(primId);
 
+        const colIds = Array.isArray(prod.collectionIds) && prod.collectionIds.length > 0
+          ? prod.collectionIds
+          : (prod.collectionId ? [prod.collectionId] : []);
+        setSelectedCollectionIds(colIds);
+        setPrimaryCollectionId(prod.collectionId || colIds[0] || '');
+
         setImages(Array.isArray(prod.images) ? [...prod.images] : []);
         setColorsText(Array.isArray(prod.colors) ? prod.colors.join(', ') : '');
         setSizesText(Array.isArray(prod.sizes) ? prod.sizes.join(', ') : '');
@@ -236,6 +247,16 @@ export const AdminProductEditor: React.FC = () => {
       }
     }
   }, [id, isEditMode]);
+
+  // Subscribe to live collections
+  useEffect(() => {
+    const unsub = collectionService.subscribeToCollections((cols) => {
+      setCollections(cols || []);
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
 
   // Handle Category toggles and auto SKU preview for creation mode
   const handleToggleCategory = async (catId: string) => {
@@ -480,10 +501,20 @@ export const AdminProductEditor: React.FC = () => {
         mostWanted,
         status: isPublished ? 'active' : 'draft',
         availability,
+        collectionId: primaryCollectionId || selectedCollectionIds[0] || '',
+        collectionIds: selectedCollectionIds,
         rating: editingProduct?.rating || 5,
         reviewCount: editingProduct?.reviewCount || 0,
         specifications: editingProduct?.specifications || { Fabric: silkType || 'Pure Silk', Weave: weaveTechnique || 'Handloom' },
-        tags: [finalCategorySlug, 'silk-saree', 'muety-ethnic'],
+        tags: Array.from(new Set([
+          finalCategorySlug, 
+          'silk-saree', 
+          'muety-ethnic',
+          ...selectedCollectionIds.map(cid => {
+            const matchCol = collections.find(c => c.id === cid);
+            return matchCol ? matchCol.slug : '';
+          }).filter(Boolean)
+        ])),
         createdAt: editingProduct?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: editingProduct?.createdBy || user?.email || 'admin',
@@ -757,6 +788,87 @@ export const AdminProductEditor: React.FC = () => {
                   </select>
                   <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
                     Primary category dictates main storefront routing and SKU prefixing.
+                  </span>
+                </div>
+              </div>
+
+              {/* Shop By Collections & Curated Edits Assignment */}
+              <div className="admin-form-grid-2col" style={{ borderTop: '1px dashed var(--brand-border)', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Sparkles size={16} color="#d4af37" />
+                    Assigned Shop By Collections & Festive Edits
+                  </label>
+                  <div style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1.5px solid var(--brand-border)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '10px 12px',
+                    maxHeight: '190px',
+                    overflowY: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}>
+                    {collections.length === 0 ? (
+                      <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>No collections found.</span>
+                    ) : (
+                      collections.map(col => (
+                        <label key={col.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '0.86rem', cursor: 'pointer' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedCollectionIds.includes(col.id)}
+                              onChange={() => {
+                                setIsDirty(true);
+                                setSelectedCollectionIds(prev => 
+                                  prev.includes(col.id) ? prev.filter(i => i !== col.id) : [...prev, col.id]
+                                );
+                              }}
+                              style={{ accentColor: '#d4af37', flexShrink: 0 }}
+                            />
+                            <span>{col.name}</span>
+                          </span>
+                          <span style={{
+                            fontSize: '0.68rem',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: col.type === 'occasion' ? '#fef3c7' : '#f1f5f9',
+                            color: col.type === 'occasion' ? '#92400e' : '#475569',
+                            fontWeight: 700,
+                            textTransform: 'uppercase'
+                          }}>
+                            {col.type || 'occasion'}
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                    Select which "Shop By" dropdown and homepage "Festive Edits" collections this saree belongs to.
+                  </span>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">
+                    Primary Collection
+                  </label>
+                  <select
+                    value={primaryCollectionId}
+                    onChange={e => {
+                      setPrimaryCollectionId(e.target.value);
+                      setIsDirty(true);
+                    }}
+                    className="form-select"
+                    disabled={selectedCollectionIds.length === 0}
+                  >
+                    <option value="">-- Optional: Primary Collection --</option>
+                    {collections.filter(c => selectedCollectionIds.includes(c.id)).map(col => (
+                      <option key={col.id} value={col.id}>{col.name} ({col.type || 'occasion'})</option>
+                    ))}
+                  </select>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                    Primary featured collection for this product.
                   </span>
                 </div>
               </div>

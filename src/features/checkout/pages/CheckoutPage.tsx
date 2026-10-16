@@ -464,7 +464,7 @@ export const CheckoutPage: React.FC = () => {
                         MUETY Pan-India Tracked Courier (2-4 Business Days)
                       </div>
                       <div style={{ fontSize: '0.82rem', color: 'var(--brand-muted)', marginTop: '2px' }}>
-                        Direct dispatch from Salem atelier • Transit insured with live SMS & tracking
+                        Direct dispatch from Muety atelier • Transit insured with live SMS & tracking
                       </div>
                     </div>
                   </div>
@@ -736,11 +736,22 @@ export const CheckoutPage: React.FC = () => {
                       <span>Balance Due at Delivery:</span>
                       <span>₹{financials.remainingAmountDueAtDelivery.toFixed(2)}</span>
                     </div>
-                    <div style={{ fontSize: '0.74rem', color: '#b45309', marginTop: '2px' }}>
-                      * The ₹89 advance is part of your order total, covering dispatch insurance.
+                    <div style={{ fontSize: '0.74rem', color: '#b45309', marginTop: '2px', lineHeight: 1.4 }}>
+                      * The ₹89 advance confirms your COD order and is credited directly toward your order total.
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '0.75rem', lineHeight: 1.5 }}>
+                By placing your order, you agree to MUETY's{' '}
+                <Link to="/terms-conditions" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>
+                  Terms &amp; Conditions
+                </Link>{' '}
+                and{' '}
+                <Link to="/return-refund-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>
+                  Return, Refund &amp; Cancellation Policy
+                </Link>.
               </div>
 
               <button

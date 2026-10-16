@@ -24,6 +24,7 @@ export const ProductsPage: React.FC = () => {
   const fabricParam = searchParams.get('fabric') || '';
   const styleParam = searchParams.get('style') || '';
   const tagParam = searchParams.get('tag') || '';
+  const collectionParam = searchParams.get('collection') || searchParams.get('col') || '';
   const minPriceParam = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : null;
   const maxPriceParam = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : null;
 
@@ -179,6 +180,18 @@ export const ProductsPage: React.FC = () => {
           (p.name || '').toLowerCase().includes(tg)
         );
       }
+    }
+
+    // Collection filter
+    if (collectionParam) {
+      const col = collectionParam.toLowerCase().trim();
+      list = list.filter(p => 
+        (p.collectionId || '').toLowerCase() === col ||
+        (p.categorySlug || '').toLowerCase().includes(col) ||
+        (p.occasion || '').toLowerCase().includes(col) ||
+        (p.tags || []).some(t => (t || '').toLowerCase().includes(col)) ||
+        (p.name || '').toLowerCase().includes(col)
+      );
     }
 
     // Min and Max price filters

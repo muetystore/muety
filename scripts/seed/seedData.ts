@@ -1,4 +1,4 @@
-import { Product, Category } from '../../src/features/catalog/types';
+import { Product, Category, SareeCollection } from '../../src/features/catalog/types';
 import { Coupon } from '../../src/features/coupons/types';
 import { Order } from '../../src/features/orders/types';
 import { PatronReview } from '../../src/features/reviews/types';
@@ -437,4 +437,205 @@ export const INITIAL_REVIEWS: PatronReview[] = [
     createdAt: '2026-03-02T14:45:00Z'
   }
 ];
+
+export const INITIAL_COLLECTIONS: SareeCollection[] = [
+  // Occasions (Festive Edits on Homepage & Shop By Megamenu)
+  {
+    id: 'col-bridal',
+    collectionId: 'col-bridal',
+    name: 'Bridal Muhurtham',
+    slug: 'bridal',
+    description: 'Sacred pure zari Kanchipuram sarees curated for wedding muhurthams.',
+    bannerImage: '/saree_model_individual.jpg',
+    featured: true,
+    productCount: 4,
+    displayOrder: 1,
+    type: 'occasion',
+    showInShopBy: true,
+    showInFestiveEdits: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    id: 'col-temple',
+    collectionId: 'col-temple',
+    name: 'Temple Ceremonies',
+    slug: 'temple',
+    description: 'Sacred hues and traditional Korvai borders for temple festivals & poojas.',
+    bannerImage: '/saree_fabric_detail.jpg',
+    featured: true,
+    productCount: 4,
+    displayOrder: 2,
+    type: 'occasion',
+    showInShopBy: true,
+    showInFestiveEdits: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    id: 'col-reception',
+    collectionId: 'col-reception',
+    name: 'Grand Receptions',
+    slug: 'reception',
+    description: 'Contemporary soft silks and opulent tissue drapes for evening receptions.',
+    bannerImage: '/saree_model_drape.jpg',
+    featured: true,
+    productCount: 4,
+    displayOrder: 3,
+    type: 'occasion',
+    showInShopBy: true,
+    showInFestiveEdits: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    id: 'col-festive',
+    collectionId: 'col-festive',
+    name: 'Family Festivities',
+    slug: 'festive',
+    description: 'Celebratory Salem handlooms and vibrant silks for family get-togethers.',
+    bannerImage: '/diwali_hero_banner.jpg',
+    featured: true,
+    productCount: 4,
+    displayOrder: 4,
+    type: 'occasion',
+    showInShopBy: true,
+    showInFestiveEdits: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  },
+
+  // Fabric Collections (Shop By Megamenu)
+  {
+    id: 'col-fab-mulberry',
+    collectionId: 'col-fab-mulberry',
+    name: 'Pure Mulberry Silk',
+    slug: 'pure-silk',
+    description: '100% Silk Mark certified natural mulberry handloom drapes.',
+    bannerImage: '/saree_fabric_detail.jpg',
+    featured: true,
+    productCount: 4,
+    displayOrder: 1,
+    type: 'fabric',
+    showInShopBy: true,
+    showInFestiveEdits: false,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    id: 'col-fab-kanchi',
+    collectionId: 'col-fab-kanchi',
+    name: 'Kanchipuram Silk',
+    slug: 'kanchipuram',
+    description: 'Authentic 3-ply heavy zari South Indian royal heritage sarees.',
+    bannerImage: '/saree_model_individual.jpg',
+    featured: true,
+    productCount: 4,
+    displayOrder: 2,
+    type: 'fabric',
+    showInShopBy: true,
+    showInFestiveEdits: false,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    id: 'col-fab-cotton',
+    collectionId: 'col-fab-cotton',
+    name: 'Traditional Cotton Handloom',
+    slug: 'cotton',
+    description: 'Breathable pit-loom Salem cottons with delicate zari borders.',
+    bannerImage: '/saree_fabric_detail.jpg',
+    featured: false,
+    productCount: 2,
+    displayOrder: 3,
+    type: 'fabric',
+    showInShopBy: true,
+    showInFestiveEdits: false,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    id: 'col-fab-georgette',
+    collectionId: 'col-fab-georgette',
+    name: 'Georgette & Soft Crepe',
+    slug: 'georgette',
+    description: 'Feather-light flowing drapes crafted for modern ease.',
+    bannerImage: '/saree_model_drape.jpg',
+    featured: false,
+    productCount: 2,
+    displayOrder: 4,
+    type: 'fabric',
+    showInShopBy: true,
+    showInFestiveEdits: false,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  },
+
+  // Style Collections (Shop By Megamenu)
+  {
+    id: 'col-style-classic',
+    collectionId: 'col-style-classic',
+    name: 'Traditional Classic',
+    slug: 'traditional',
+    description: 'Timeless temple motifs, rudraksha and annapakshi borders.',
+    bannerImage: '/saree_model_individual.jpg',
+    featured: true,
+    productCount: 4,
+    displayOrder: 1,
+    type: 'style',
+    showInShopBy: true,
+    showInFestiveEdits: false,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    id: 'col-style-designer',
+    collectionId: 'col-style-designer',
+    name: 'Contemporary Designer',
+    slug: 'contemporary',
+    description: 'Subtle pastels, minimalist brocades, and modern atelier silhouettes.',
+    bannerImage: '/saree_model_drape.jpg',
+    featured: true,
+    productCount: 3,
+    displayOrder: 2,
+    type: 'style',
+    showInShopBy: true,
+    showInFestiveEdits: false,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    id: 'col-style-temple',
+    collectionId: 'col-style-temple',
+    name: 'Royal Temple Borders',
+    slug: 'temple-borders',
+    description: 'Heritage Korvai interlocking temple spires along the selvedge.',
+    bannerImage: '/saree_fabric_detail.jpg',
+    featured: true,
+    productCount: 4,
+    displayOrder: 3,
+    type: 'style',
+    showInShopBy: true,
+    showInFestiveEdits: false,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  },
+  {
+    id: 'col-style-gold-zari',
+    collectionId: 'col-style-gold-zari',
+    name: 'Pure Gold Zari Handlooms',
+    slug: 'gold-zari',
+    description: 'Heirloom drapes enriched with authentic gold and silver metallic threads.',
+    bannerImage: '/saree_model_individual.jpg',
+    featured: true,
+    productCount: 4,
+    displayOrder: 4,
+    type: 'style',
+    showInShopBy: true,
+    showInFestiveEdits: false,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z'
+  }
+];
+
 

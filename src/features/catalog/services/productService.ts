@@ -438,15 +438,80 @@ export const productService = {
     return products;
   },
 
-  getRelatedProducts(productId: string, limit = 4): Product[] {
-    const current = storageService.getProductById(productId);
-    const all = storageService.getProducts().filter(p => p.id !== productId);
-    if (!current) return all.slice(0, limit);
-    const categoryMatches = all.filter(
-      p => (p.categorySlug || '').toLowerCase() === (current.categorySlug || '').toLowerCase() ||
-           (p.category || '').toLowerCase() === (current.category || '').toLowerCase()
+  getRelatedProducts(productId: string, limit = 4, currentProduct?: Product): Product[] {
+    const current = currentProduct || storageService.getProductById(productId);
+    const allProducts = storageService.getProducts();
+
+    const excludeIds = new Set<string>();
+    const excludeSlugs = new Set<string>();
+    const excludeNames = new Set<string>();
+
+    if (productId) {
+      excludeIds.add(productId.toLowerCase());
+      excludeSlugs.add(productId.toLowerCase());
+    }
+
+    if (current) {
+      if (current.id) excludeIds.add(current.id.toLowerCase());
+      if (current.slug) excludeSlugs.add(current.slug.toLowerCase());
+      const name = (current.name || (current as any).title || '').trim().toLowerCase();
+      if (name) excludeNames.add(name);
+    }
+
+    const seenIds = new Set<string>();
+    const seenSlugs = new Set<string>();
+    const seenNames = new Set<string>();
+    const candidates: Product[] = [];
+
+    for (const p of allProducts) {
+      const pId = (p.id || '').trim().toLowerCase();
+      const pSlug = (p.slug || '').trim().toLowerCase();
+      const pName = (p.name || (p as any).title || '').trim().toLowerCase();
+
+      // Skip current product being viewed
+      if (excludeIds.has(pId) || excludeSlugs.has(pSlug) || (pName && excludeNames.has(pName))) {
+        continue;
+      }
+
+      // Skip duplicate products (same ID, slug, or name)
+      if (pId && seenIds.has(pId)) continue;
+      if (pSlug && seenSlugs.has(pSlug)) continue;
+      if (pName && seenNames.has(pName)) continue;
+
+      if (pId) seenIds.add(pId);
+      if (pSlug) seenSlugs.add(pSlug);
+      if (pName) seenNames.add(pName);
+
+      candidates.push(p);
+    }
+
+    if (!current) {
+      return candidates.slice(0, limit);
+    }
+
+    const currentCatSlug = (current.categorySlug || '').toLowerCase();
+    const currentCat = (current.category || '').toLowerCase();
+
+    // Prioritize matching category, then fill with other catalog pieces
+    const sameCategory = candidates.filter(
+      p => (currentCatSlug && (p.categorySlug || '').toLowerCase() === currentCatSlug) ||
+           (currentCat && (p.category || '').toLowerCase() === currentCat)
     );
-    return (categoryMatches.length > 0 ? categoryMatches : all).slice(0, limit);
+
+    const otherCategory = candidates.filter(
+      p => !((currentCatSlug && (p.categorySlug || '').toLowerCase() === currentCatSlug) ||
+             (currentCat && (p.category || '').toLowerCase() === currentCat))
+    );
+
+    const results: Product[] = [...sameCategory];
+    if (results.length < limit) {
+      for (const other of otherCategory) {
+        if (results.length >= limit) break;
+        results.push(other);
+      }
+    }
+
+    return results.slice(0, limit);
   },
 
   async createProduct(productData: Partial<Product> & { id?: string; slug?: string; sku?: string }): Promise<Product> {
@@ -587,6 +652,8 @@ export const productService = {
             isMostWanted: Boolean(productData.isMostWanted || productData.mostWanted),
             occasion: productData.occasion || '',
             occasions: Array.isArray(productData.occasions) ? productData.occasions : (productData.occasion ? [productData.occasion] : []),
+            collectionId: productData.collectionId || '',
+            collectionIds: Array.isArray(productData.collectionIds) ? productData.collectionIds : (productData.collectionId ? [productData.collectionId] : []),
             rating: Number(productData.rating || 5.0),
             reviewCount: Number(productData.reviewCount || 0),
             tags: Array.isArray(productData.tags) && productData.tags.length > 0 ? productData.tags : [String(categorySlug), 'luxury', 'atelier'],
@@ -829,6 +896,8 @@ export const productService = {
           isMostWanted: Boolean(updated.isMostWanted || updated.mostWanted),
           occasion: updated.occasion || '',
           occasions: Array.isArray(updated.occasions) ? updated.occasions : (updated.occasion ? [updated.occasion] : []),
+          collectionId: updated.collectionId || '',
+          collectionIds: Array.isArray(updated.collectionIds) ? updated.collectionIds : (updated.collectionId ? [updated.collectionId] : []),
           rating: Number(updated.rating || 5.0),
           reviewCount: Number(updated.reviewCount || 0),
           tags: Array.isArray(updated.tags) ? updated.tags : [],

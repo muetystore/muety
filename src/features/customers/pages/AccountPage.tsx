@@ -188,12 +188,12 @@ export const AccountPage: React.FC = () => {
   };
 
   const handleRequestCancel = async (orderId: string) => {
-    const reason = window.prompt('Please let our Salem atelier concierge know the reason for your cancellation request:');
+    const reason = window.prompt('Please provide the reason for your order cancellation request:');
     if (!reason || !reason.trim()) return;
 
     try {
       await orderService.requestCancellation(orderId, reason.trim());
-      success('Cancellation request submitted to the atelier team. We will review prior to courier dispatch.', 'Request Submitted');
+      success('Cancellation request submitted. We will review prior to dispatch.', 'Request Submitted');
     } catch (err: any) {
       warning(err.message || 'Unable to submit cancellation request.');
     }

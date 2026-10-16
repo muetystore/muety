@@ -18,6 +18,7 @@ import {
   Plus, 
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   X,
   Maximize2,
   ZoomIn,
@@ -226,7 +227,7 @@ export const ProductDetailPage: React.FC = () => {
   }
 
   const isSaved = isInWishlist(product.id);
-  const relatedProducts = productService.getRelatedProducts(product.id, 4);
+  const relatedProducts = productService.getRelatedProducts(product.id, 4, product);
 
   const effectiveReviewCount = liveReviews.length > 0 ? liveReviews.length : (product.reviewCount || 0);
   const calculatedAvg = liveReviews.length > 0 
@@ -287,178 +288,134 @@ export const ProductDetailPage: React.FC = () => {
   const isManualSoldOut = product.availability === 'sold_out';
 
   return (
-    <div className="product-detail-page animate-fade-in" style={{ paddingBottom: '6rem' }}>
-      <div style={{ backgroundColor: 'var(--bg-surface)', borderBottom: '1px solid var(--brand-border)', padding: '1rem 0' }}>
-        <div className="container" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--brand-muted)' }}>
-          <Link to="/" style={{ color: 'var(--brand-muted)' }}>Home</Link>
-          <ChevronRight size={14} />
-          <Link to="/products" style={{ color: 'var(--brand-muted)' }}>Catalog</Link>
-          <ChevronRight size={14} />
-          <Link to={`/category/${product.categorySlug}`} style={{ color: 'var(--brand-muted)' }}>{product.category}</Link>
-          <ChevronRight size={14} />
-          <span style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{product.name}</span>
+    <div className="product-detail-page pdp-page animate-fade-in">
+      <div className="pdp-breadcrumb-bar">
+        <div className="container">
+          <div className="pdp-breadcrumb-inner">
+            <Link to="/" className="pdp-breadcrumb-link">Home</Link>
+            <ChevronRight size={13} style={{ flexShrink: 0 }} />
+            <Link to="/products" className="pdp-breadcrumb-link">Catalog</Link>
+            <ChevronRight size={13} style={{ flexShrink: 0 }} />
+            <Link to={`/category/${product.categorySlug}`} className="pdp-breadcrumb-link">{product.category}</Link>
+            <ChevronRight size={13} style={{ flexShrink: 0 }} />
+            <span className="pdp-breadcrumb-current">{product.name}</span>
+          </div>
         </div>
       </div>
 
-      <div className="container" style={{ marginTop: '2.5rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '3.5rem' }} className="pdp-grid">
-          <div>
+      <div className="container" style={{ marginTop: 'clamp(1rem, 2.5vw, 2.5rem)' }}>
+        <div className="pdp-grid">
+          <div className="pdp-gallery-col">
             <div 
-              style={{
-                borderRadius: 'var(--radius-xl)',
-                overflow: 'hidden',
-                backgroundColor: '#ffffff',
-                border: '1px solid var(--brand-border)',
-                height: '520px',
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '1.5rem',
-                boxShadow: 'var(--shadow-sm)',
-                marginBottom: '1.25rem',
-                cursor: 'zoom-in'
-              }}
+              className="pdp-main-image-card"
               onClick={() => setIsLightboxOpen(true)}
+              title="Click to view high-resolution saree drape"
             >
               <img 
                 src={product.images[selectedImage] || product.images[0]} 
                 alt={product.name}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  objectPosition: 'center',
-                  transition: 'transform 0.3s ease'
-                }}
+                className="pdp-main-img"
               />
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setIsLightboxOpen(true); }}
-                style={{
-                  position: 'absolute',
-                  bottom: '16px',
-                  right: '16px',
-                  backgroundColor: 'rgba(15, 23, 42, 0.82)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '8px 12px',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  backdropFilter: 'blur(4px)',
-                  cursor: 'pointer'
-                }}
+                className="pdp-expand-btn"
+                aria-label="Expand image gallery"
               >
-                <Maximize2 size={14} /> Expand Gallery
+                <Maximize2 size={13} /> Expand Gallery
               </button>
             </div>
 
             {product.images.length > 1 && (
-              <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+              <div className="pdp-thumbnails-strip">
                 {product.images.map((img, idx) => (
                   <button
                     key={idx}
+                    type="button"
                     onClick={() => setSelectedImage(idx)}
-                    style={{
-                      width: '80px',
-                      height: '80px',
-                      borderRadius: 'var(--radius-md)',
-                      overflow: 'hidden',
-                      border: selectedImage === idx ? '2px solid var(--brand-accent)' : '1px solid var(--brand-border)',
-                      padding: '4px',
-                      backgroundColor: '#ffffff',
-                      cursor: 'pointer',
-                      flexShrink: 0
-                    }}
+                    className={`pdp-thumbnail-btn ${selectedImage === idx ? 'active' : ''}`}
+                    aria-label={`View creation drape ${idx + 1}`}
                   >
-                    <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center' }} />
+                    <img src={img} alt="" />
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--brand-accent-hover)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                {product.category} • SKU: {product.sku}
+          <div className="pdp-info-col">
+            <div className="pdp-header-meta">
+              <span className="pdp-category-sku">
+                {product.category} • SKU: {product.sku || product.id.slice(0, 8).toUpperCase()}
               </span>
 
               {isManualSoldOut && (
-                <span style={{
-                  backgroundColor: '#991b1b',
-                  color: '#ffffff',
-                  fontSize: '0.7rem',
-                  fontWeight: 800,
-                  letterSpacing: '0.08em',
-                  padding: '3px 8px',
-                  borderRadius: '3px',
-                  textTransform: 'uppercase'
-                }}>
+                <span className="pdp-soldout-pill">
                   🔴 SOLD OUT
                 </span>
               )}
             </div>
 
-            <h1 style={{ fontSize: '2.2rem', color: 'var(--brand-primary)', marginTop: '6px', marginBottom: '12px', lineHeight: 1.2 }}>
+            <h1 className="pdp-title">
               {product.name}
             </h1>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', color: '#f59e0b' }}>
+            <div className="pdp-rating-row">
+              <div className="pdp-stars">
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} size={16} fill={i < Math.floor(effectiveRating) ? '#f59e0b' : 'none'} color="#f59e0b" />
+                  <Star key={i} size={15} fill={i < Math.floor(effectiveRating) ? '#f59e0b' : 'none'} color="#f59e0b" />
                 ))}
               </div>
-              <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--brand-primary)' }}>
+              <span className="pdp-rating-score">
                 {effectiveRating.toFixed(1)}
               </span>
-              <span style={{ color: 'var(--brand-muted)', fontSize: '0.85rem' }}>
+              <button 
+                type="button"
+                onClick={() => {
+                  setActiveTab('reviews');
+                  const el = document.getElementById('pdp-tabs-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="pdp-review-count"
+              >
                 ({effectiveReviewCount} {effectiveReviewCount === 1 ? 'verified review' : 'verified reviews'})
-              </span>
+              </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--brand-border)' }}>
-              <span style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
+            <div className="pdp-price-row">
+              <span className="pdp-price-current">
                 ₹{product.price.toLocaleString('en-IN')}
               </span>
               {product.originalPrice && product.originalPrice > product.price && (
-                <span style={{ fontSize: '1.3rem', color: 'var(--brand-muted)', textDecoration: 'line-through' }}>
-                  ₹{product.originalPrice.toLocaleString('en-IN')}
-                </span>
+                <>
+                  <span className="pdp-price-original">
+                    ₹{product.originalPrice.toLocaleString('en-IN')}
+                  </span>
+                  <span className="pdp-discount-badge">
+                    -{Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
+                  </span>
+                </>
               )}
             </div>
 
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.98rem', lineHeight: 1.7, marginBottom: '2rem' }}>
-              {product.shortDescription}
-            </p>
+            {product.shortDescription && (
+              <p className="pdp-description-short">
+                {product.shortDescription}
+              </p>
+            )}
 
             {product.colors && product.colors.length > 0 && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--brand-primary)', display: 'block', marginBottom: '8px' }}>
-                  Finish / Shade: <span style={{ fontWeight: 400 }}>{selectedColor}</span>
+              <div className="pdp-shade-group">
+                <label className="pdp-shade-label">
+                  Finish / Shade: <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>{selectedColor}</span>
                 </label>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <div className="pdp-shade-list">
                   {product.colors.map(color => (
                     <button
                       key={color}
+                      type="button"
                       onClick={() => setSelectedColor(color)}
-                      style={{
-                        padding: '8px 18px',
-                        borderRadius: 'var(--radius-full)',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        border: selectedColor === color ? '2px solid var(--brand-primary)' : '1px solid var(--brand-border)',
-                        backgroundColor: selectedColor === color ? 'var(--brand-primary)' : '#ffffff',
-                        color: selectedColor === color ? '#ffffff' : 'var(--text-primary)',
-                        cursor: 'pointer'
-                      }}
+                      className={`pdp-shade-chip ${selectedColor === color ? 'active' : ''}`}
                     >
                       {color}
                     </button>
@@ -467,183 +424,148 @@ export const ProductDetailPage: React.FC = () => {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '2rem' }}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--brand-primary)', marginBottom: '6px' }}>
-                  Quantity
-                </label>
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  border: '1px solid var(--brand-border)',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: '#ffffff',
-                  height: '48px',
-                  padding: '0 8px',
-                  gap: '12px'
-                }}>
-                  <button 
-                    onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
-                    style={{ color: 'var(--brand-primary)', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <span style={{ fontSize: '1rem', fontWeight: 700, minWidth: '24px', textAlign: 'center' }}>
-                    {quantity}
-                  </span>
-                  <button 
-                    onClick={() => setQuantity(prev => Math.min(product.stock, prev + 1))}
-                    style={{ color: 'var(--brand-primary)', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
-                  >
-                    <Plus size={16} />
-                  </button>
+            {/* Responsive Actions: Stepper + Wishlist + Cart + Buy Now */}
+            <div className="pdp-actions-container">
+              <div className="pdp-qty-wishlist-row">
+                <div className="pdp-qty-wrapper">
+                  <span className="pdp-qty-label">Quantity</span>
+                  <div className="pdp-stepper">
+                    <button 
+                      type="button"
+                      onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+                      className="pdp-stepper-btn"
+                      aria-label="Decrease quantity"
+                    >
+                      <Minus size={15} />
+                    </button>
+                    <span className="pdp-stepper-num">
+                      {quantity}
+                    </span>
+                    <button 
+                      type="button"
+                      onClick={() => setQuantity(prev => Math.min(product.stock || 99, prev + 1))}
+                      className="pdp-stepper-btn"
+                      aria-label="Increase quantity"
+                    >
+                      <Plus size={15} />
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => toggleWishlist(product.id)}
+                  className={`pdp-wishlist-btn ${isSaved ? 'saved' : ''}`}
+                  aria-label="Wishlist"
+                >
+                  <Heart size={18} fill={isSaved ? '#ef4444' : 'none'} color={isSaved ? '#ef4444' : 'currentColor'} />
+                  <span>{isSaved ? 'Saved' : 'Wishlist'}</span>
+                </button>
+              </div>
+
+              <div className="pdp-buttons-grid">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isSoldOut) return;
+                    addToCart(product, quantity, selectedColor, selectedSize);
+                  }}
+                  disabled={isSoldOut}
+                  className="btn btn-primary pdp-add-to-bag-btn"
+                >
+                  <ShoppingBag size={18} />
+                  <span>{isSoldOut ? 'SOLD OUT' : 'Add to Bag'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isSoldOut) return;
+                    addToCart(product, quantity, selectedColor, selectedSize);
+                    setIsDrawerOpen(false);
+                    navigate('/checkout');
+                  }}
+                  disabled={isSoldOut}
+                  className="btn btn-accent pdp-buy-now-btn"
+                >
+                  <Zap size={18} fill="currentColor" />
+                  <span>Buy Now</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Value Proposition Cards */}
+            <div className="pdp-trust-grid">
+              <div className="pdp-trust-item">
+                <div className="pdp-trust-icon-box">
+                  <Truck size={19} />
+                </div>
+                <div>
+                  <div className="pdp-trust-title">Pan-India Courier (₹89 Flat)</div>
+                  <div className="pdp-trust-sub">Muety Atelier dispatch • Insured transit</div>
                 </div>
               </div>
 
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'transparent', marginBottom: '6px' }}>
-                  Actions
-                </label>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isSoldOut) return;
-                      addToCart(product, quantity, selectedColor, selectedSize);
-                    }}
-                    disabled={isSoldOut}
-                    className="btn btn-primary"
-                    style={{
-                      flex: 1,
-                      height: '48px',
-                      fontSize: '0.95rem',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      opacity: isSoldOut ? 0.6 : 1,
-                      cursor: isSoldOut ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    <ShoppingBag size={18} />
-                    {isSoldOut ? 'SOLD OUT' : 'Add to Bag'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isSoldOut) return;
-                      addToCart(product, quantity, selectedColor, selectedSize);
-                      setIsDrawerOpen(false);
-                      navigate('/checkout');
-                    }}
-                    disabled={isSoldOut}
-                    className="btn btn-accent"
-                    style={{
-                      height: '48px',
-                      padding: '0 18px',
-                      fontSize: '0.95rem',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      opacity: isSoldOut ? 0.6 : 1,
-                      cursor: isSoldOut ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    <Zap size={18} fill="currentColor" /> Buy Now
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => toggleWishlist(product.id)}
-                    className="btn btn-outline"
-                    style={{
-                      height: '48px',
-                      width: '48px',
-                      padding: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: isSaved ? '#ef4444' : 'var(--brand-primary)',
-                      borderColor: isSaved ? '#ef4444' : 'var(--brand-border)'
-                    }}
-                    aria-label="Wishlist"
-                  >
-                    <Heart size={20} fill={isSaved ? '#ef4444' : 'none'} />
-                  </button>
+              <div className="pdp-trust-item">
+                <div className="pdp-trust-icon-box">
+                  <ShieldCheck size={19} />
+                </div>
+                <div>
+                  <div className="pdp-trust-title">Silk Mark Certified</div>
+                  <div className="pdp-trust-sub">100% Pure Mulberry Silk Guarantee</div>
                 </div>
               </div>
             </div>
 
-            <div style={{
-              backgroundColor: '#f8fafc',
-              border: '1px solid var(--brand-border)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '1.25rem 1.5rem',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '1.25rem',
-              marginTop: '1.5rem'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Truck size={20} color="#d4af37" />
-                <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 700 }}>Pan-India Courier (₹89 Flat)</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>Salem atelier dispatch • Insured transit</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <ShieldCheck size={20} color="#d4af37" />
-                <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 700 }}>Silk Mark Certified</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>100% Pure Mulberry Silk Guarantee</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Atelier Concierge Enquiry Trigger */}
-            <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+            {/* Atelier Concierge Whatsapp */}
+            <div className="pdp-concierge-box">
               <a
                 href={`https://wa.me/919940668095?text=${encodeURIComponent(`Hello MUETY Atelier, I am enquiring about "${product.name}" (SKU: ${product.sku || product.id}). Could you assist with drape consultation and availability?`)}`}
                 target="_blank"
                 rel="noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  color: 'var(--brand-primary)',
-                  textDecoration: 'underline',
-                  textUnderlineOffset: '4px',
-                  cursor: 'pointer'
-                }}
+                className="pdp-concierge-link"
               >
-                💬 Enquire with Salem Atelier Concierge about this saree
+                <span>💬</span>
+                <span>Enquire with Muety Atelier Concierge about this saree</span>
               </a>
             </div>
           </div>
         </div>
 
-        <div style={{ marginTop: '5rem' }}>
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--brand-border)', marginBottom: '2rem', gap: '2rem' }}>
+        {/* Product Information Tabs */}
+        <div id="pdp-tabs-section" className="pdp-tabs-container">
+          {/* Mobile Tab Dropdown Selector (shown on mobile, hidden on desktop) */}
+          <div className="pdp-tabs-mobile-dropdown">
+            <label htmlFor="pdp-mobile-tab-select" className="pdp-tabs-mobile-label">
+              Product Details Section
+            </label>
+            <div className="pdp-tabs-select-wrapper">
+              <select
+                id="pdp-mobile-tab-select"
+                value={activeTab}
+                onChange={(e) => setActiveTab(e.target.value as any)}
+                className="pdp-tabs-select"
+                aria-label="Select product details section"
+              >
+                <option value="details">Description &amp; Craft</option>
+                <option value="specs">Specifications</option>
+                <option value="reviews">
+                  Patron Reviews ({liveReviews.length || (product.reviews ? product.reviews.length : product.reviewCount || 0)})
+                </option>
+                <option value="shipping">Shipping &amp; Care</option>
+              </select>
+              <ChevronDown size={18} className="pdp-tabs-select-icon" />
+            </div>
+          </div>
+
+          {/* Desktop/Tablet Horizontal Tabs (hidden on mobile, shown on desktop) */}
+          <div className="pdp-tabs-nav">
             {(['details', 'specs', 'reviews', 'shipping'] as const).map(tab => (
               <button
                 key={tab}
+                type="button"
                 onClick={() => setActiveTab(tab)}
-                style={{
-                  padding: '12px 0',
-                  fontSize: '1rem',
-                  fontWeight: activeTab === tab ? 700 : 500,
-                  color: activeTab === tab ? 'var(--brand-primary)' : 'var(--brand-muted)',
-                  borderBottom: activeTab === tab ? '2px solid var(--brand-primary)' : '2px solid transparent',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  textTransform: 'capitalize'
-                }}
+                className={`pdp-tab-btn ${activeTab === tab ? 'active' : ''}`}
               >
                 {tab === 'details' && 'Description & Craft'}
                 {tab === 'specs' && 'Specifications'}
@@ -667,7 +589,7 @@ export const ProductDetailPage: React.FC = () => {
               <div style={{ maxWidth: '600px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {Object.entries(product.specifications || {}).map(([key, val]) => (
-                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--brand-border)' }}>
+                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--brand-border)', gap: '1rem', flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>{key}</span>
                       <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{val}</span>
                     </div>
@@ -678,10 +600,10 @@ export const ProductDetailPage: React.FC = () => {
 
             {activeTab === 'reviews' && (
               <div style={{ maxWidth: '800px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
                   <div>
-                    <h3 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)' }}>Patron Testimonials</h3>
-                    <p style={{ color: 'var(--brand-muted)', fontSize: '0.88rem' }}>Authentic feedback from verified collectors.</p>
+                    <h3 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', margin: 0 }}>Patron Testimonials</h3>
+                    <p style={{ color: 'var(--brand-muted)', fontSize: '0.88rem', margin: '4px 0 0' }}>Authentic feedback from verified collectors.</p>
                   </div>
                   <button onClick={() => setShowReviewForm(!showReviewForm)} className="btn btn-outline btn-sm">
                     {showReviewForm ? 'Cancel' : 'Write a Review'}
@@ -691,7 +613,7 @@ export const ProductDetailPage: React.FC = () => {
                 {showReviewForm && (
                   <form onSubmit={handleAddReview} style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--brand-border)', marginBottom: '2rem' }}>
                     <h4 style={{ marginBottom: '1rem' }}>Submit Your Testimonial</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '4px' }}>Your Name</label>
                         <input type="text" value={reviewerName} onChange={e => setReviewerName(e.target.value)} required className="form-input" placeholder="e.g. Ananya Sharma" />
@@ -755,26 +677,35 @@ export const ProductDetailPage: React.FC = () => {
                   Pan-India Tracked Courier Delivery (₹89 Flat)
                 </h4>
                 <p style={{ marginBottom: '1rem' }}>
-                  Orders are dispatched within 24 to 48 hours from our Salem weaving atelier. Delivery across India typically takes 2 to 4 business days via insured express couriers with live AWB tracking via SMS.
+                  Orders are dispatched to serviceable PIN codes across India via trusted courier partners. Dispatch is initiated promptly after online payment confirmation or COD advance verification. A tracking link is provided upon courier pickup. Timelines are estimates and vary depending on courier network coverage and destination PIN code.
                 </p>
 
                 <div style={{ backgroundColor: 'var(--bg-main)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)', marginBottom: '1.5rem', fontSize: '0.92rem' }}>
                   <strong>Transparent Order Total Calculation:</strong><br />
-                  <code>Order Total = Item Subtotal − Discount + Applicable Tax (5% GST) + ₹89 Shipping/Delivery Charge</code>
+                  <code style={{ wordBreak: 'break-word', whiteSpace: 'normal', display: 'block', marginTop: '6px' }}>
+                    Order Total = Item Subtotal − Discount + Applicable Tax (5% GST) + ₹89 Flat Delivery Charge
+                  </code>
                 </div>
 
                 <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
-                  Flexible Payment & COD Advance Policy
+                  Flexible Payment &amp; COD Advance Confirmation
                 </h4>
                 <p style={{ marginBottom: '1rem' }}>
-                  Choose full online payment via Razorpay (UPI, Credit/Debit Cards, NetBanking) for seamless zero-contact delivery, or select Cash on Delivery (COD) with a ₹89 online courier advance credited directly toward your order total. The remaining balance is payable upon delivery.
+                  Choose full online payment via Razorpay (UPI, Credit/Debit Cards, NetBanking) for zero-contact delivery, or select Cash on Delivery (COD) with an advance confirmation fee of <strong>₹89</strong> paid online. The ₹89 advance is credited directly toward your total order amount; the remaining balance is collected at delivery. Per policy, the advance is non-refundable for ordinary customer cancellations or refusal to accept delivery once dispatched.
                 </p>
 
                 <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
-                  Artisan Handloom Policy & Cancellation Window
+                  3-Day Review Window &amp; Unboxing Video Requirement
                 </h4>
-                <p>
-                  Store your saree in the provided breathable muslin cover away from direct sunlight. Because each piece is handcrafted from pure silk, creations are generally non-returnable once delivered. You may submit an order cancellation request directly from your Patron Account while your order remains in "pending" status before atelier packaging.
+                <p style={{ marginBottom: '1rem' }}>
+                  In the rare event of damaged, defective, incorrect or materially misdescribed items, contact <strong>support@muety.in</strong> within <strong>3 days of delivery</strong> with continuous, unedited unboxing video evidence. No returns are accepted for change of mind or personal preference. Statutory consumer rights under Indian law remain fully preserved.
+                </p>
+
+                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', margin: 0 }}>
+                  For full details, please review our{' '}
+                  <Link to="/shipping-policy" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>Shipping Policy</Link>{' '}
+                  and{' '}
+                  <Link to="/return-refund-policy" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>Return, Refund &amp; Cancellation Policy</Link>.
                 </p>
               </div>
             )}
@@ -782,9 +713,9 @@ export const ProductDetailPage: React.FC = () => {
         </div>
 
         {relatedProducts.length > 0 && (
-          <div style={{ marginTop: '6rem' }}>
-            <h2 style={{ fontSize: '1.8rem', color: 'var(--brand-primary)', marginBottom: '1.5rem' }}>
-              Complementary Creations
+          <div style={{ marginTop: 'clamp(3rem, 6vw, 6rem)' }}>
+            <h2 style={{ fontSize: 'clamp(1.3rem, 2.5vw, 1.8rem)', color: 'var(--brand-primary)', marginBottom: '1.5rem', fontFamily: 'var(--font-heading)' }}>
+              Curated For You
             </h2>
             <div className="products-grid-4col">
               {relatedProducts.map((p: any) => (

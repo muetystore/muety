@@ -35,6 +35,7 @@ const ContactPage = lazy(() => import('@/features/inquiries/pages/ContactPage').
 const PrivacyPage = lazy(() => import('@/features/info/pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
 const TermsPage = lazy(() => import('@/features/info/pages/TermsPage').then(m => ({ default: m.TermsPage })));
 const ShippingPage = lazy(() => import('@/features/info/pages/ShippingPage').then(m => ({ default: m.ShippingPage })));
+const ReturnRefundPage = lazy(() => import('@/features/info/pages/ReturnRefundPage').then(m => ({ default: m.ReturnRefundPage })));
 const SupportPage = lazy(() => import('@/features/info/pages/SupportPage').then(m => ({ default: m.SupportPage })));
 
 // Lazily loaded admin pages
@@ -47,6 +48,7 @@ const AdminCategories = lazy(() => import('@/features/admin/pages/AdminCategorie
 const AdminCoupons = lazy(() => import('@/features/admin/pages/AdminCoupons').then(m => ({ default: m.AdminCoupons })));
 const AdminReviews = lazy(() => import('@/features/admin/pages/AdminReviews').then(m => ({ default: m.AdminReviews })));
 const AdminSettings = lazy(() => import('@/features/admin/pages/AdminSettings').then(m => ({ default: m.AdminSettings })));
+const AdminCollections = lazy(() => import('@/features/admin/pages/AdminCollections').then(m => ({ default: m.AdminCollections })));
 const AdminInquiries = lazy(() => import('@/features/admin/pages/AdminInquiries').then(m => ({ default: m.AdminInquiries })));
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin').then(m => ({ default: m.AdminLogin })));
 const AdminUsers = lazy(() => import('@/features/admin/pages/AdminUsers').then(m => ({ default: m.AdminUsers })));
@@ -140,6 +142,7 @@ export const AppRouter: React.FC = () => {
             <Route path="/reviews" element={<Navigate to="/admin/reviews" replace />} />
             <Route path="/customers" element={<Navigate to="/admin/customers" replace />} />
             <Route path="/categories" element={<Navigate to="/admin/categories" replace />} />
+            <Route path="/collections" element={<Navigate to="/admin/collections" replace />} />
             <Route path="/coupons" element={<Navigate to="/admin/coupons" replace />} />
             <Route path="/announcements" element={<Navigate to="/admin/announcements" replace />} />
             <Route path="/settings" element={<Navigate to="/admin/settings" replace />} />
@@ -166,6 +169,7 @@ export const AppRouter: React.FC = () => {
               <Route path="reviews" element={<AdminReviews />} />
               <Route path="customers" element={<AdminCustomers />} />
               <Route path="categories" element={<AdminCategories />} />
+              <Route path="collections" element={<AdminCollections />} />
               <Route path="coupons" element={<AdminCoupons />} />
               <Route path="announcements" element={<AdminAnnouncements />} />
               <Route path="settings" element={<AdminSettings />} />
@@ -220,6 +224,7 @@ export const AppRouter: React.FC = () => {
             <Route path="reviews" element={<AdminReviews />} />
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="categories" element={<AdminCategories />} />
+            <Route path="collections" element={<AdminCollections />} />
             <Route path="coupons" element={<AdminCoupons />} />
             <Route path="announcements" element={<AdminAnnouncements />} />
             <Route path="settings" element={<AdminSettings />} />
@@ -248,7 +253,10 @@ export const AppRouter: React.FC = () => {
             <Route path="/privacy-policy" element={<PrivacyPage />} />
             <Route path="/terms-conditions" element={<TermsPage />} />
             <Route path="/shipping-policy" element={<ShippingPage />} />
-            <Route path="/refund-policy" element={<Navigate to="/shipping-policy" replace />} />
+            <Route path="/return-refund-policy" element={<ReturnRefundPage />} />
+            <Route path="/refund-policy" element={<Navigate to="/return-refund-policy" replace />} />
+            <Route path="/returns-policy" element={<Navigate to="/return-refund-policy" replace />} />
+            <Route path="/cancellation-policy" element={<Navigate to="/return-refund-policy" replace />} />
             <Route path="/support" element={<SupportPage />} />
             <Route path="/customer-support" element={<Navigate to="/contact" replace />} />
 

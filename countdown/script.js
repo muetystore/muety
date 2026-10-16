@@ -6,6 +6,8 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   initLaunchGate();
+  updateEstablishmentDisplay();
+  updateAllLaunchDateDisplays();
   initCountdown();
   initParticleBackground();
   initFireworksEngine();
@@ -16,14 +18,20 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ==========================================================================
    CENTRALIZED LAUNCH GATE & STORE REVEAL SYSTEM
    ========================================================================== */
-const OFFICIAL_LAUNCH_ISO = '2026-10-18T08:00:00+05:30';
+// Preloaded configuration from server-side rendering or build injection
+const preloadedConfig = (typeof window !== 'undefined' && window.__MUETY_LAUNCH_CONFIG__) ? window.__MUETY_LAUNCH_CONFIG__ : {};
+const OFFICIAL_LAUNCH_ISO = preloadedConfig.launchAt || '2026-10-18T08:00:00+05:30';
+const OFFICIAL_ESTABLISHMENT = preloadedConfig.establishment || '2026';
+const OFFICIAL_ESTABLISHMENT_DISPLAY = preloadedConfig.establishmentDisplay || (isNaN(Number(OFFICIAL_ESTABLISHMENT)) ? OFFICIAL_ESTABLISHMENT : `Est. ${OFFICIAL_ESTABLISHMENT} • Royal Weaves`);
 
 const launchGateState = {
-  status: 'PRE_LAUNCH', // 'PRE_LAUNCH' | 'LIVE'
+  status: preloadedConfig.status || 'PRE_LAUNCH', // 'PRE_LAUNCH' | 'LIVE'
   launchAt: OFFICIAL_LAUNCH_ISO,
   launchTimestamp: new Date(OFFICIAL_LAUNCH_ISO).getTime(),
+  establishment: OFFICIAL_ESTABLISHMENT,
+  establishmentDisplay: OFFICIAL_ESTABLISHMENT_DISPLAY,
   serverTimeOffset: 0,
-  storeUrl: '',
+  storeUrl: preloadedConfig.storeUrl || '',
   isVerifiedWithServer: false,
   isStoreRevealed: false
 };
@@ -40,6 +48,72 @@ async function initLaunchGate() {
   setInterval(checkServerLaunchState, 30000);
 }
 
+function updateEstablishmentDisplay() {
+  const pill = document.getElementById('launchEstablishmentPill') || document.querySelector('.heritage-pill');
+  if (pill) {
+    pill.textContent = launchGateState.establishmentDisplay || (isNaN(Number(launchGateState.establishment)) ? launchGateState.establishment : `Est. ${launchGateState.establishment} • Royal Weaves`);
+  }
+  const yearEl = document.getElementById('footerCopyrightYear');
+  if (yearEl) {
+    const rawVal = String(launchGateState.establishment || '2026');
+    const match = rawVal.match(/\b(19|20)\d{2}\b/);
+    if (match) {
+      yearEl.textContent = match[0];
+    } else if (!isNaN(Number(rawVal))) {
+      yearEl.textContent = rawVal;
+    }
+  }
+}
+
+function updateAllLaunchDateDisplays() {
+  const d = new Date(countdownTargetTimestamp || launchGateState.launchTimestamp);
+  if (isNaN(d.getTime())) return;
+
+  const monthDayFull = d.toLocaleString('en-US', { month: 'long', day: 'numeric', timeZone: 'Asia/Kolkata' });
+  const monthDayShort = d.toLocaleString('en-US', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' });
+  const marqueeDate = d.toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' }).toUpperCase();
+  const uppercaseDate = monthDayFull.toUpperCase();
+  const monthDayYear = d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' });
+
+  // 1. Marquee announcement bar dates
+  document.querySelectorAll('.launch-date-marquee').forEach(el => {
+    el.textContent = marqueeDate;
+  });
+
+  // 2. Diwali banner and quiz caption full month/day
+  document.querySelectorAll('.launch-date-month-day-full').forEach(el => {
+    el.textContent = monthDayFull;
+  });
+
+  // 3. Uppercase unveiling heading
+  document.querySelectorAll('.launch-date-uppercase').forEach(el => {
+    el.textContent = uppercaseDate;
+  });
+
+  // 4. Lookbook cards launch notes
+  document.querySelectorAll('.launch-date-month-day').forEach(el => {
+    el.textContent = monthDayShort;
+  });
+
+  // 5. Calendar modal subtitle date
+  document.querySelectorAll('.launch-date-month-day-year').forEach(el => {
+    el.textContent = monthDayYear;
+  });
+
+  // 6. Timezone selector display (the main launch pill)
+  updateTimezoneDisplay();
+
+  // 7. Page title and meta tags
+  document.title = `Muety — Sarees For Your Story | Grand Launch ${monthDayFull}`;
+  const ogTitle = document.querySelector('meta[property="og:title"]');
+  if (ogTitle) ogTitle.setAttribute('content', `Muety — Sarees For Your Story | Launching ${monthDayFull}`);
+  const metaDesc = document.querySelector('meta[name="description"]');
+  if (metaDesc) {
+    const fullDate = d.toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' });
+    metaDesc.setAttribute('content', `Discover handcrafted luxury sarees, pure Kanjivaram heirlooms, and regal Banarasi silk. Muety launches ${fullDate}. Join the VIP waitlist for exclusive 15% launch privilege.`);
+  }
+}
+
 async function checkServerLaunchState() {
   try {
     const apiEndpoint = (window.location.protocol === 'file:' || !window.location.host)
@@ -51,15 +125,26 @@ async function checkServerLaunchState() {
       const data = await res.json();
       launchGateState.isVerifiedWithServer = true;
       launchGateState.status = data.status || 'PRE_LAUNCH';
-      if (data.launchAt) launchGateState.launchAt = data.launchAt;
-      if (data.launchTimestamp) {
-        launchGateState.launchTimestamp = data.launchTimestamp;
-        countdownTargetTimestamp = data.launchTimestamp;
+      if (data.launchAt) {
+        launchGateState.launchAt = data.launchAt;
+        const newTarget = new Date(data.launchAt).getTime();
+        if (!isNaN(newTarget) && newTarget !== launchGateState.launchTimestamp) {
+          launchGateState.launchTimestamp = newTarget;
+          countdownTargetTimestamp = newTarget;
+        }
+      }
+      if (data.establishment) {
+        launchGateState.establishment = data.establishment;
+        launchGateState.establishmentDisplay = data.establishmentDisplay || (isNaN(Number(data.establishment)) ? data.establishment : `Est. ${data.establishment} • Royal Weaves`);
       }
       if (typeof data.serverTimestamp === 'number') {
         launchGateState.serverTimeOffset = data.serverTimestamp - Date.now();
       }
       if (data.storeUrl) launchGateState.storeUrl = data.storeUrl;
+
+      // Synchronize all dynamic UI elements with server configuration
+      updateEstablishmentDisplay();
+      updateAllLaunchDateDisplays();
 
       if (launchGateState.status === 'LIVE') {
         handleLiveStoreReveal(false);
@@ -343,21 +428,58 @@ function updateTimezoneDisplay() {
   if (!textEl) return;
 
   const targetDate = new Date(countdownTargetTimestamp);
+  if (isNaN(targetDate.getTime())) return;
 
   let formattedDateStr = '';
   if (selectedTimezone === 'IST') {
-    formattedDateStr = 'Sunday, October 18, 2026 • 8:00 AM IST';
-    if (countdownTargetTimestamp !== new Date(OFFICIAL_LAUNCH_ISO).getTime()) {
-      formattedDateStr = targetDate.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' }) + ' IST';
-    }
+    const datePart = targetDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata'
+    });
+    const timePart = targetDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
+    });
+    formattedDateStr = `${datePart} • ${timePart} IST`;
   } else if (selectedTimezone === 'LOCAL') {
-    formattedDateStr = targetDate.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' }) + ' (Your Local Time)';
+    formattedDateStr = targetDate.toLocaleString(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }) + ' (Your Local Time)';
   } else if (selectedTimezone === 'UTC') {
     formattedDateStr = targetDate.toUTCString();
   } else if (selectedTimezone === 'EST') {
-    formattedDateStr = targetDate.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'full', timeStyle: 'short' }) + ' EST';
+    formattedDateStr = targetDate.toLocaleString('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }) + ' EST';
   } else if (selectedTimezone === 'PST') {
-    formattedDateStr = targetDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'full', timeStyle: 'short' }) + ' PST';
+    formattedDateStr = targetDate.toLocaleString('en-US', {
+      timeZone: 'America/Los_Angeles',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }) + ' PST';
   }
 
   textEl.innerHTML = `Grand Launch: <strong>${formattedDateStr}</strong>`;

@@ -32,7 +32,7 @@ const INITIAL_ANNOUNCEMENTS: StoreAnnouncement[] = [
   },
   {
     id: 'ann-02',
-    title: 'Salem Atelier Pure Silk Mark Certification',
+    title: 'Muety Atelier Pure Silk Mark Certification',
     campaignLabel: 'SILK MARK INDIA',
     message: '100% Pure Mulberry Silk & 24K Certified Gold Zari Handcrafted on Heritage Pit Looms',
     ctaText: 'Explore Atelier →',

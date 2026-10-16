@@ -1,4 +1,4 @@
-import { Product, Category } from '@/features/catalog/types';
+import { Product, Category, SareeCollection } from '@/features/catalog/types';
 import { Coupon } from '@/features/coupons/types';
 import { Order } from '@/features/orders/types';
 import { PatronReview } from '@/features/reviews/types';
@@ -6,6 +6,7 @@ import { StoreSettings, UserProfile } from '@/shared/types';
 import { 
   INITIAL_PRODUCTS, 
   INITIAL_CATEGORIES, 
+  INITIAL_COLLECTIONS,
   INITIAL_COUPONS, 
   INITIAL_SETTINGS, 
   INITIAL_USERS, 
@@ -17,6 +18,7 @@ const KEYS = {
   INITIALIZED: 'muety_initialized_v2',
   PRODUCTS: 'muety_products_v1',
   CATEGORIES: 'muety_categories_v1',
+  COLLECTIONS: 'muety_collections_v1',
   COUPONS: 'muety_coupons_v1',
   SETTINGS: 'muety_settings_v1',
   USERS: 'muety_users_v1',
@@ -31,6 +33,7 @@ const KEYS = {
 const memoryStore: Record<string, string> = {};
 const categoryListeners = new Set<(cats: Category[]) => void>();
 const productListeners = new Set<(products: Product[]) => void>();
+const collectionListeners = new Set<(cols: SareeCollection[]) => void>();
 
 export function subscribeLocalCategories(callback: (cats: Category[]) => void): () => void {
   categoryListeners.add(callback);
@@ -40,6 +43,11 @@ export function subscribeLocalCategories(callback: (cats: Category[]) => void): 
 export function subscribeLocalProducts(callback: (products: Product[]) => void): () => void {
   productListeners.add(callback);
   return () => productListeners.delete(callback);
+}
+
+export function subscribeLocalCollections(callback: (cols: SareeCollection[]) => void): () => void {
+  collectionListeners.add(callback);
+  return () => collectionListeners.delete(callback);
 }
 
 function safeGetItem(key: string): string | null {
@@ -87,12 +95,17 @@ class StorageService {
     if (!isInit || isInit !== 'v7_canonical_identities_sanitized') {
       safeSetItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
       safeSetItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
+      safeSetItem(KEYS.COLLECTIONS, JSON.stringify(INITIAL_COLLECTIONS));
       safeSetItem(KEYS.COUPONS, JSON.stringify(INITIAL_COUPONS));
       safeSetItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
       safeSetItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
       safeSetItem(KEYS.ORDERS, JSON.stringify([]));
       safeSetItem(KEYS.REVIEWS, JSON.stringify(INITIAL_REVIEWS));
       safeSetItem(KEYS.INITIALIZED, 'v7_canonical_identities_sanitized');
+    }
+
+    if (safeGetItem(KEYS.COLLECTIONS) === null) {
+      safeSetItem(KEYS.COLLECTIONS, JSON.stringify(INITIAL_COLLECTIONS));
     }
   }
 
@@ -244,6 +257,64 @@ class StorageService {
     const list = this.getCategories();
     const filtered = list.filter(c => c.id !== id);
     this.saveCategories(filtered);
+    return true;
+  }
+
+  // --- COLLECTIONS ---
+  getCollections(): SareeCollection[] {
+    try {
+      const data = safeGetItem(KEYS.COLLECTIONS);
+      if (data !== null) {
+        return JSON.parse(data);
+      }
+      return INITIAL_COLLECTIONS;
+    } catch {
+      return INITIAL_COLLECTIONS;
+    }
+  }
+
+  getCollectionById(id: string): SareeCollection | undefined {
+    return this.getCollections().find(c => c.id === id || c.slug === id);
+  }
+
+  saveCollections(collections: SareeCollection[]): void {
+    try {
+      safeSetItem(KEYS.COLLECTIONS, JSON.stringify(collections));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('muety_collections_updated'));
+      }
+      collectionListeners.forEach(cb => {
+        try { cb(collections); } catch {}
+      });
+    } catch {}
+  }
+
+  addCollection(collection: SareeCollection): SareeCollection {
+    const list = this.getCollections();
+    const existsIdx = list.findIndex(c => c.id === collection.id || c.slug === collection.slug);
+    if (existsIdx !== -1) {
+      list[existsIdx] = { ...collection, updatedAt: new Date().toISOString() };
+    } else {
+      list.push(collection);
+    }
+    this.saveCollections(list);
+    return collection;
+  }
+
+  updateCollection(collection: SareeCollection): SareeCollection {
+    const list = this.getCollections();
+    const index = list.findIndex(c => c.id === collection.id);
+    if (index !== -1) {
+      list[index] = { ...collection, updatedAt: new Date().toISOString() };
+      this.saveCollections(list);
+    }
+    return collection;
+  }
+
+  deleteCollection(id: string): boolean {
+    const list = this.getCollections();
+    const filtered = list.filter(c => c.id !== id);
+    this.saveCollections(filtered);
     return true;
   }
 

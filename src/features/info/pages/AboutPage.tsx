@@ -19,22 +19,12 @@ export const AboutPage: React.FC = () => {
     },
     {
       name: 'Thilakeswaran K',
-      role: 'Founder',
-      title: 'Founder of MUETY',
+      role: 'Founder & CEO',
+      title: 'Founder & CEO of MUETY',
       points: [
-        'Contributes to business development and brand growth.',
-        'Focuses on operations, partnerships and opportunities.',
+        'Contributes to executive leadership, business development and brand growth.',
+        'Focuses on operations, partnerships and execution.',
         'Supports MUETY’s sustainable growth.'
-      ]
-    },
-    {
-      name: 'Kishore K',
-      role: 'CEO',
-      title: 'CEO of MUETY',
-      points: [
-        'Oversees day-to-day operations.',
-        'Coordinates teams and ensures execution.',
-        'Focuses on performance, efficiency and business growth.'
       ]
     }
   ];
@@ -103,7 +93,7 @@ export const AboutPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="grid-3" style={{ gap: '2rem' }}>
+            <div className="grid-2" style={{ gap: '2rem', maxWidth: '820px', margin: '0 auto' }}>
               {leaders.map((leader, idx) => (
                 <div 
                   key={idx} 

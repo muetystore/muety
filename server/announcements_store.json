@@ -14,8 +14,8 @@
     "campaignLabel": "ROYAL FESTIVE EDIT 2026",
     "couponCode": "DIWALI25",
     "hasCountdown": true,
-    "countdownEndTime": "2026-10-13T13:40:39.446Z",
-    "updatedAt": "2026-10-01T00:00:00Z"
+    "updatedAt": "2026-10-01T00:00:00Z",
+    "countdownEndTime": "2026-10-16T12:44:21.697Z"
   },
   {
     "backgroundColor": "#3b0a24",
@@ -25,13 +25,13 @@
     "hasCountdown": false,
     "isActive": false,
     "message": "100% Pure Mulberry Silk & 24K Certified Gold Zari Handcrafted on Heritage Pit Looms",
-    "title": "Salem Atelier Pure Silk Mark Certification",
     "textColor": "#ffffff",
     "createdAt": "2026-10-02T00:00:00Z",
     "id": "ann-02",
     "ctaLink": "/about",
     "campaignLabel": "SILK MARK INDIA",
-    "updatedAt": "2026-10-02T00:00:00Z"
+    "updatedAt": "2026-10-02T00:00:00Z",
+    "title": "Muety Atelier Pure Silk Mark Certification"
   },
   {
     "backgroundColor": "#4a0e2e",

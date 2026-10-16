@@ -16,6 +16,8 @@
     "firebase:setup": "node scripts/firebase/bootstrap.mjs",
     "firebase:status": "node scripts/firebase/status.mjs",
     "firebase:seed:dev": "node scripts/firebase/seed-firestore.mjs --dev",
+    "countdown": "node countdown/server.js",
+    "countown": "node countdown/server.js",
     "seed:firebase": "node scripts/seed/seed-to-firebase.mjs"
   },
   "dependencies": {

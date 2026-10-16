@@ -270,8 +270,8 @@ export const Footer: React.FC = () => {
                 href="https://maps.google.com/?q=2/32B+Ramireddypatti,+Palikadu,+Salem+-+636501"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="View Salem Atelier Studio on Google Maps"
-                title="Salem Studio: 2/32B Ramireddypatti, Salem"
+                aria-label="View Muety Atelier Studio on Google Maps"
+                title="Muety Atelier Studio: 2/32B Ramireddypatti, Salem"
                 style={{
                   width: '34px',
                   height: '34px',
@@ -329,7 +329,7 @@ export const Footer: React.FC = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/shipping-policy" style={{ transition: 'color var(--transition-fast)' }} onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
+                <Link to="/return-refund-policy" style={{ transition: 'color var(--transition-fast)' }} onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
                   Return, Refund & Cancellation Policy
                 </Link>
               </li>
@@ -356,6 +356,7 @@ export const Footer: React.FC = () => {
             <Link to="/privacy-policy" style={{ color: '#94a3b8' }}>Privacy</Link>
             <Link to="/terms-conditions" style={{ color: '#94a3b8' }}>Terms</Link>
             <Link to="/shipping-policy" style={{ color: '#94a3b8' }}>Shipping</Link>
+            <Link to="/return-refund-policy" style={{ color: '#94a3b8' }}>Returns &amp; Refunds</Link>
           </div>
         </div>
       </div>

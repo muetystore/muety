@@ -315,6 +315,32 @@ export const OrderConfirmationPage: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Policy Information Notice */}
+          <div style={{
+            marginTop: '2rem',
+            padding: '1rem 1.25rem',
+            backgroundColor: '#f8fafc',
+            border: '1px solid var(--brand-border)',
+            borderRadius: 'var(--radius-md)',
+            fontSize: '0.82rem',
+            color: 'var(--text-secondary)',
+            lineHeight: 1.6
+          }}>
+            <div style={{ fontWeight: 700, color: 'var(--brand-primary)', marginBottom: '4px' }}>
+              Important Delivery &amp; Return Notice:
+            </div>
+            <div>
+              Please record a clear, continuous and unedited unboxing video while opening your parcel (from sealed condition to contents). In case of damaged, defective, or incorrect items, contact <strong>support@muety.in</strong> within <strong>3 days of delivery</strong> with the video. Review our{' '}
+              <Link to="/return-refund-policy" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>
+                Return, Refund &amp; Cancellation Policy
+              </Link>{' '}
+              and{' '}
+              <Link to="/shipping-policy" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>
+                Shipping &amp; Delivery Policy
+              </Link>.
+            </div>
+          </div>
         </div>
 
         <div style={{ marginTop: '2.5rem', textAlign: 'center' }}>

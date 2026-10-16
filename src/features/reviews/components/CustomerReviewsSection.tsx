@@ -336,7 +336,7 @@ export const CustomerReviewsSection: React.FC = () => {
                         marginBottom: '8px'
                       }}
                     >
-                      <span>{review.authorLocation || 'Salem Atelier Patron'}</span>
+                      <span>{review.authorLocation || 'Muety Atelier Patron'}</span>
                       {review.verifiedPurchase && (
                         <span 
                           style={{

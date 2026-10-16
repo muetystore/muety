@@ -11,7 +11,8 @@ import { ProductCard, ProductCardSkeleton } from '@/features/catalog/components/
 import { QuickViewModal } from '@/features/catalog/components/QuickViewModal';
 import { SectionHeader } from '@/features/catalog/components/SectionHeader';
 import { CampaignHero } from '@/features/catalog/components/CampaignHero';
-import { Product, Category } from '@/types';
+import { Product, Category, SareeCollection } from '@/types';
+import { collectionService } from '@/features/catalog/services/collectionService';
 import { PatronReview } from '@/features/reviews/types';
 import { 
   Sparkles, 
@@ -61,6 +62,7 @@ export const HomePage: React.FC = () => {
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [allProducts, setAllProducts] = useState<Product[]>(() => storageService.getProducts());
   const [categories, setCategories] = useState<Category[]>(() => storageService.getCategories());
+  const [collections, setCollections] = useState<SareeCollection[]>(() => collectionService.getCollections());
   const [approvedReviews, setApprovedReviews] = useState<PatronReview[]>([]);
   const [activeReviewIdx, setActiveReviewIdx] = useState<number>(0);
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(() => storageService.getRecentlyViewed());
@@ -162,6 +164,10 @@ export const HomePage: React.FC = () => {
       setCategories(cats || []);
     });
 
+    const unsubCollections = collectionService.subscribeToCollections((cols) => {
+      setCollections(cols || []);
+    });
+
     // Load approved reviews
     try {
       const reviews = reviewService.getApprovedReviews();
@@ -188,10 +194,37 @@ export const HomePage: React.FC = () => {
     return () => {
       if (typeof unsubProducts === 'function') unsubProducts();
       if (typeof unsubCategories === 'function') unsubCategories();
+      if (typeof unsubCollections === 'function') unsubCollections();
       if (typeof unsubReviews === 'function') unsubReviews();
       window.removeEventListener('muety_recently_viewed_updated', handleRecentUpdate);
     };
   }, []);
+
+  // Section 9 Tabs: Festive Edits by Occasion (Admin-managed)
+  const festiveOccasions = useMemo(() => {
+    const list = collections
+      .filter(c => c.showInFestiveEdits !== false && (c.type === 'occasion' || !c.type))
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+    if (list.length > 0) return list;
+
+    // Default canonical 4 occasions if no admin data yet
+    return [
+      { id: 'col-bridal', slug: 'bridal', name: 'Bridal Muhurtham', bannerImage: '/saree_model_individual.jpg', featured: true, productCount: 4, displayOrder: 1 },
+      { id: 'col-temple', slug: 'temple', name: 'Temple Ceremonies', bannerImage: '/saree_fabric_detail.jpg', featured: true, productCount: 4, displayOrder: 2 },
+      { id: 'col-reception', slug: 'reception', name: 'Grand Receptions', bannerImage: '/saree_model_drape.jpg', featured: true, productCount: 4, displayOrder: 3 },
+      { id: 'col-festive', slug: 'festive', name: 'Family Festivities', bannerImage: '/diwali_hero_banner.jpg', featured: true, productCount: 4, displayOrder: 4 }
+    ];
+  }, [collections]);
+
+  useEffect(() => {
+    if (festiveOccasions.length > 0) {
+      const exists = festiveOccasions.some(t => (t.slug || t.id) === selectedOccasion || t.id === selectedOccasion);
+      if (!exists) {
+        setSelectedOccasion(festiveOccasions[0].slug || festiveOccasions[0].id);
+      }
+    }
+  }, [festiveOccasions, selectedOccasion]);
 
   // Section 3: Trending Collections (Admin-selected categories showcase)
   const trendingCategories = useMemo(() => {
@@ -244,22 +277,23 @@ export const HomePage: React.FC = () => {
     return allProducts.filter(p => p.published !== false);
   }, [allProducts, wishlist]);
 
-  // Section 9: Festive Edits by Occasion (Admin-selected authority)
+  // Section 9: Festive Edits by Occasion (Admin-managed authority)
   const occasionProducts = useMemo(() => {
     if (allProducts.length === 0) return [];
-    const target = selectedOccasion; // 'bridal' | 'temple' | 'reception' | 'festive'
+    const target = (selectedOccasion || '').toLowerCase().trim();
     
-    // Explicit admin assignment match
+    // Explicit admin assignment match (by collectionId, occasion string, or occasions array)
     const adminSelected = allProducts.filter(p => 
       p.published !== false && (
+        (p.collectionId || '').toLowerCase() === target ||
         (p.occasion || '').toLowerCase().includes(target) || 
         (p.occasions && p.occasions.some(o => o.toLowerCase().includes(target)))
       )
     );
     if (adminSelected.length > 0) return adminSelected;
 
-    // Graceful fallback heuristics if admin has not explicitly set occasion string yet
-    if (target === 'bridal') {
+    // Semantic fallback heuristics
+    if (target.includes('bridal') || target.includes('wedding')) {
       const bridal = allProducts.filter(p => 
         p.published !== false && (
           (p.categorySlug || '').includes('bridal') || 
@@ -268,7 +302,7 @@ export const HomePage: React.FC = () => {
         )
       );
       return bridal.length > 0 ? bridal : allProducts;
-    } else if (target === 'temple') {
+    } else if (target.includes('temple')) {
       const temple = allProducts.filter(p => 
         p.published !== false && (
           (p.name || '').toLowerCase().includes('temple') || 
@@ -276,7 +310,7 @@ export const HomePage: React.FC = () => {
         )
       );
       return temple.length > 0 ? temple : allProducts;
-    } else if (target === 'reception') {
+    } else if (target.includes('reception')) {
       const reception = allProducts.filter(p => 
         p.published !== false && (
           (p.categorySlug || '').includes('handloom') ||
@@ -287,11 +321,12 @@ export const HomePage: React.FC = () => {
       );
       return reception.length > 0 ? reception : allProducts;
     } else {
-      // festive / family celebrations (Salem Handlooms)
+      // festive / family celebrations
       const festive = allProducts.filter(p => 
         p.published !== false && (
-          (p.tags || []).some(t => t.toLowerCase().includes('festive') || t.toLowerCase().includes('diwali') || t.toLowerCase().includes('salem')) ||
-          (p.categorySlug || '').includes('sarees')
+          (p.tags || []).some(t => t.toLowerCase().includes('festive') || t.toLowerCase().includes('diwali') || t.toLowerCase().includes('salem') || t.toLowerCase().includes(target)) ||
+          (p.categorySlug || '').includes('sarees') ||
+          (p.name || '').toLowerCase().includes(target)
         )
       );
       return festive.length > 0 ? festive : allProducts;
@@ -741,11 +776,11 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* =========================================================================
-          SECTION 8: SALEM ATELIER / OUR CRAFTSMANSHIP EDITORIAL FEATURE
+          SECTION 8: MUETY ATELIER / OUR CRAFTSMANSHIP EDITORIAL FEATURE
           ========================================================================= */}
       <section 
         className="editorial-craftsmanship-section section-padding"
-        aria-label="Salem Atelier Craftsmanship"
+        aria-label="Muety Atelier Craftsmanship"
         style={{
           backgroundColor: '#070a12',
           color: '#ffffff',
@@ -847,7 +882,7 @@ export const HomePage: React.FC = () => {
               className="btn btn-outline-gold"
               style={{ padding: '0.75rem 1.75rem' }}
             >
-              Read Our Salem Atelier Story &rarr;
+              Read Our Muety Atelier Story &rarr;
             </Link>
           </div>
         </div>
@@ -881,45 +916,34 @@ export const HomePage: React.FC = () => {
               scrollbarWidth: 'none'
             }}
           >
-            {[
-              { id: 'bridal', label: 'Bridal Muhurtham', badge: 'Pure Zari' },
-              { id: 'temple', label: 'Temple Ceremonies', badge: 'Sacred Hues' },
-              { id: 'reception', label: 'Grand Receptions', badge: 'Soft Silks' },
-              { id: 'festive', label: 'Family Festivities', badge: 'Salem Handlooms' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setSelectedOccasion(tab.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '9px 18px',
-                  borderRadius: 'var(--radius-full)',
-                  fontSize: '0.84rem',
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                  border: '1px solid',
-                  borderColor: selectedOccasion === tab.id ? 'var(--brand-primary)' : 'var(--brand-border)',
-                  backgroundColor: selectedOccasion === tab.id ? 'var(--brand-primary)' : '#ffffff',
-                  color: selectedOccasion === tab.id ? '#ffffff' : 'var(--brand-primary)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <span>{tab.label}</span>
-                <span style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 800,
-                  color: selectedOccasion === tab.id ? '#facc15' : 'var(--brand-accent)',
-                  backgroundColor: selectedOccasion === tab.id ? 'rgba(255,255,255,0.15)' : 'var(--bg-subtle)',
-                  padding: '2px 6px',
-                  borderRadius: '4px'
-                }}>
-                  {tab.badge}
-                </span>
-              </button>
-            ))}
+            {festiveOccasions.map(tab => {
+              const tabId = tab.slug || tab.id;
+              const isSelected = selectedOccasion === tabId || selectedOccasion === tab.id;
+              return (
+                <button
+                  key={tab.id || tabId}
+                  onClick={() => setSelectedOccasion(tabId)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '9px 20px',
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: '0.86rem',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    border: '1px solid',
+                    borderColor: isSelected ? 'var(--brand-primary)' : 'var(--brand-border)',
+                    backgroundColor: isSelected ? 'var(--brand-primary)' : '#ffffff',
+                    color: isSelected ? '#ffffff' : 'var(--brand-primary)',
+                    cursor: 'pointer',
+                    boxShadow: isSelected ? '0 2px 8px rgba(16, 24, 45, 0.15)' : 'none',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <span>{tab.name || (tab as any).label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Festive Edits Single-Row Scrolling Display */}

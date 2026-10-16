@@ -35,13 +35,36 @@ export const AdminOrders: React.FC = () => {
   const [queryError, setQueryError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  // Derive currently selected order from live orders list to prevent any state flickering
+  const selectedOrder = React.useMemo(() => {
+    return orders.find(o => o.id === selectedOrderId) || null;
+  }, [orders, selectedOrderId]);
 
   // Edit Tracking State
   const [trackingNumber, setTrackingNumber] = useState('');
   const [courier, setCourier] = useState('');
   const [statusNote, setStatusNote] = useState('');
   const [isUpdatingTracking, setIsUpdatingTracking] = useState(false);
+
+  // Helper to extract or resolve the SKU for any order line item
+  const getProductSku = (item: any): string => {
+    if (item?.product?.sku && String(item.product.sku).trim()) {
+      return String(item.product.sku).trim();
+    }
+    if (item?.sku && String(item.sku).trim()) {
+      return String(item.sku).trim();
+    }
+    const pId = item?.product?.id || item?.productId || item?.id;
+    if (pId) {
+      const prod = storageService.getProductById(pId);
+      if (prod?.sku && String(prod.sku).trim()) {
+        return String(prod.sku).trim();
+      }
+    }
+    return 'MUETY-LUXE';
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -52,10 +75,6 @@ export const AdminOrders: React.FC = () => {
         setOrders(liveOrders);
         setLoading(false);
         setQueryError(null);
-        if (selectedOrder) {
-          const matching = liveOrders.find(o => o.id === selectedOrder.id);
-          if (matching) setSelectedOrder(matching);
-        }
       },
       (err) => {
         setLoading(false);
@@ -66,10 +85,10 @@ export const AdminOrders: React.FC = () => {
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, [selectedOrder]);
+  }, []);
 
   const openOrderDetails = (ord: Order) => {
-    setSelectedOrder(ord);
+    setSelectedOrderId(ord.id);
     setTrackingNumber(ord.trackingNumber || '');
     setCourier(ord.courier || ord.trackingCarrier || 'Bluedart Express');
     setStatusNote('');
@@ -78,9 +97,7 @@ export const AdminOrders: React.FC = () => {
   const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
     const updated = await orderService.updateOrderStatus(orderId, newStatus, statusNote || undefined);
     if (updated) {
-      if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder(updated);
-      }
+      setOrders(prev => prev.map(o => o.id === orderId ? updated : o));
 
       await auditService.logAction({
         actorUid: user?.uid || 'system',
@@ -112,7 +129,7 @@ export const AdminOrders: React.FC = () => {
       };
 
       storageService.createOrder(updated);
-      setSelectedOrder(updated);
+      setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
 
       await auditService.logAction({
         actorUid: user?.uid || 'system',
@@ -129,6 +146,61 @@ export const AdminOrders: React.FC = () => {
       error(err?.message || 'Failed to update tracking info.');
     } finally {
       setIsUpdatingTracking(false);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string, orderNum: string) => {
+    const confirmed = window.confirm(`Permanently remove Order #${orderNum} from store records? This action cannot be reversed.`);
+    if (!confirmed) return;
+
+    try {
+      await orderService.deleteOrder(orderId);
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+      if (selectedOrderId === orderId) {
+        setSelectedOrderId(null);
+      }
+
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'order_manager',
+        actorRole: getUserRoles(user)[0] || 'order_manager',
+        action: 'ORDER_DELETED',
+        entityType: 'ORDER',
+        entityId: orderId,
+        reason: `Admin deleted order #${orderNum}`
+      });
+
+      success(`Order #${orderNum} successfully removed from records.`);
+    } catch (err: any) {
+      error(err?.message || 'Failed to delete order.');
+    }
+  };
+
+  const testOrders = orders.filter(o =>
+    (o.customerEmail || '').includes('@example.com') ||
+    (o.customerEmail || '').includes('test') ||
+    (o.items || []).some((i: any) => i.product?.id?.startsWith('saree-') || i.product?.name === 'Silk Saree')
+  );
+
+  const handlePurgeTestOrders = async () => {
+    if (testOrders.length === 0) {
+      success('No mock or automated test orders detected in database.');
+      return;
+    }
+    const confirmed = window.confirm(`Found ${testOrders.length} automated test order(s). Purge them all now?`);
+    if (!confirmed) return;
+
+    try {
+      for (const tOrd of testOrders) {
+        await orderService.deleteOrder(tOrd.id);
+      }
+      setOrders(prev => prev.filter(o => !testOrders.some(t => t.id === o.id)));
+      if (testOrders.some(t => t.id === selectedOrderId)) {
+        setSelectedOrderId(null);
+      }
+      success(`Successfully purged ${testOrders.length} test order(s).`);
+    } catch (err: any) {
+      error(err?.message || 'Failed to purge test orders.');
     }
   };
 
@@ -156,6 +228,35 @@ export const AdminOrders: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Automated / Test Orders Notice */}
+      {testOrders.length > 0 && (
+        <div style={{
+          backgroundColor: '#fffbeb',
+          border: '1px solid #fde68a',
+          borderRadius: 'var(--radius-md)',
+          padding: '0.85rem 1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          color: '#92400e'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}>
+            <AlertTriangle size={18} color="#d97706" style={{ flexShrink: 0 }} />
+            <span>Detected <strong>{testOrders.length} automated / test order(s)</strong> created outside live catalog transactions.</span>
+          </div>
+          <button
+            type="button"
+            onClick={handlePurgeTestOrders}
+            className="btn btn-sm"
+            style={{ backgroundColor: '#dc2626', color: '#ffffff', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Trash2 size={14} /> Purge Automated Test Orders
+          </button>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="card" style={{ padding: '1.25rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -232,7 +333,7 @@ export const AdminOrders: React.FC = () => {
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Order #</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Customer Patron</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Date</th>
-                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Items Count</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Items Count & SKU</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Total (₹)</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Status</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
@@ -278,7 +379,25 @@ export const AdminOrders: React.FC = () => {
                     </td>
 
                     <td style={{ padding: '14px 18px', color: 'var(--text-secondary)' }}>
-                      {ord.items.reduce((s: number, i: any) => s + i.quantity, 0)} saree(s)
+                      <div style={{ fontWeight: 700, color: 'var(--brand-primary)' }}>
+                        {ord.items.reduce((s: number, i: any) => s + i.quantity, 0)} saree(s)
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+                        {ord.items.map((i: any, idx: number) => (
+                          <span key={idx} style={{
+                            fontFamily: 'monospace',
+                            fontSize: '0.72rem',
+                            padding: '1px 6px',
+                            backgroundColor: '#f1f5f9',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '3px',
+                            color: '#0f172a',
+                            fontWeight: 700
+                          }}>
+                            {getProductSku(i)}
+                          </span>
+                        ))}
+                      </div>
                     </td>
 
                     <td style={{ padding: '14px 18px', fontWeight: 800, color: 'var(--brand-primary)' }}>
@@ -299,9 +418,25 @@ export const AdminOrders: React.FC = () => {
                     </td>
 
                     <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                      <button onClick={() => openOrderDetails(ord)} className="btn btn-primary btn-sm">
-                        <Eye size={14} /> View Order
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <button onClick={() => openOrderDetails(ord)} className="btn btn-primary btn-sm">
+                          <Eye size={14} /> View Order
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteOrder(ord.id, ord.orderNumber)} 
+                          className="btn btn-sm"
+                          title="Delete Order"
+                          style={{
+                            backgroundColor: '#fee2e2',
+                            color: '#b91c1c',
+                            border: '1px solid #fecaca',
+                            padding: '6px 8px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -313,7 +448,7 @@ export const AdminOrders: React.FC = () => {
 
       {/* ORDER DETAIL & FULFILLMENT MODAL */}
       {selectedOrder && (
-        <div className="admin-modal-overlay" onClick={() => setSelectedOrder(null)}>
+        <div className="admin-modal-overlay" onClick={() => setSelectedOrderId(null)}>
           <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '850px' }}>
             {/* Modal Header */}
             <div style={{
@@ -335,8 +470,9 @@ export const AdminOrders: React.FC = () => {
               </div>
               <button 
                 type="button" 
-                onClick={() => setSelectedOrder(null)}
+                onClick={() => setSelectedOrderId(null)}
                 style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer' }}
+                aria-label="Close Order Details"
               >
                 <X size={22} />
               </button>
@@ -442,27 +578,77 @@ export const AdminOrders: React.FC = () => {
                 </div>
               </div>
 
-              {/* Order Items Breakdown */}
+              {/* Order Items Breakdown with SKU details */}
               <div className="card" style={{ padding: '1.25rem' }}>
-                <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--brand-primary)', marginBottom: '1rem' }}>
-                  Order Line Items ({selectedOrder.items?.length || 0})
-                </h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--brand-primary)' }}>
+                    Order Line Items & Saree SKU Specifications ({selectedOrder.items?.length || 0})
+                  </h4>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    Official Master Catalog Verified
+                  </span>
+                </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {(selectedOrder.items || []).map((item, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <img src={item.product?.images?.[0] || '/saree_model_individual.jpg'} alt="" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
-                        <div>
-                          <strong style={{ fontSize: '0.9rem', color: 'var(--brand-primary)' }}>{item.product?.name || 'MUETY Luxury Silk Saree'}</strong>
-                          <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>Qty: {item.quantity} x ₹{item.product?.price || 0}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {(selectedOrder.items || []).map((item, idx) => {
+                    const sku = getProductSku(item);
+                    const prodName = item.product?.name || (item as any).name || 'MUETY Luxury Silk Saree';
+                    const prodImage = item.product?.images?.[0] || (item as any).image || '/saree_model_individual.jpg';
+                    const unitPrice = item.product?.price || (item as any).price || 0;
+                    const lineTotal = unitPrice * (item.quantity || 1);
+                    const categoryName = item.product?.category || 'Festive Silk Sarees';
+
+                    return (
+                      <div key={idx} style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        border: '1px solid #e2e8f0', 
+                        borderRadius: '8px',
+                        padding: '12px 14px',
+                        backgroundColor: '#ffffff'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+                          <img 
+                            src={prodImage} 
+                            alt={prodName} 
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/saree_model_individual.jpg'; }}
+                            style={{ width: '56px', height: '56px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e2e8f0', flexShrink: 0 }} 
+                          />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <strong style={{ fontSize: '0.95rem', color: 'var(--brand-primary)' }}>{prodName}</strong>
+                              <span style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '4px',
+                                padding: '2px 8px', 
+                                borderRadius: '4px', 
+                                backgroundColor: '#090d16', 
+                                color: '#fbbf24', 
+                                fontFamily: 'monospace', 
+                                fontSize: '0.8rem', 
+                                fontWeight: 700,
+                                letterSpacing: '0.04em'
+                              }}>
+                                SKU: {sku}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                              <span><strong>Category:</strong> {categoryName}</span>
+                              <span><strong>Qty:</strong> {item.quantity} × ₹{unitPrice.toLocaleString('en-IN')}</span>
+                              {item.selectedColor && (
+                                <span><strong>Shade:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{item.selectedColor}</span></span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ fontWeight: 800, color: 'var(--brand-primary)', fontSize: '1rem', flexShrink: 0, paddingLeft: '12px' }}>
+                          ₹{lineTotal.toLocaleString('en-IN')}
                         </div>
                       </div>
-                      <div style={{ fontWeight: 700, color: 'var(--brand-primary)' }}>
-                        ₹{((item.product?.price || 0) * item.quantity).toLocaleString('en-IN')}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '2px solid var(--brand-border)', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -516,8 +702,24 @@ export const AdminOrders: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: '1rem 1.75rem', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', textAlign: 'right' }}>
-              <button type="button" onClick={() => setSelectedOrder(null)} className="btn btn-outline">
+            <div style={{ padding: '1rem 1.75rem', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button 
+                type="button" 
+                onClick={() => handleDeleteOrder(selectedOrder.id, selectedOrder.orderNumber)} 
+                className="btn btn-sm"
+                style={{
+                  backgroundColor: '#fee2e2',
+                  color: '#b91c1c',
+                  border: '1px solid #fecaca',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                <Trash2 size={14} /> Delete Order Record
+              </button>
+              <button type="button" onClick={() => setSelectedOrderId(null)} className="btn btn-outline">
                 Close Order View
               </button>
             </div>
