@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { storageService } from '@/lib/storage/storageService';
 import { auditService } from '@/shared/services/auditService';
@@ -19,7 +20,8 @@ import {
   Save, 
   Megaphone, 
   CreditCard, 
-  FileText
+  FileText,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export const AdminSettings: React.FC = () => {
@@ -353,6 +355,37 @@ export const AdminSettings: React.FC = () => {
             <p style={{ fontSize: '0.8rem', color: '#78350f', marginTop: '10px', margin: 0 }}>
               Published policies are live at <code>/shipping-policy</code>, <code>/return-refund-policy</code>, <code>/privacy-policy</code>, and <code>/terms-conditions</code>.
             </p>
+          </div>
+        </div>
+
+        {/* Section 5: Storefront Visuals & Hero Banners */}
+        <div className="card" style={{ padding: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+            <h3 style={{ fontSize: '1.25rem', color: 'var(--brand-primary)', margin: 0, fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ImageIcon size={22} color="var(--brand-accent)" /> Storefront Hero Banners & Campaign Visuals
+            </h3>
+
+            <Link
+              to="/admin/banners"
+              className="btn btn-primary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
+            >
+              <span>Setup Banner Images</span>
+              <span>→</span>
+            </Link>
+          </div>
+
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, margin: '0 0 1rem' }}>
+            Configure high-resolution campaign banner photography featured at the top of the store homepage. You can upload images, customize titles, set destination links, and adjust auto-scroll display sequence.
+          </p>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', backgroundColor: '#faf8f5', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '0.86rem', color: 'var(--brand-primary)' }}>
+              <strong>Optimal Specification:</strong> 1920 × 750px (Desktop / 2.5:1 ratio) • JPG / PNG / WebP under 15MB
+            </div>
+            <Link to="/admin/banners" style={{ fontSize: '0.86rem', color: 'var(--brand-accent)', fontWeight: 600, textDecoration: 'underline' }}>
+              Open Banner Manager
+            </Link>
           </div>
         </div>
 

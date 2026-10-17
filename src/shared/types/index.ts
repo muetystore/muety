@@ -169,7 +169,7 @@ export interface AdminAuditLog {
   actorEmail: string;
   actorRole: AppRole;
   action: string;
-  entityType: 'PRODUCT' | 'CATEGORY' | 'COLLECTION' | 'ORDER' | 'CUSTOMER' | 'ADMIN' | 'SETTINGS' | 'POLICY' | 'COUPON' | 'INVENTORY';
+  entityType: 'PRODUCT' | 'CATEGORY' | 'COLLECTION' | 'ORDER' | 'CUSTOMER' | 'ADMIN' | 'SETTINGS' | 'POLICY' | 'COUPON' | 'INVENTORY' | 'BANNER';
   entityId: string;
   before?: any;
   after?: any;

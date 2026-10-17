@@ -54,6 +54,7 @@ const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin').then(m
 const AdminUsers = lazy(() => import('@/features/admin/pages/AdminUsers').then(m => ({ default: m.AdminUsers })));
 const AdminAuditLogs = lazy(() => import('@/features/admin/pages/AdminAuditLogs').then(m => ({ default: m.AdminAuditLogs })));
 const AdminAnnouncements = lazy(() => import('@/features/admin/pages/AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })));
+const AdminBanners = lazy(() => import('@/features/admin/pages/AdminBanners').then(m => ({ default: m.AdminBanners })));
 const AdminProfile = lazy(() => import('@/features/admin/pages/AdminProfile').then(m => ({ default: m.AdminProfile })));
 const AdminProductEditor = lazy(() => import('@/features/admin/pages/AdminProductEditor').then(m => ({ default: m.AdminProductEditor })));
 const AdminSetupPassword = lazy(() => import('@/features/admin/pages/AdminSetupPassword').then(m => ({ default: m.AdminSetupPassword })));
@@ -172,6 +173,7 @@ export const AppRouter: React.FC = () => {
               <Route path="collections" element={<AdminCollections />} />
               <Route path="coupons" element={<AdminCoupons />} />
               <Route path="announcements" element={<AdminAnnouncements />} />
+              <Route path="banners" element={<AdminBanners />} />
               <Route path="settings" element={<AdminSettings />} />
               <Route path="admins" element={<ProtectedRoute requiredRoles={['superadmin', 'super_admin']}><AdminUsers /></ProtectedRoute>} />
               <Route path="audit-logs" element={<ProtectedRoute requiredRoles={['superadmin', 'super_admin', 'admin']}><AdminAuditLogs /></ProtectedRoute>} />
@@ -227,6 +229,7 @@ export const AppRouter: React.FC = () => {
             <Route path="collections" element={<AdminCollections />} />
             <Route path="coupons" element={<AdminCoupons />} />
             <Route path="announcements" element={<AdminAnnouncements />} />
+            <Route path="banners" element={<AdminBanners />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="admins" element={<ProtectedRoute requiredRoles={['superadmin', 'super_admin']}><AdminUsers /></ProtectedRoute>} />
             <Route path="audit-logs" element={<ProtectedRoute requiredRoles={['superadmin', 'super_admin', 'admin']}><AdminAuditLogs /></ProtectedRoute>} />

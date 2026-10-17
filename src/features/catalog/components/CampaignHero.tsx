@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { bannerService } from '@/features/banners/services/bannerService';
 
 export interface BannerSlide {
   id: string;
@@ -33,15 +34,42 @@ const DEFAULT_SLIDES: BannerSlide[] = [
 ];
 
 export const CampaignHero: React.FC<CampaignHeroProps> = ({
-  slides = DEFAULT_SLIDES,
+  slides: explicitSlides,
   autoPlayInterval = 5000
 }) => {
+  const [activeSlides, setActiveSlides] = useState<BannerSlide[]>(() => {
+    if (explicitSlides && explicitSlides.length > 0) return explicitSlides;
+    const dynamic = bannerService.getActiveBanners();
+    return dynamic.length > 0 ? dynamic : DEFAULT_SLIDES;
+  });
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
   const touchEndXRef = useRef<number | null>(null);
 
+  useEffect(() => {
+    if (explicitSlides && explicitSlides.length > 0) {
+      setActiveSlides(explicitSlides);
+      return;
+    }
+
+    const unsub = bannerService.subscribeBanners((items) => {
+      const active = items.filter(b => b.isActive);
+      setActiveSlides(active.length > 0 ? active : DEFAULT_SLIDES);
+    });
+
+    return () => unsub();
+  }, [explicitSlides]);
+
+  const slides = activeSlides;
   const totalSlides = slides.length;
+
+  useEffect(() => {
+    if (currentIndex >= totalSlides && totalSlides > 0) {
+      setCurrentIndex(0);
+    }
+  }, [totalSlides, currentIndex]);
 
   const goToNext = useCallback(() => {
     setCurrentIndex((prev) => (prev + 1) % totalSlides);

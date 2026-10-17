@@ -553,171 +553,172 @@ export const AdminCollections: React.FC = () => {
         title={editingCol ? `Edit Collection: ${editingCol.name}` : 'Create New Collection'}
         maxWidth="680px"
       >
-        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          
-          {formError && (
-            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #f87171', color: '#991b1b', padding: '10px 14px', borderRadius: '6px', fontSize: '0.85rem' }}>
-              {formError}
-            </div>
-          )}
-
-          <div className="grid-2" style={{ gap: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
-                Collection Name *
-              </label>
-              <input 
-                type="text"
-                value={name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="e.g. Bridal Muhurtham, Kanchipuram Silk..."
-                required
-                className="input"
-                style={{ width: '100%' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
-                URL Slug *
-              </label>
-              <input 
-                type="text"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                placeholder="e.g. bridal, temple, pure-silk..."
-                required
-                className="input"
-                style={{ width: '100%' }}
-              />
-            </div>
-          </div>
-
-          <div className="grid-2" style={{ gap: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
-                Collection Type *
-              </label>
-              <select 
-                value={type} 
-                onChange={(e) => setType(e.target.value as any)}
-                className="input"
-                style={{ width: '100%', height: '42px' }}
-              >
-                <option value="occasion">Occasion (Festive Edits & Shop By)</option>
-                <option value="fabric">Fabric (Shop by Fabric)</option>
-                <option value="style">Style (Shop by Style)</option>
-                <option value="collection">General Collection</option>
-                <option value="curated">Curated & Special Edit</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
-                Display Order *
-              </label>
-              <input 
-                type="number"
-                min={1}
-                max={999}
-                value={displayOrder}
-                onChange={(e) => setDisplayOrder(parseInt(e.target.value, 10) || 1)}
-                className="input"
-                style={{ width: '100%' }}
-              />
-            </div>
-          </div>
-
-          {/* Visibility Checkboxes */}
-          <div style={{ backgroundColor: 'var(--bg-subtle)', padding: '12px 16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--brand-primary)', cursor: 'pointer' }}>
-              <input 
-                type="checkbox"
-                checked={showInShopBy}
-                onChange={(e) => setShowInShopBy(e.target.checked)}
-                style={{ width: '16px', height: '16px' }}
-              />
-              <span>Display in "Shop By" Megamenu dropdown and mobile navigation</span>
-            </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--brand-primary)', cursor: 'pointer' }}>
-              <input 
-                type="checkbox"
-                checked={showInFestiveEdits}
-                onChange={(e) => setShowInFestiveEdits(e.target.checked)}
-                style={{ width: '16px', height: '16px' }}
-              />
-              <span>Display in "Festive Edits by Occasion" tabs on Homepage (tab without subtitle)</span>
-            </label>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
-              Editorial Description
-            </label>
-            <textarea 
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Detailed description of this collection or festive occasion drape..."
-              rows={3}
-              className="input"
-              style={{ width: '100%', resize: 'vertical' }}
-            />
-          </div>
-
-          {/* Banner Image Photography */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
-              Banner Photography
-            </label>
-            
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '8px' }}>
-              <div style={{ width: '90px', height: '70px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--brand-border)', flexShrink: 0 }}>
-                <img 
-                  src={displayPreview} 
-                  alt="Preview" 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                  onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-                    e.currentTarget.src = DEFAULT_BANNER_IMAGE;
-                  }}
-                />
+        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <div className="admin-modal-body" style={{ maxHeight: 'calc(85vh - 130px)', overflowY: 'auto' }}>
+            {formError && (
+              <div style={{ backgroundColor: '#fef2f2', border: '1px solid #f87171', color: '#991b1b', padding: '10px 14px', borderRadius: '6px', fontSize: '0.85rem' }}>
+                {formError}
               </div>
+            )}
 
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="btn btn-secondary btn-sm"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <Upload size={14} /> Upload Photography
-                  </button>
-                  <input 
-                    ref={fileInputRef}
-                    type="file" 
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    style={{ display: 'none' }}
-                  />
-                </div>
+            <div className="grid-2" style={{ gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
+                  Collection Name *
+                </label>
                 <input 
                   type="text"
-                  value={bannerImage}
-                  onChange={(e) => {
-                    setBannerImage(e.target.value);
-                    setImagePreview(e.target.value);
-                  }}
-                  placeholder="Or enter image URL (e.g. /saree_model_individual.jpg or https://...)"
+                  value={name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  placeholder="e.g. Bridal Muhurtham, Kanchipuram Silk..."
+                  required
                   className="input"
-                  style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                  style={{ width: '100%' }}
                 />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
+                  URL Slug *
+                </label>
+                <input 
+                  type="text"
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value)}
+                  placeholder="e.g. bridal, temple, pure-silk..."
+                  required
+                  className="input"
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+
+            <div className="grid-2" style={{ gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
+                  Collection Type *
+                </label>
+                <select 
+                  value={type} 
+                  onChange={(e) => setType(e.target.value as any)}
+                  className="input"
+                  style={{ width: '100%', height: '42px' }}
+                >
+                  <option value="occasion">Occasion (Festive Edits & Shop By)</option>
+                  <option value="fabric">Fabric (Shop by Fabric)</option>
+                  <option value="style">Style (Shop by Style)</option>
+                  <option value="collection">General Collection</option>
+                  <option value="curated">Curated & Special Edit</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
+                  Display Order *
+                </label>
+                <input 
+                  type="number"
+                  min={1}
+                  max={999}
+                  value={displayOrder}
+                  onChange={(e) => setDisplayOrder(parseInt(e.target.value, 10) || 1)}
+                  className="input"
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+
+            {/* Visibility Checkboxes */}
+            <div style={{ backgroundColor: 'var(--bg-subtle)', padding: '12px 16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--brand-primary)', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox"
+                  checked={showInShopBy}
+                  onChange={(e) => setShowInShopBy(e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                <span>Display in "Shop By" Megamenu dropdown and mobile navigation</span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--brand-primary)', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox"
+                  checked={showInFestiveEdits}
+                  onChange={(e) => setShowInFestiveEdits(e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                <span>Display in "Festive Edits by Occasion" tabs on Homepage (tab without subtitle)</span>
+              </label>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
+                Editorial Description
+              </label>
+              <textarea 
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Detailed description of this collection or festive occasion drape..."
+                rows={3}
+                className="input"
+                style={{ width: '100%', resize: 'vertical' }}
+              />
+            </div>
+
+            {/* Banner Image Photography */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px', color: 'var(--brand-primary)' }}>
+                Banner Photography
+              </label>
+              
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ width: '90px', height: '70px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--brand-border)', flexShrink: 0 }}>
+                  <img 
+                    src={displayPreview} 
+                    alt="Preview" 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                      e.currentTarget.src = DEFAULT_BANNER_IMAGE;
+                    }}
+                  />
+                </div>
+
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="btn btn-secondary btn-sm"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <Upload size={14} /> Upload Photography
+                    </button>
+                    <input 
+                      ref={fileInputRef}
+                      type="file" 
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      style={{ display: 'none' }}
+                    />
+                  </div>
+                  <input 
+                    type="text"
+                    value={bannerImage}
+                    onChange={(e) => {
+                      setBannerImage(e.target.value);
+                      setImagePreview(e.target.value);
+                    }}
+                    placeholder="Or enter image URL (e.g. /saree_model_individual.jpg or https://...)"
+                    className="input"
+                    style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Modal Actions */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '1rem', borderTop: '1px solid var(--brand-border)', paddingTop: '12px' }}>
+          {/* Docked Modal Actions Footer */}
+          <div className="admin-modal-footer">
             <button
               type="button"
               onClick={() => setModalOpen(false)}
@@ -736,7 +737,6 @@ export const AdminCollections: React.FC = () => {
               {editingCol ? 'Update Collection' : 'Create Collection'}
             </button>
           </div>
-
         </form>
       </AdminModal>
 
@@ -748,139 +748,140 @@ export const AdminCollections: React.FC = () => {
           title={`Assign Sarees to "${managingCol.name}"`}
           maxWidth="720px"
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-              <div>
-                <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                  Check the sarees that belong to this collection. Selected items will appear in the "Shop By" megamenu and homepage edits.
-                </p>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--brand-primary)', marginTop: '4px', display: 'block' }}>
-                  {assignedProductIds.length} of {allProducts.length} Sarees Selected
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={() => setAssignedProductIds(allProducts.map(p => p.id))}
-                  className="btn btn-sm btn-secondary"
-                  style={{ fontSize: '0.75rem', fontWeight: 600 }}
-                >
-                  Select All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAssignedProductIds([])}
-                  className="btn btn-sm btn-secondary"
-                  style={{ fontSize: '0.75rem', fontWeight: 600 }}
-                >
-                  Clear All
-                </button>
-              </div>
-            </div>
-
-            {/* Product Search Box */}
-            <div style={{ position: 'relative' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-              <input
-                type="text"
-                value={productSearchTerm}
-                onChange={(e) => setProductSearchTerm(e.target.value)}
-                placeholder="Search products by title, SKU, or category..."
-                className="input"
-                style={{ width: '100%', paddingLeft: '36px' }}
-              />
-            </div>
-
-            {/* Scrollable Product List */}
-            <div style={{
-              maxHeight: '380px',
-              overflowY: 'auto',
-              border: '1px solid var(--brand-border)',
-              borderRadius: '8px',
-              backgroundColor: '#ffffff',
-              display: 'flex',
-              flexDirection: 'column'
-            }}>
-              {searchedProducts.length === 0 ? (
-                <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>
-                  No products matched your search.
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <div className="admin-modal-body" style={{ maxHeight: 'calc(85vh - 130px)', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+                    Check the sarees that belong to this collection. Selected items will appear in the "Shop By" megamenu and homepage edits.
+                  </p>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--brand-primary)', marginTop: '4px', display: 'block' }}>
+                    {assignedProductIds.length} of {allProducts.length} Sarees Selected
+                  </span>
                 </div>
-              ) : (
-                searchedProducts.map(product => {
-                  const isChecked = assignedProductIds.includes(product.id);
-                  const thumb = Array.isArray(product.images) && product.images.length > 0 
-                    ? product.images[0] 
-                    : '/saree_model_individual.jpg';
 
-                  return (
-                    <label
-                      key={product.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '10px 14px',
-                        borderBottom: '1px solid var(--brand-border)',
-                        cursor: 'pointer',
-                        backgroundColor: isChecked ? 'rgba(212, 175, 55, 0.08)' : 'transparent',
-                        transition: 'background-color 0.15s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {
-                            setAssignedProductIds(prev => 
-                              prev.includes(product.id)
-                                ? prev.filter(id => id !== product.id)
-                                : [...prev, product.id]
-                            );
-                          }}
-                          style={{ accentColor: '#d4af37', width: '18px', height: '18px', cursor: 'pointer' }}
-                        />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setAssignedProductIds(allProducts.map(p => p.id))}
+                    className="btn btn-sm btn-secondary"
+                    style={{ fontSize: '0.75rem', fontWeight: 600 }}
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssignedProductIds([])}
+                    className="btn btn-sm btn-secondary"
+                    style={{ fontSize: '0.75rem', fontWeight: 600 }}
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
 
-                        <div style={{ width: '44px', height: '44px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--brand-border)', flexShrink: 0 }}>
-                          <img 
-                            src={thumb} 
-                            alt={product.name} 
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                            onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-                              e.currentTarget.src = DEFAULT_BANNER_IMAGE;
+              {/* Product Search Box */}
+              <div style={{ position: 'relative' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  value={productSearchTerm}
+                  onChange={(e) => setProductSearchTerm(e.target.value)}
+                  placeholder="Search products by title, SKU, or category..."
+                  className="input"
+                  style={{ width: '100%', paddingLeft: '36px' }}
+                />
+              </div>
+
+              {/* Scrollable Product List */}
+              <div style={{
+                maxHeight: '320px',
+                overflowY: 'auto',
+                border: '1px solid var(--brand-border)',
+                borderRadius: '8px',
+                backgroundColor: '#ffffff',
+                display: 'flex',
+                flexDirection: 'column'
+              }}>
+                {searchedProducts.length === 0 ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>
+                    No products matched your search.
+                  </div>
+                ) : (
+                  searchedProducts.map(product => {
+                    const isChecked = assignedProductIds.includes(product.id);
+                    const thumb = Array.isArray(product.images) && product.images.length > 0 
+                      ? product.images[0] 
+                      : '/saree_model_individual.jpg';
+
+                    return (
+                      <label
+                        key={product.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 14px',
+                          borderBottom: '1px solid var(--brand-border)',
+                          cursor: 'pointer',
+                          backgroundColor: isChecked ? 'rgba(212, 175, 55, 0.08)' : 'transparent',
+                          transition: 'background-color 0.15s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              setAssignedProductIds(prev => 
+                                prev.includes(product.id)
+                                  ? prev.filter(id => id !== product.id)
+                                  : [...prev, product.id]
+                              );
                             }}
+                            style={{ accentColor: '#d4af37', width: '18px', height: '18px', cursor: 'pointer' }}
                           />
+
+                          <div style={{ width: '44px', height: '44px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--brand-border)', flexShrink: 0 }}>
+                            <img 
+                              src={thumb} 
+                              alt={product.name} 
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                              onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                                e.currentTarget.src = DEFAULT_BANNER_IMAGE;
+                              }}
+                            />
+                          </div>
+
+                          <div>
+                            <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--brand-primary)' }}>
+                              {product.name}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', gap: '8px', marginTop: '2px' }}>
+                              <span style={{ fontWeight: 700, color: '#d4af37' }}>SKU: {product.sku || 'N/A'}</span>
+                              <span>•</span>
+                              <span>{product.category || 'Silk Saree'}</span>
+                            </div>
+                          </div>
                         </div>
 
-                        <div>
-                          <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--brand-primary)' }}>
-                            {product.name}
+                        <div style={{ textAlign: 'right', flexShrink: 0, paddingLeft: '10px' }}>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--brand-primary)' }}>
+                            ₹{(product.price || 0).toLocaleString('en-IN')}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', gap: '8px', marginTop: '2px' }}>
-                            <span style={{ fontWeight: 700, color: '#d4af37' }}>SKU: {product.sku || 'N/A'}</span>
-                            <span>•</span>
-                            <span>{product.category || 'Silk Saree'}</span>
+                          <div style={{ fontSize: '0.72rem', color: (product.stock || 0) > 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                            {(product.stock || 0) > 0 ? `${product.stock} in stock` : 'Out of stock'}
                           </div>
                         </div>
-                      </div>
-
-                      <div style={{ textAlign: 'right', flexShrink: 0, paddingLeft: '10px' }}>
-                        <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--brand-primary)' }}>
-                          ₹{(product.price || 0).toLocaleString('en-IN')}
-                        </div>
-                        <div style={{ fontSize: '0.72rem', color: (product.stock || 0) > 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
-                          {(product.stock || 0) > 0 ? `${product.stock} in stock` : 'Out of stock'}
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })
-              )}
+                      </label>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
-            {/* Modal Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid var(--brand-border)', paddingTop: '12px' }}>
+            {/* Docked Modal Actions Footer */}
+            <div className="admin-modal-footer">
               <button
                 type="button"
                 onClick={() => setManagingCol(null)}
@@ -900,7 +901,6 @@ export const AdminCollections: React.FC = () => {
                 Save Assigned Sarees ({assignedProductIds.length})
               </button>
             </div>
-
           </div>
         </AdminModal>
       )}

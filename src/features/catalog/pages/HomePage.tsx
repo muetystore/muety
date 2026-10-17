@@ -153,6 +153,28 @@ export const HomePage: React.FC = () => {
     ];
   }, [approvedReviews]);
 
+  const getReviewPhoto = (rev?: PatronReview, fallbackIdx: number = 0) => {
+    if (!rev) return '/saree_model_individual.jpg';
+    if (rev.photoUrl && rev.photoUrl.trim()) return rev.photoUrl;
+    if (rev.productId || rev.productName || (rev as any).productSlug) {
+      const matched = allProducts.find(p => 
+        (rev.productId && p.id === rev.productId) ||
+        (rev.productName && p.name.toLowerCase() === rev.productName.toLowerCase()) ||
+        ((rev as any).productSlug && p.slug === (rev as any).productSlug)
+      );
+      if (matched && matched.images && matched.images.length > 0) {
+        return matched.images[0];
+      }
+    }
+    const fallbacks = [
+      '/saree_model_individual.jpg',
+      '/saree_model_drape.jpg',
+      '/saree_fabric_detail.jpg'
+    ];
+    const charSum = (rev.id || rev.authorName || String(fallbackIdx)).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    return fallbacks[charSum % fallbacks.length];
+  };
+
   // Subscribe to live products & categories
   useEffect(() => {
     const unsubProducts = productService.subscribeToProducts((products) => {
@@ -431,49 +453,87 @@ export const HomePage: React.FC = () => {
       <CampaignHero />
 
       {/* =========================================================================
-          SECTION 3: TRENDING COLLECTIONS (Single-row rounded category showcase)
+          SECTION 3: CURATED CAPSULES (Category Profiles Showcase)
           ========================================================================= */}
       <section 
-        className="section-padding trending-showcase-section"
-        aria-label="Trending Collections"
+        className="trending-showcase-section"
+        aria-label="Curated Capsules"
         style={{ 
+          padding: 'clamp(1rem, 2vw, 1.5rem) 0 0.5rem',
           background: 'radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.05) 0%, rgba(255, 255, 255, 0) 70%), var(--bg-main)', 
           position: 'relative' 
         }}
       >
         <div className="container">
-          <SectionHeader 
-            eyebrow="Curated Capsules"
-            title="Trending Collections"
-            subtitle="Hand-selected weaves capturing the festive season's most sought-after colors, borders, and zari weights."
-            actionLink={{ to: '/categories', label: 'Explore All' }}
-          />
+          <div 
+            className="curated-capsules-header"
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', 
+              marginBottom: '0.6rem', 
+              flexWrap: 'wrap', 
+              gap: '0.5rem' 
+            }}
+          >
+            <span 
+              style={{
+                display: 'inline-block',
+                fontSize: '0.85rem',
+                fontWeight: 800,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: '#991b1b',
+                fontFamily: 'var(--font-heading)'
+              }}
+            >
+              Curated Capsules
+            </span>
+
+            <Link
+              to="/categories"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                color: 'var(--brand-primary, #0f172a)',
+                padding: '5px 12px',
+                borderRadius: 'var(--radius-sm, 6px)',
+                border: '1px solid var(--brand-border, #e2e8f0)',
+                backgroundColor: '#ffffff',
+                transition: 'all 0.2s ease',
+                textDecoration: 'none'
+              }}
+              className="curated-capsules-action"
+            >
+              <span>Explore All</span>
+              <ArrowRight size={14} />
+            </Link>
+          </div>
 
           {isLoading ? (
-            <div style={{ display: 'flex', gap: '2rem', justifyContent: 'center', padding: '3rem 0' }}>
+            <div style={{ display: 'flex', gap: '2rem', justifyContent: 'center', padding: '1rem 0' }}>
               {[1, 2, 3, 4].map(n => (
-                <div key={n} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-                  <div style={{ width: 'clamp(140px, 17vw, 220px)', height: 'clamp(140px, 17vw, 220px)', borderRadius: '50%', backgroundColor: 'var(--brand-border)', animation: 'pulse 1.5s infinite' }} />
-                  <div style={{ width: '120px', height: '16px', borderRadius: '4px', backgroundColor: 'var(--brand-border)' }} />
-                  <div style={{ width: '80px', height: '12px', borderRadius: '4px', backgroundColor: 'var(--brand-border)' }} />
-                </div>
+                <div 
+                  key={n} 
+                  style={{ 
+                    width: 'clamp(130px, 16vw, 210px)', 
+                    height: 'clamp(130px, 16vw, 210px)', 
+                    borderRadius: '50%', 
+                    backgroundColor: 'var(--brand-border)', 
+                    animation: 'pulse 1.5s infinite' 
+                  }} 
+                />
               ))}
             </div>
           ) : trendingCategories.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '3.5rem 1rem', backgroundColor: '#ffffff', borderRadius: 'var(--radius-md)' }}>
-              <p style={{ color: 'var(--brand-muted)', fontSize: '0.95rem' }}>Curated collections are arriving from the looms.</p>
+            <div style={{ textAlign: 'center', padding: '1rem 1rem' }}>
+              <p style={{ color: 'var(--brand-muted)', fontSize: '0.95rem' }}>Curated categories are arriving from the looms.</p>
             </div>
           ) : (
-            <div className="trending-gallery-stage">
-              {/* Luxury Stage Header Pill */}
-              <div className="trending-stage-header">
-                <span className="trending-stage-badge">
-                  <Sparkles size={13} style={{ color: '#d4af37' }} />
-                  <span>Curated Festival Edit • Pure Silk & Zari</span>
-                  <Sparkles size={13} style={{ color: '#d4af37' }} />
-                </span>
-              </div>
-
+            <div className="category-profiles-track-wrapper">
               {/* Desktop Scroll Left Button */}
               {trendingCategories.length > 4 && (
                 <button
@@ -505,6 +565,8 @@ export const HomePage: React.FC = () => {
                       key={cat.id}
                       to={`/category/${cat.slug || cat.id}`}
                       className="trending-circle-card"
+                      title={cat.name}
+                      aria-label={`View ${cat.name} Category`}
                     >
                       {/* Sculpted Dual-Ring Gold Bezel Circular Category Frame */}
                       <div className="category-circle-frame">
@@ -519,30 +581,6 @@ export const HomePage: React.FC = () => {
                             }}
                           />
                         </div>
-                      </div>
-
-                      {/* Editorial Category Metadata */}
-                      <div className="trending-cat-meta">
-                        <h3 className="trending-cat-title" title={cat.name}>
-                          {cat.name}
-                        </h3>
-
-                        {cat.description ? (
-                          <p className="trending-cat-desc">{cat.description}</p>
-                        ) : (
-                          <p className="trending-cat-desc">
-                            {cat.itemCount && cat.itemCount > 0 ? `${cat.itemCount} Exclusive Drapes` : 'Heirloom Weaves & Borders'}
-                          </p>
-                        )}
-
-                        <span className="trending-cat-badge">
-                          UPTO 40% OFF
-                        </span>
-
-                        <span className="trending-cat-cta">
-                          <span>Explore Weaves</span>
-                          <span className="trending-cta-arrow">→</span>
-                        </span>
                       </div>
                     </Link>
                   );
@@ -571,7 +609,7 @@ export const HomePage: React.FC = () => {
       <section 
         className="section-padding"
         aria-label="New Arrivals"
-        style={{ backgroundColor: 'var(--bg-main)' }}
+        style={{ backgroundColor: 'var(--bg-main)', paddingTop: '1.25rem', paddingBottom: '3.5rem' }}
       >
         <div className="container">
           <SectionHeader 
@@ -1100,44 +1138,53 @@ export const HomePage: React.FC = () => {
             justifyContent: 'center',
             gap: '1.25rem'
           }}>
-            {/* Left Chevron Button */}
-            <button
-              type="button"
-              onClick={() => setActiveReviewIdx((prev) => (prev === 0 ? displayReviews.length - 1 : prev - 1))}
-              aria-label="Previous Reviews"
-              className="review-nav-btn"
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '50%',
-                backgroundColor: '#ffffff',
-                border: '1.5px solid var(--brand-border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--brand-primary)',
-                cursor: 'pointer',
-                boxShadow: 'var(--shadow-sm)',
-                transition: 'all 0.2s ease',
-                flexShrink: 0
-              }}
-            >
-              <ChevronLeft size={22} />
-            </button>
+            {/* Left Chevron Button (only if more than 4 reviews) */}
+            {displayReviews.length > 4 && (
+              <button
+                type="button"
+                onClick={() => setActiveReviewIdx((prev) => (prev === 0 ? displayReviews.length - 1 : prev - 1))}
+                aria-label="Previous Reviews"
+                className="review-nav-btn"
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ffffff',
+                  border: '1.5px solid var(--brand-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--brand-primary)',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow-sm)',
+                  transition: 'all 0.2s ease',
+                  flexShrink: 0
+                }}
+              >
+                <ChevronLeft size={22} />
+              </button>
+            )}
 
-            {/* 4 Cards Grid */}
+            {/* Cards Grid */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
+              gridTemplateColumns: displayReviews.length <= 4 
+                ? `repeat(${displayReviews.length}, minmax(250px, 280px))` 
+                : 'repeat(4, 1fr)',
+              justifyContent: 'center',
               gap: '1.25rem',
-              flex: 1
+              width: '100%',
+              maxWidth: displayReviews.length === 1 ? '300px' : displayReviews.length === 2 ? '620px' : displayReviews.length === 3 ? '920px' : '100%',
+              margin: '0 auto'
             }}>
-              {[0, 1, 2, 3].map((offset) => {
-                const item = displayReviews[(activeReviewIdx + offset) % displayReviews.length];
+              {(displayReviews.length <= 4 
+                ? displayReviews 
+                : [0, 1, 2, 3].map(offset => displayReviews[(activeReviewIdx + offset) % displayReviews.length])
+              ).map((item, idx) => {
                 if (!item) return null;
                 return (
                   <div 
-                    key={`${item.id || offset}-${offset}`}
+                    key={`${item.id || idx}-${idx}`}
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
@@ -1147,7 +1194,7 @@ export const HomePage: React.FC = () => {
                   >
                     {/* Quote Headline */}
                     <div style={{
-                      minHeight: '52px',
+                      minHeight: '48px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -1160,7 +1207,11 @@ export const HomePage: React.FC = () => {
                         fontWeight: 600,
                         color: 'var(--brand-primary)',
                         lineHeight: 1.4,
-                        fontFamily: 'var(--font-heading)'
+                        fontFamily: 'var(--font-heading)',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden'
                       }}>
                         &ldquo;{item.quote || item.title || item.comment}&rdquo;
                       </p>
@@ -1189,12 +1240,7 @@ export const HomePage: React.FC = () => {
                         backgroundColor: '#0f172a'
                       }}>
                         <img 
-                          src={item.photoUrl || (
-                            offset === 0 ? '/saree_model_individual.jpg' :
-                            offset === 1 ? '/saree_model_drape.jpg' :
-                            offset === 2 ? '/saree_fabric_detail.jpg' :
-                            '/saree_model_individual.jpg'
-                          )}
+                          src={getReviewPhoto(item, idx)}
                           alt={`Patron draped in ${item.productName || 'MUETY pure silk'}`}
                           style={{
                             width: '100%',
@@ -1220,7 +1266,7 @@ export const HomePage: React.FC = () => {
                         </div>
 
                         <strong style={{ display: 'block', fontSize: '0.85rem', color: 'var(--brand-primary)' }}>
-                          _{item.authorName}
+                          {item.authorName}
                         </strong>
 
                         <span style={{ fontSize: '0.72rem', color: 'var(--brand-muted)', display: 'block', marginTop: '2px' }}>
@@ -1262,30 +1308,32 @@ export const HomePage: React.FC = () => {
               })}
             </div>
 
-            {/* Right Chevron Button */}
-            <button
-              type="button"
-              onClick={() => setActiveReviewIdx((prev) => (prev === displayReviews.length - 1 ? 0 : prev + 1))}
-              aria-label="Next Reviews"
-              className="review-nav-btn"
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '50%',
-                backgroundColor: '#ffffff',
-                border: '1.5px solid var(--brand-border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--brand-primary)',
-                cursor: 'pointer',
-                boxShadow: 'var(--shadow-sm)',
-                transition: 'all 0.2s ease',
-                flexShrink: 0
-              }}
-            >
-              <ChevronRight size={22} />
-            </button>
+            {/* Right Chevron Button (only if more than 4 reviews) */}
+            {displayReviews.length > 4 && (
+              <button
+                type="button"
+                onClick={() => setActiveReviewIdx((prev) => (prev === displayReviews.length - 1 ? 0 : prev + 1))}
+                aria-label="Next Reviews"
+                className="review-nav-btn"
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ffffff',
+                  border: '1.5px solid var(--brand-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--brand-primary)',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow-sm)',
+                  transition: 'all 0.2s ease',
+                  flexShrink: 0
+                }}
+              >
+                <ChevronRight size={22} />
+              </button>
+            )}
           </div>
 
           {/* Mobile Single Card Carousel (< 1024px) */}
@@ -1333,27 +1381,29 @@ export const HomePage: React.FC = () => {
               margin: '0 auto 1.25rem',
               width: '100%'
             }}>
-              <button
-                type="button"
-                onClick={() => setActiveReviewIdx((prev) => (prev === 0 ? displayReviews.length - 1 : prev - 1))}
-                aria-label="Previous Customer Review"
-                style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '50%',
-                  backgroundColor: '#ffffff',
-                  border: '1.5px solid var(--brand-border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--brand-primary)',
-                  cursor: 'pointer',
-                  boxShadow: 'var(--shadow-sm)',
-                  flexShrink: 0
-                }}
-              >
-                <ChevronLeft size={22} />
-              </button>
+              {displayReviews.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveReviewIdx((prev) => (prev === 0 ? displayReviews.length - 1 : prev - 1))}
+                  aria-label="Previous Customer Review"
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '50%',
+                    backgroundColor: '#ffffff',
+                    border: '1.5px solid var(--brand-border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--brand-primary)',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-sm)',
+                    flexShrink: 0
+                  }}
+                >
+                  <ChevronLeft size={22} />
+                </button>
+              )}
 
               <div 
                 className="review-polaroid-frame"
@@ -1377,11 +1427,7 @@ export const HomePage: React.FC = () => {
                   backgroundColor: '#0f172a'
                 }}>
                   <img 
-                    src={displayReviews[activeReviewIdx]?.photoUrl || (
-                      activeReviewIdx === 0 ? '/saree_model_individual.jpg' :
-                      activeReviewIdx === 1 ? '/saree_model_drape.jpg' :
-                      '/saree_fabric_detail.jpg'
-                    )}
+                    src={getReviewPhoto(displayReviews[activeReviewIdx], activeReviewIdx)}
                     alt={`Patron draped in ${displayReviews[activeReviewIdx]?.productName || 'MUETY pure silk'}`}
                     style={{
                       width: '100%',
@@ -1394,10 +1440,10 @@ export const HomePage: React.FC = () => {
 
                 <div style={{ marginTop: '12px', textAlign: 'center' }}>
                   <strong style={{ display: 'block', fontSize: '0.88rem', color: 'var(--brand-primary)' }}>
-                    _{displayReviews[activeReviewIdx]?.authorName}
+                    {displayReviews[activeReviewIdx]?.authorName}
                   </strong>
                   <span style={{ fontSize: '0.74rem', color: 'var(--brand-muted)', display: 'block', marginTop: '2px' }}>
-                    {displayReviews[activeReviewIdx]?.authorLocation || 'Tamil Nadu, India'}
+                    {displayReviews[activeReviewIdx]?.authorLocation || 'India'}
                   </span>
                   {displayReviews[activeReviewIdx]?.verifiedPurchase && (
                     <span style={{
@@ -1418,27 +1464,29 @@ export const HomePage: React.FC = () => {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setActiveReviewIdx((prev) => (prev === displayReviews.length - 1 ? 0 : prev + 1))}
-                aria-label="Next Customer Review"
-                style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '50%',
-                  backgroundColor: '#ffffff',
-                  border: '1.5px solid var(--brand-border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--brand-primary)',
-                  cursor: 'pointer',
-                  boxShadow: 'var(--shadow-sm)',
-                  flexShrink: 0
-                }}
-              >
-                <ChevronRight size={22} />
-              </button>
+              {displayReviews.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveReviewIdx((prev) => (prev === displayReviews.length - 1 ? 0 : prev + 1))}
+                  aria-label="Next Customer Review"
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '50%',
+                    backgroundColor: '#ffffff',
+                    border: '1.5px solid var(--brand-border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--brand-primary)',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-sm)',
+                    flexShrink: 0
+                  }}
+                >
+                  <ChevronRight size={22} />
+                </button>
+              )}
             </div>
 
             {/* Carousel Indicators / Dots */}
@@ -1840,47 +1888,22 @@ export const HomePage: React.FC = () => {
         }
 
         /* =========================================================================
-           Trending Circular Category Showcase: Editorial Luxury Pavilion System
+           Curated Capsules: Minimalist Gold Medallion Category Profile Showcase
            ========================================================================= */
-        .trending-gallery-stage {
+        .category-profiles-track-wrapper {
           position: relative;
-          margin-top: 1.75rem;
-          background: linear-gradient(180deg, #ffffff 0%, rgba(255, 252, 247, 0.98) 60%, rgba(250, 244, 232, 0.92) 100%);
-          border: 1px solid rgba(212, 175, 55, 0.32);
-          border-radius: 28px;
-          padding: clamp(1.75rem, 3.5vw, 3rem) clamp(1rem, 2.5vw, 2.5rem);
-          box-shadow: 0 16px 45px rgba(42, 8, 19, 0.04), 0 2px 14px rgba(212, 175, 55, 0.08);
-        }
-
-        .trending-stage-header {
-          display: flex;
-          justifyContent: center;
-          margin-bottom: clamp(1.25rem, 2vw, 2.25rem);
-        }
-
-        .trending-stage-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 9px;
-          padding: 6px 18px;
-          border-radius: 9999px;
-          background: rgba(212, 175, 55, 0.08);
-          border: 1px solid rgba(212, 175, 55, 0.3);
-          font-size: clamp(0.72rem, 0.9vw, 0.8rem);
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: var(--brand-primary, #2a0813);
-          font-weight: 700;
+          width: 100%;
+          padding: 0.15rem 0 0.25rem;
         }
 
         .circular-categories-carousel {
           display: flex;
-          gap: clamp(2rem, 5vw, 4.5rem);
+          gap: clamp(1.25rem, 3.5vw, 3rem);
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
-          padding: 0.5rem 0.5rem 1.25rem;
+          padding: 0.25rem 0.25rem 0.35rem;
           scrollbar-width: none;
-          align-items: stretch;
+          align-items: center;
           flex-wrap: nowrap;
           scroll-behavior: smooth;
         }
@@ -1890,35 +1913,30 @@ export const HomePage: React.FC = () => {
         }
 
         .trending-circle-card {
-          width: clamp(170px, 20vw, 260px);
-          max-width: 280px;
-          display: flex;
-          flex-direction: column;
+          display: inline-flex;
           align-items: center;
-          text-align: center;
+          justify-content: center;
           text-decoration: none;
           flex-shrink: 0;
-          padding: clamp(0.75rem, 1.2vw, 1.25rem) clamp(0.5rem, 0.8vw, 1rem);
-          border-radius: 22px;
-          transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+          padding: 6px;
+          border-radius: 50%;
+          transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
           background: transparent;
           cursor: pointer;
         }
 
         .trending-circle-card:hover {
-          transform: translateY(-8px);
-          background: rgba(255, 255, 255, 0.9);
-          box-shadow: 0 16px 36px rgba(42, 8, 19, 0.06), 0 0 0 1px rgba(212, 175, 55, 0.3);
+          transform: translateY(-6px);
         }
 
-        /* Sculpted Dual-Ring Gold Bezel Medallion (Enlarged for Desktop) */
+        /* Sculpted Dual-Ring Gold Bezel Medallion (Diameter reduced by 10px) */
         .category-circle-frame {
-          width: clamp(140px, 17vw, 220px);
-          height: clamp(140px, 17vw, 220px);
+          width: clamp(130px, 16vw, 210px);
+          height: clamp(130px, 16vw, 210px);
           border-radius: 50%;
-          padding: 5px;
+          padding: 4.5px;
           background: linear-gradient(135deg, #f3d078 0%, #d4af37 40%, #a17724 75%, #f6e29d 100%);
-          box-shadow: 0 12px 30px rgba(212, 175, 55, 0.32), 0 4px 12px rgba(42, 8, 19, 0.08);
+          box-shadow: 0 10px 24px rgba(212, 175, 55, 0.3), 0 3px 10px rgba(42, 8, 19, 0.06);
           transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
           position: relative;
           box-sizing: border-box;
@@ -1945,93 +1963,11 @@ export const HomePage: React.FC = () => {
 
         .trending-circle-card:hover .category-circle-frame {
           transform: scale(1.05);
-          box-shadow: 0 20px 45px rgba(212, 175, 55, 0.48), 0 0 0 4px rgba(212, 175, 55, 0.28);
+          box-shadow: 0 18px 40px rgba(212, 175, 55, 0.46), 0 0 0 4px rgba(212, 175, 55, 0.25);
         }
 
         .trending-circle-card:hover .circle-avatar-img {
           transform: scale(1.1);
-        }
-
-        /* Editorial Category Metadata */
-        .trending-cat-meta {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          text-align: center;
-          margin-top: 1.1rem;
-          width: 100%;
-          gap: 8px;
-        }
-
-        .trending-cat-title {
-          font-family: var(--font-heading, 'Playfair Display', serif);
-          font-size: clamp(1.08rem, 1.35vw, 1.35rem);
-          font-weight: 700;
-          color: var(--brand-primary, #2a0813);
-          letter-spacing: 0.03em;
-          text-transform: uppercase;
-          margin: 0;
-          line-height: 1.3;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          transition: color 0.25s ease;
-        }
-
-        .trending-circle-card:hover .trending-cat-title {
-          color: var(--brand-accent, #b45309);
-        }
-
-        .trending-cat-desc {
-          font-size: clamp(0.78rem, 0.92vw, 0.86rem);
-          color: var(--brand-muted, #64748b);
-          margin: 0;
-          line-height: 1.4;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          max-width: 90%;
-        }
-
-        .trending-cat-badge {
-          display: inline-block;
-          font-size: clamp(0.66rem, 0.78vw, 0.72rem);
-          font-weight: 800;
-          letter-spacing: 0.06em;
-          color: #991b1b;
-          background-color: #fff1f2;
-          border: 1px solid #fecdd3;
-          border-radius: 9999px;
-          padding: 4px 14px;
-          box-shadow: 0 2px 6px rgba(185, 28, 28, 0.08);
-          white-space: nowrap;
-          margin-top: 2px;
-        }
-
-        .trending-cat-cta {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          font-size: clamp(0.76rem, 0.88vw, 0.82rem);
-          font-weight: 600;
-          color: var(--brand-accent, #d4af37);
-          letter-spacing: 0.04em;
-          margin-top: 4px;
-          transition: all 0.25s ease;
-        }
-
-        .trending-cta-arrow {
-          transition: transform 0.25s ease;
-        }
-
-        .trending-circle-card:hover .trending-cat-cta {
-          color: #b45309;
-        }
-
-        .trending-circle-card:hover .trending-cta-arrow {
-          transform: translateX(4px);
         }
 
         /* Desktop Nav Arrows */
@@ -2040,12 +1976,12 @@ export const HomePage: React.FC = () => {
           top: 50%;
           transform: translateY(-50%);
           z-index: 10;
-          width: 44px;
-          height: 44px;
+          width: 42px;
+          height: 42px;
           border-radius: 50%;
           background: #ffffff;
           border: 1.5px solid rgba(212, 175, 55, 0.4);
-          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -2055,11 +1991,11 @@ export const HomePage: React.FC = () => {
         }
 
         .trending-nav-left {
-          left: -16px;
+          left: -12px;
         }
 
         .trending-nav-right {
-          right: -16px;
+          right: -12px;
         }
 
         .trending-nav-arrow:hover {
@@ -2070,35 +2006,17 @@ export const HomePage: React.FC = () => {
         }
 
         @media (max-width: 768px) {
-          .trending-gallery-stage {
-            padding: 1.5rem 0.75rem 1.75rem;
-            border-radius: 20px;
-            margin-top: 1.25rem;
-          }
-          .trending-stage-badge {
-            font-size: 0.7rem;
-            padding: 4px 12px;
-          }
-          .trending-circle-card {
-            width: clamp(130px, 34vw, 175px);
-            padding: 0.5rem 0.25rem;
-          }
           .category-circle-frame {
-            width: clamp(118px, 30vw, 150px);
-            height: clamp(118px, 30vw, 150px);
+            width: clamp(108px, 28vw, 140px);
+            height: clamp(108px, 28vw, 140px);
             padding: 3.5px;
           }
-          .trending-cat-desc {
-            display: none;
-          }
-          .trending-cat-cta {
-            font-size: 0.75rem;
+          .circular-categories-carousel {
+            gap: 1.25rem;
+            padding: 0.5rem 0.25rem;
           }
           .trending-nav-arrow {
             display: none !important;
-          }
-          .trending-cat-title {
-            min-height: auto;
           }
         }
 

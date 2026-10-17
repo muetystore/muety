@@ -9,7 +9,7 @@ import { Product } from '@/types';
 import { Heart, ShoppingBag, ArrowRight, Sparkles } from 'lucide-react';
 
 export const WishlistPage: React.FC = () => {
-  useDocumentTitle('My Wishlist | MUETY Handlooms');
+  useDocumentTitle('My Wishlist | MUETY Collection');
   const { wishlist, addToCart, setIsDrawerOpen } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -68,7 +68,7 @@ export const WishlistPage: React.FC = () => {
             margin: '0 0 10px',
             color: '#ffffff'
           }}>
-            My Saved Handlooms
+            My Saved Collection
           </h1>
           <p style={{
             color: '#cbd5e1',
@@ -153,7 +153,7 @@ export const WishlistPage: React.FC = () => {
             }}>
               <Heart size={34} strokeWidth={1.7} />
             </div>
-            
+
             <h2 style={{
               fontSize: '1.5rem',
               fontWeight: 800,
@@ -163,7 +163,7 @@ export const WishlistPage: React.FC = () => {
             }}>
               Your Wishlist is Empty
             </h2>
-            
+
             <p style={{
               color: '#64748b',
               fontSize: '0.95rem',
@@ -174,8 +174,8 @@ export const WishlistPage: React.FC = () => {
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
-              <Link 
-                to="/products" 
+              <Link
+                to="/products"
                 className="btn btn-primary"
                 style={{
                   display: 'inline-flex',
@@ -189,9 +189,9 @@ export const WishlistPage: React.FC = () => {
                 <span>Shop Sarees & Handlooms</span>
                 <ArrowRight size={16} />
               </Link>
-              
-              <Link 
-                to="/categories" 
+
+              <Link
+                to="/categories"
                 className="btn btn-outline"
                 style={{
                   display: 'inline-flex',

@@ -304,6 +304,7 @@ export const AdminUsers: React.FC = () => {
             'Authorization': idToken ? `Bearer ${idToken}` : ''
           },
           body: JSON.stringify({
+            action: 'create-user',
             fullName: fullName.trim(),
             personalEmail: personalEmail.trim().toLowerCase(),
             muetyEmail: muetyEmail.trim().toLowerCase(),
@@ -312,7 +313,12 @@ export const AdminUsers: React.FC = () => {
           })
         });
 
-        const serverRes = await res.json();
+        let serverRes: any = null;
+        try {
+          serverRes = await res.json();
+        } catch {
+          // Response is not JSON (e.g. 404 HTML fallback)
+        }
 
         if (res.ok && serverRes && serverRes.success && serverRes.user) {
           const createdUser: UserProfile = {
@@ -320,12 +326,25 @@ export const AdminUsers: React.FC = () => {
             createdAt: new Date().toISOString()
           };
           await customerService.saveCustomer(createdUser);
-          success('Admin user created and invitation sent.');
-          success(`Invitation sent to ${personalEmail.trim().toLowerCase()}`);
+          if (serverRes.warning) {
+            warning(serverRes.warning);
+          } else {
+            success('Admin user created and invitation sent.');
+          }
+          success(`Invitation setup link ready for ${personalEmail.trim().toLowerCase()}`);
           setShowAdminModal(false);
           loadAllData();
         } else {
-          let errMsg = serverRes?.error?.message || 'Failed to provision admin user.';
+          let errMsg = serverRes?.error?.message || serverRes?.message;
+          if (!errMsg) {
+            if (res.status === 404) {
+              errMsg = 'Admin API endpoint was not found on this domain. Check serverless function deployment on Netlify.';
+            } else if (res.status === 401 || res.status === 403) {
+              errMsg = 'Permission Denied: Only authenticated Super Admin can provision new admin accounts.';
+            } else {
+              errMsg = `Failed to provision admin user (HTTP ${res.status}).`;
+            }
+          }
           if (serverRes?.code === 'INVITATION_EMAIL_PROVIDER_REJECTED' || errMsg.includes('Verify the MUETY sending domain')) {
             errMsg = 'Admin account created, but invitation email could not be sent. Verify the MUETY sending domain in Resend.';
           } else if (errMsg.includes('credentials are not configured') || errMsg.includes('Firebase server credentials')) {
@@ -353,16 +372,20 @@ export const AdminUsers: React.FC = () => {
             'Authorization': idToken ? `Bearer ${idToken}` : ''
           },
           body: JSON.stringify({
+            action: 'update-role',
             targetUid,
             departmentId: selectedDepartmentId,
             roleId: selectedRoleId
           })
         });
 
-        const serverRes = await res.json();
+        let serverRes: any = null;
+        try {
+          serverRes = await res.json();
+        } catch {}
 
         if (!res.ok || (serverRes && serverRes.error)) {
-          throw new Error(serverRes?.error?.message || 'Failed to update custom claims on server.');
+          throw new Error(serverRes?.error?.message || `Failed to update custom claims on server (HTTP ${res.status}).`);
         }
 
         const dept = departments.find(d => d.id === selectedDepartmentId);
@@ -417,10 +440,13 @@ export const AdminUsers: React.FC = () => {
           'Content-Type': 'application/json',
           'Authorization': idToken ? `Bearer ${idToken}` : ''
         },
-        body: JSON.stringify({ targetUid: u.uid })
+        body: JSON.stringify({ action: 'resend-invitation', targetUid: u.uid })
       });
 
-      const serverRes = await res.json();
+      let serverRes: any = null;
+      try {
+        serverRes = await res.json();
+      } catch {}
 
       if (res.ok && serverRes && serverRes.success) {
         success('Admin invitation sent.');
@@ -434,7 +460,7 @@ export const AdminUsers: React.FC = () => {
         await customerService.saveCustomer(updated);
         loadAllData();
       } else {
-        let errMsg = serverRes?.error?.message || 'Failed to resend admin invitation.';
+        let errMsg = serverRes?.error?.message || serverRes?.message || `Failed to resend admin invitation (HTTP ${res.status}).`;
         if (serverRes?.code === 'INVITATION_EMAIL_PROVIDER_REJECTED' || errMsg.includes('Verify the MUETY sending domain')) {
           errMsg = 'Admin account created, but invitation email could not be sent. Verify the MUETY sending domain in Resend.';
         } else if (errMsg.includes('credentials are not configured') || errMsg.includes('Firebase server credentials')) {
@@ -476,13 +502,16 @@ export const AdminUsers: React.FC = () => {
           'Content-Type': 'application/json',
           'Authorization': idToken ? `Bearer ${idToken}` : ''
         },
-        body: JSON.stringify({ targetUid: targetUser.uid, disabled: nextDisabledState })
+        body: JSON.stringify({ action: 'disable-user', targetUid: targetUser.uid, disabled: nextDisabledState })
       });
 
-      const serverRes = await res.json();
+      let serverRes: any = null;
+      try {
+        serverRes = await res.json();
+      } catch {}
 
       if (!res.ok || (serverRes && serverRes.error)) {
-        throw new Error(serverRes?.error?.message || 'Failed to update account status on server.');
+        throw new Error(serverRes?.error?.message || `Failed to update account status on server (HTTP ${res.status}).`);
       }
 
       const nextStatus: AdminStatus = nextDisabledState ? 'disabled' : 'active';

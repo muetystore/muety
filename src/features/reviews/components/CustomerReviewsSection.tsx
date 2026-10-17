@@ -321,7 +321,7 @@ export const CustomerReviewsSection: React.FC = () => {
                           letterSpacing: '0.02em'
                         }}
                       >
-                        _{review.authorName}
+                        {review.authorName}
                       </span>
                     </div>
 

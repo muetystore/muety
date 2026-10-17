@@ -23,7 +23,8 @@ import {
   Key,
   ChevronDown,
   Megaphone,
-  Sparkles
+  Sparkles,
+  Image as ImageIcon
 } from 'lucide-react';
 import { hasPermission, getUserRoles, ROLE_LABELS, Permission } from '@/shared/utils/permissions';
 import { getCanonicalStoreUrl } from '@/shared/utils/domainRouting';
@@ -90,6 +91,7 @@ export const AdminLayout: React.FC = () => {
         { to: '/admin/products', label: 'Products & ERP', icon: Package, permission: 'products.read' },
         { to: '/admin/categories', label: 'Categories', icon: Layers, permission: 'categories.write' },
         { to: '/admin/collections', label: 'Collections & Edits', icon: Sparkles, permission: 'categories.write' },
+        { to: '/admin/banners', label: 'Hero Banners', icon: ImageIcon, permission: 'categories.write' },
         { to: '/admin/orders', label: 'Orders', icon: ShoppingBag, permission: 'orders.read' },
         { to: '/admin/coupons', label: 'Coupons', icon: Tag, permission: 'coupons.manage' }
       ]

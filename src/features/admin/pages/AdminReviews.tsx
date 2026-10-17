@@ -17,14 +17,18 @@ import {
   Plus, 
   ShieldCheck, 
   MapPin, 
-  X,
-  Search,
-  Sparkles,
-  MessageSquare,
-  ExternalLink,
-  Eye,
-  Image as ImageIcon
+  X, 
+  Search, 
+  Sparkles, 
+  MessageSquare, 
+  ExternalLink, 
+  Eye, 
+  Image as ImageIcon,
+  Edit,
+  Upload,
+  Loader2
 } from 'lucide-react';
+import { uploadToCloudinary } from '@/lib/media/cloudinary';
 
 export const AdminReviews: React.FC = () => {
   useDocumentTitle('Patron Reviews & Testimonials - Admin');
@@ -50,6 +54,24 @@ export const AdminReviews: React.FC = () => {
   const [displayOrder, setDisplayOrder] = useState(1);
   const [verifiedPurchase, setVerifiedPurchase] = useState(true);
   const [isFeatured, setIsFeatured] = useState(true);
+  const [uploadingAddPhoto, setUploadingAddPhoto] = useState(false);
+
+  // Edit review modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingReview, setEditingReview] = useState<PatronReview | null>(null);
+  const [editAuthorName, setEditAuthorName] = useState('');
+  const [editAuthorLocation, setEditAuthorLocation] = useState('');
+  const [editProductName, setEditProductName] = useState('');
+  const [editProductId, setEditProductId] = useState('');
+  const [editRating, setEditRating] = useState(5);
+  const [editTitle, setEditTitle] = useState('');
+  const [editQuote, setEditQuote] = useState('');
+  const [editPhotoUrl, setEditPhotoUrl] = useState('');
+  const [editDisplayOrder, setEditDisplayOrder] = useState(1);
+  const [editVerifiedPurchase, setEditVerifiedPurchase] = useState(true);
+  const [editIsFeatured, setEditIsFeatured] = useState(true);
+  const [editStatus, setEditStatus] = useState<'approved' | 'pending' | 'rejected'>('approved');
+  const [uploadingEditPhoto, setUploadingEditPhoto] = useState(false);
 
   const loadData = () => {
     setReviews(reviewService.getAllReviews());
@@ -133,6 +155,27 @@ export const AdminReviews: React.FC = () => {
     }
   };
 
+  const handleAddPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      warning('Image size must be under 10MB.');
+      return;
+    }
+    setUploadingAddPhoto(true);
+    try {
+      const res = await uploadToCloudinary(file, { folder: 'muety/reviews', publicId: `patron_admin_${Date.now()}` });
+      if (res?.url) {
+        setPhotoUrl(res.url);
+        success('Patron photograph uploaded to Cloudinary CDN.', 'Photo Uploaded');
+      }
+    } catch (err: any) {
+      warning('Failed to upload photo to Cloudinary. You can still paste a URL manually.');
+    } finally {
+      setUploadingAddPhoto(false);
+    }
+  };
+
   const handleCreateReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authorName.trim() || !quote.trim() || !productName.trim()) {
@@ -140,14 +183,18 @@ export const AdminReviews: React.FC = () => {
       return;
     }
 
+    const matchedProd = products.find(p => p.id === productId || p.name.toLowerCase() === productName.trim().toLowerCase());
+
     const created = await reviewService.addReview({
       authorName: authorName.trim(),
-      authorLocation: authorLocation.trim() || 'Global Patron',
+      authorLocation: authorLocation.trim() || 'India',
       productName: productName.trim(),
-      productId: productId || undefined,
+      productId: productId || matchedProd?.id || undefined,
+      productSlug: matchedProd?.slug || undefined,
       rating,
       title: title.trim() || 'Exceptional Quality',
       quote: quote.trim(),
+      comment: quote.trim(),
       verifiedPurchase,
       status: 'approved',
       isFeatured,
@@ -171,6 +218,91 @@ export const AdminReviews: React.FC = () => {
     setIsModalOpen(false);
     resetForm();
     loadData();
+  };
+
+  const handleOpenEditModal = (rev: PatronReview) => {
+    setEditingReview(rev);
+    setEditAuthorName(rev.authorName || '');
+    setEditAuthorLocation(rev.authorLocation || '');
+    setEditProductName(rev.productName || '');
+    setEditProductId(rev.productId || '');
+    setEditRating(rev.rating || 5);
+    setEditTitle(rev.title || '');
+    setEditQuote(rev.quote || rev.comment || '');
+    setEditPhotoUrl(rev.photoUrl || '');
+    setEditDisplayOrder(rev.displayOrder || 1);
+    setEditVerifiedPurchase(rev.verifiedPurchase ?? true);
+    setEditIsFeatured(rev.isFeatured ?? false);
+    setEditStatus(rev.status || 'approved');
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      warning('Image size must be under 10MB.');
+      return;
+    }
+    setUploadingEditPhoto(true);
+    try {
+      const res = await uploadToCloudinary(file, { folder: 'muety/reviews', publicId: `patron_edit_${Date.now()}` });
+      if (res?.url) {
+        setEditPhotoUrl(res.url);
+        success('Patron photograph updated via Cloudinary.', 'Photo Uploaded');
+      }
+    } catch (err: any) {
+      warning('Failed to upload photo to Cloudinary. You can still paste a URL manually.');
+    } finally {
+      setUploadingEditPhoto(false);
+    }
+  };
+
+  const handleSaveEditReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingReview) return;
+    if (!editAuthorName.trim() || !editQuote.trim() || !editProductName.trim()) {
+      warning('Please fill in author name, product, and review impressions.');
+      return;
+    }
+
+    const matchedProd = products.find(p => p.id === editProductId || p.name.toLowerCase() === editProductName.trim().toLowerCase());
+
+    const updated = await reviewService.updateReview(editingReview.id, {
+      authorName: editAuthorName.trim(),
+      authorLocation: editAuthorLocation.trim() || 'India',
+      productName: editProductName.trim(),
+      productId: editProductId || matchedProd?.id || undefined,
+      productSlug: matchedProd?.slug || (editingReview as any).productSlug || undefined,
+      rating: editRating,
+      title: editTitle.trim() || 'Patron Review',
+      quote: editQuote.trim(),
+      comment: editQuote.trim(),
+      verifiedPurchase: editVerifiedPurchase,
+      status: editStatus,
+      isFeatured: editIsFeatured,
+      showOnHome: editIsFeatured,
+      displayOrder: editIsFeatured ? editDisplayOrder : undefined,
+      photoUrl: editPhotoUrl.trim() || undefined
+    });
+
+    if (updated) {
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'admin',
+        actorRole: getUserRoles(user)[0] || 'admin',
+        action: 'REVIEW_APPROVED',
+        entityType: 'PRODUCT',
+        entityId: editingReview.id,
+        after: updated,
+        reason: `Edited review by ${updated.authorName}`
+      });
+
+      success(`Review by "${updated.authorName}" updated successfully.`, 'Review Saved');
+      setIsEditModalOpen(false);
+      setEditingReview(null);
+      loadData();
+    }
   };
 
   const handleUpdateDisplayOrder = async (id: string, newOrder: number) => {
@@ -639,6 +771,15 @@ export const AdminReviews: React.FC = () => {
                   )}
 
                   <button
+                    onClick={() => handleOpenEditModal(rev)}
+                    className="btn btn-outline btn-sm"
+                    style={{ color: 'var(--brand-primary)', borderColor: 'var(--brand-border)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    title="Edit Review Details & Photograph"
+                  >
+                    <Edit size={14} /> <span>Edit</span>
+                  </button>
+
+                  <button
                     onClick={() => handleDelete(rev.id, rev.authorName)}
                     className="btn btn-outline btn-sm"
                     style={{ color: '#ef4444' }}
@@ -774,18 +915,73 @@ export const AdminReviews: React.FC = () => {
               />
             </div>
 
-            {/* Customer Photo URL */}
+            {/* Customer Photo Upload & URL */}
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Customer Photograph URL (Optional)</label>
+              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Patron Photograph (Optional)</label>
+              
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
+                <label style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1.5px dashed var(--brand-border)',
+                  backgroundColor: '#f8fafc',
+                  cursor: uploadingAddPhoto ? 'not-allowed' : 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: 'var(--brand-primary)',
+                  transition: 'all 0.2s ease'
+                }}>
+                  {uploadingAddPhoto ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                  <span>{uploadingAddPhoto ? 'Uploading to Cloudinary...' : 'Upload Image to Cloudinary'}</span>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    disabled={uploadingAddPhoto}
+                    onChange={handleAddPhotoUpload} 
+                    style={{ display: 'none' }} 
+                  />
+                </label>
+
+                {photoUrl && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '4px',
+                      overflow: 'hidden',
+                      border: '1px solid var(--brand-border)',
+                      backgroundColor: '#0f172a'
+                    }}>
+                      <img 
+                        src={photoUrl} 
+                        alt="Preview" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setPhotoUrl('')}
+                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                      title="Remove photograph"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <input 
                 type="url" 
-                placeholder="https://... Cloudinary or hosted photo URL"
+                placeholder="Or paste direct image URL (https://...)"
                 value={photoUrl} 
                 onChange={e => setPhotoUrl(e.target.value)} 
                 className="form-input" 
               />
-              <span style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>
-                Original patron portrait photo to display in the polaroid review frame.
+              <span style={{ fontSize: '0.75rem', color: 'var(--brand-muted)', marginTop: '4px', display: 'block' }}>
+                Upload or link patron portrait photograph to display in storefront review frames.
               </span>
             </div>
 
@@ -863,7 +1059,7 @@ export const AdminReviews: React.FC = () => {
                 maxWidth: '100%', 
                 maxHeight: '65vh', 
                 borderRadius: '8px', 
-                objectFit: 'contain',
+                objectFit: 'contain', 
                 boxShadow: 'var(--shadow-md)',
                 backgroundColor: '#000000'
               }} 
@@ -877,6 +1073,266 @@ export const AdminReviews: React.FC = () => {
               </button>
             </div>
           </div>
+        </AdminModal>
+      )}
+
+      {/* Edit Patron Review Modal */}
+      {isEditModalOpen && editingReview && (
+        <AdminModal
+          isOpen={isEditModalOpen}
+          onClose={() => { setIsEditModalOpen(false); setEditingReview(null); }}
+          title="Edit Patron Testimonial"
+          subtitle={`Editing review by ${editingReview.authorName}`}
+          headerIcon={<Edit size={20} />}
+          maxWidth="640px"
+        >
+          <form onSubmit={handleSaveEditReview} style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
+            <div className="admin-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div className="grid-2" style={{ gap: '1rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Patron Full Name *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={editAuthorName} 
+                    onChange={e => setEditAuthorName(e.target.value)} 
+                    className="form-input" 
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Patron Location</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Chennai, Tamil Nadu"
+                    value={editAuthorLocation} 
+                    onChange={e => setEditAuthorLocation(e.target.value)} 
+                    className="form-input" 
+                  />
+                </div>
+              </div>
+
+              {/* Product Selection */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Associated Product *</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <select 
+                    className="form-input"
+                    value={editProductId}
+                    onChange={(e) => {
+                      const pId = e.target.value;
+                      setEditProductId(pId);
+                      const prod = products.find(p => p.id === pId);
+                      if (prod) setEditProductName(prod.name);
+                    }}
+                    style={{ flex: 1 }}
+                  >
+                    <option value="">-- Custom Product Title or Select from Catalog --</option>
+                    {products.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {!editProductId && (
+                  <input 
+                    type="text" 
+                    placeholder="Type custom product title"
+                    value={editProductName} 
+                    onChange={e => setEditProductName(e.target.value)} 
+                    className="form-input" 
+                    style={{ marginTop: '8px' }}
+                  />
+                )}
+              </div>
+
+              {/* Rating */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Rating</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {[1, 2, 3, 4, 5].map((starVal) => (
+                    <button
+                      type="button"
+                      key={starVal}
+                      onClick={() => setEditRating(starVal)}
+                      style={{
+                        padding: '4px',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: starVal <= editRating ? '#f59e0b' : '#cbd5e1',
+                        transition: 'transform 0.15s ease'
+                      }}
+                    >
+                      <Star size={24} fill={starVal <= editRating ? '#f59e0b' : 'none'} />
+                    </button>
+                  ))}
+                  <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#090d16', marginLeft: '6px' }}>
+                    {editRating} out of 5 Stars
+                  </span>
+                </div>
+              </div>
+
+              {/* Review Headline & Quote */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Review Headline (Optional)</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Breathtaking craftsmanship and swift delivery"
+                  value={editTitle} 
+                  onChange={e => setEditTitle(e.target.value)} 
+                  className="form-input" 
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Patron Quote / Impressions *</label>
+                <textarea 
+                  required 
+                  rows={4}
+                  placeholder="Enter the full review or impressions quote..."
+                  value={editQuote} 
+                  onChange={e => setEditQuote(e.target.value)} 
+                  className="form-input" 
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Patron Photograph Upload & URL */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Patron Photograph (Optional)</label>
+                
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <label style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1.5px dashed var(--brand-border)',
+                    backgroundColor: '#f8fafc',
+                    cursor: uploadingEditPhoto ? 'not-allowed' : 'pointer',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    color: 'var(--brand-primary)',
+                    transition: 'all 0.2s ease'
+                  }}>
+                    {uploadingEditPhoto ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                    <span>{uploadingEditPhoto ? 'Uploading to Cloudinary...' : 'Upload Image to Cloudinary'}</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      disabled={uploadingEditPhoto}
+                      onChange={handleEditPhotoUpload} 
+                      style={{ display: 'none' }} 
+                    />
+                  </label>
+
+                  {editPhotoUrl && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '4px',
+                        overflow: 'hidden',
+                        border: '1px solid var(--brand-border)',
+                        backgroundColor: '#0f172a'
+                      }}>
+                        <img 
+                          src={editPhotoUrl} 
+                          alt="Preview" 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        />
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => setEditPhotoUrl('')}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                        title="Remove photograph"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <input 
+                  type="url" 
+                  placeholder="Or paste direct image URL (https://...)"
+                  value={editPhotoUrl} 
+                  onChange={e => setEditPhotoUrl(e.target.value)} 
+                  className="form-input" 
+                />
+              </div>
+
+              {/* Status & Toggles */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid #e2e8f0' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Moderation Status</label>
+                  <select 
+                    value={editStatus} 
+                    onChange={e => setEditStatus(e.target.value as any)}
+                    className="form-input"
+                  >
+                    <option value="approved">Approved</option>
+                    <option value="pending">Pending</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.88rem', color: '#1e293b' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={editVerifiedPurchase} 
+                    onChange={e => setEditVerifiedPurchase(e.target.checked)} 
+                    style={{ width: '16px', height: '16px', accentColor: '#090d16' }}
+                  />
+                  <span>Mark as <strong>Verified Patron</strong></span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.88rem', color: '#1e293b' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={editIsFeatured} 
+                    onChange={e => setEditIsFeatured(e.target.checked)} 
+                    style={{ width: '16px', height: '16px', accentColor: '#090d16' }}
+                  />
+                  <span>Feature on <strong>Homepage Testimonials Carousel</strong></span>
+                </label>
+
+                {editIsFeatured && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Homepage Display Priority:</span>
+                    <input 
+                      type="number" 
+                      min={1} 
+                      value={editDisplayOrder} 
+                      onChange={e => setEditDisplayOrder(parseInt(e.target.value) || 1)}
+                      className="form-input" 
+                      style={{ width: '80px', padding: '6px' }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="admin-modal-footer" style={{ borderTop: '1px solid #e2e8f0', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', backgroundColor: '#ffffff' }}>
+              <button 
+                type="button" 
+                onClick={() => { setIsEditModalOpen(false); setEditingReview(null); }} 
+                className="btn btn-outline"
+                style={{ fontWeight: 600, color: '#475569' }}
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit" 
+                className="btn btn-primary"
+                style={{ fontWeight: 700 }}
+              >
+                Save Changes
+              </button>
+            </div>
+          </form>
         </AdminModal>
       )}
 

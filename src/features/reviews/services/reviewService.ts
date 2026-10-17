@@ -73,8 +73,39 @@ class ReviewService {
     }
 
     storageService.addReview(newReview);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('muety_reviews_updated'));
+    }
     await this.syncProductRatingAndCount(newReview.productId);
     return newReview;
+  }
+
+  async updateReview(id: string, updates: Partial<PatronReview>): Promise<PatronReview | undefined> {
+    const existing = this.getReviewById(id);
+    const updated: PatronReview = {
+      ...(existing || {} as PatronReview),
+      ...updates,
+      id,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (db) {
+      try {
+        await setDoc(doc(db, 'reviews', id), updated, { merge: true });
+        console.log(`MUETY Cloud: Review ${id} updated in Firestore`);
+      } catch (err) {
+        console.warn('Firestore review update note:', err);
+      }
+    }
+
+    storageService.updateReview(updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('muety_reviews_updated'));
+    }
+    if (updated.productId || existing?.productId) {
+      await this.syncProductRatingAndCount(updated.productId || existing?.productId);
+    }
+    return updated;
   }
 
   async updateReviewStatus(id: string, status: 'approved' | 'rejected' | 'pending'): Promise<PatronReview | undefined> {
@@ -106,6 +137,9 @@ class ReviewService {
     }
 
     storageService.updateReview(updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('muety_reviews_updated'));
+    }
     await this.syncProductRatingAndCount(updated.productId);
     return updated;
   }
@@ -133,6 +167,9 @@ class ReviewService {
     }
 
     storageService.updateReview(updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('muety_reviews_updated'));
+    }
     await this.syncProductRatingAndCount(updated.productId);
     return updated;
   }
@@ -156,6 +193,9 @@ class ReviewService {
     }
 
     storageService.updateReview(updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('muety_reviews_updated'));
+    }
     return updated;
   }
 
@@ -171,6 +211,9 @@ class ReviewService {
     }
 
     storageService.deleteReview(id);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('muety_reviews_updated'));
+    }
     if (target?.productId) {
       await this.syncProductRatingAndCount(target.productId);
     }
@@ -178,19 +221,30 @@ class ReviewService {
   }
 
   subscribeToProductReviews(
-    productIdentifier: string,
+    productIdentifier: string | string[],
     callback: (reviews: PatronReview[]) => void,
     onError?: (err: Error) => void
   ): Unsubscribe {
-    const cleanId = (productIdentifier || '').trim().toLowerCase();
+    const rawList = Array.isArray(productIdentifier) ? productIdentifier : [productIdentifier];
+    const cleanIds = rawList
+      .filter(Boolean)
+      .map(item => String(item).trim().toLowerCase())
+      .filter(s => s.length > 0);
 
     const filterApproved = (all: PatronReview[]) => {
-      return all.filter(r => 
-        r.status === 'approved' && 
-        ((r.productId && r.productId.toLowerCase() === cleanId) ||
-         ((r as any).productSlug && (r as any).productSlug.toLowerCase() === cleanId) ||
-         (r.productName && r.productName.toLowerCase() === cleanId))
-      ).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      return all.filter(r => {
+        if (r.status !== 'approved') return false;
+        if (cleanIds.length === 0) return true;
+        const rProdId = (r.productId || '').trim().toLowerCase();
+        const rSlug = ((r as any).productSlug || '').trim().toLowerCase();
+        const rName = (r.productName || '').trim().toLowerCase();
+
+        return cleanIds.some(target => 
+          (rProdId && (rProdId === target || target.includes(rProdId) || rProdId.includes(target))) ||
+          (rSlug && (rSlug === target || target.includes(rSlug) || rSlug.includes(target))) ||
+          (rName && (rName === target || target.includes(rName) || rName.includes(target)))
+        );
+      }).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     };
 
     if (db) {

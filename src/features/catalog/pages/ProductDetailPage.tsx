@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
@@ -23,11 +23,18 @@ import {
   Maximize2,
   ZoomIn,
   ZoomOut,
-  Zap
+  Zap,
+  Upload,
+  Image as ImageIcon,
+  CheckCircle2,
+  Loader2,
+  Eye,
+  Sparkles
 } from 'lucide-react';
 import { auditService } from '@/shared/services/auditService';
 import { useAuth } from '@/shared/context/AuthContext';
 import { Product, Review, PatronReview } from '@/types';
+import { uploadToCloudinary } from '@/lib/media/cloudinary';
 
 export const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -50,13 +57,40 @@ export const ProductDetailPage: React.FC = () => {
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [selectedSize, setSelectedSize] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
-  const [activeTab, setActiveTab] = useState<'details' | 'specs' | 'reviews' | 'shipping'>('details');
+  const [openAccordion, setOpenAccordion] = useState<Record<string, boolean>>({
+    description: true,
+    information: false,
+    care: false,
+    reviews: false,
+  });
 
-  const [reviewerName, setReviewerName] = useState('');
+  const toggleAccordion = (key: string) => {
+    setOpenAccordion(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  const [reviewerName, setReviewerName] = useState(user?.displayName || '');
+  const [reviewerLocation, setReviewerLocation] = useState('India');
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewTitle, setReviewTitle] = useState('');
   const [reviewComment, setReviewComment] = useState('');
+  const [reviewPhotoFile, setReviewPhotoFile] = useState<File | null>(null);
+  const [reviewPhotoPreview, setReviewPhotoPreview] = useState<string | null>(null);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false);
+  const [previewPhotoModal, setPreviewPhotoModal] = useState<{ url: string; author: string } | null>(null);
+  const [selectedRatingFilter, setSelectedRatingFilter] = useState<number | 'all'>('all');
+  const [hoverRating, setHoverRating] = useState<number | null>(null);
+  const reviewsScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollReviews = (direction: 'left' | 'right') => {
+    if (reviewsScrollRef.current) {
+      const scrollAmount = direction === 'left' ? -340 : 340;
+      reviewsScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
 
   const resetZoom = () => {
     setZoomScale(1);
@@ -100,17 +134,17 @@ export const ProductDetailPage: React.FC = () => {
 
   useEffect(() => {
     if (!product && !id) return;
-    const targetId = product?.id || product?.slug || id || '';
-    if (!targetId) return;
+    const targets = [product?.id, product?.slug, product?.name, id].filter(Boolean) as string[];
+    if (targets.length === 0) return;
 
-    const unsub = reviewService.subscribeToProductReviews(targetId, (revs) => {
+    const unsub = reviewService.subscribeToProductReviews(targets, (revs) => {
       setLiveReviews(revs);
     });
 
     return () => {
       if (typeof unsub === 'function') unsub();
     };
-  }, [product?.id, product?.slug, id]);
+  }, [product?.id, product?.slug, product?.name, id]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -235,6 +269,41 @@ export const ProductDetailPage: React.FC = () => {
     : (product.rating || 5.0);
   const effectiveRating = Number(calculatedAvg.toFixed(1));
 
+  const allProductReviews = useMemo(() => {
+    return liveReviews.length > 0 ? liveReviews : (product.reviews || []);
+  }, [liveReviews, product.reviews]);
+
+  const ratingCounts = useMemo(() => {
+    const counts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    allProductReviews.forEach((rev: any) => {
+      const r = Math.round(Number(rev.rating) || 5);
+      if (counts[r] !== undefined) {
+        counts[r] += 1;
+      }
+    });
+    return counts;
+  }, [allProductReviews]);
+
+  const filteredReviews = useMemo(() => {
+    if (selectedRatingFilter === 'all') return allProductReviews;
+    return allProductReviews.filter((rev: any) => Math.round(Number(rev.rating) || 5) === selectedRatingFilter);
+  }, [allProductReviews, selectedRatingFilter]);
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      warning('Photo size must be under 10MB.', 'File Too Large');
+      return;
+    }
+    setReviewPhotoFile(file);
+    const reader = new FileReader();
+    reader.onload = (uploadEvt) => {
+      setReviewPhotoPreview(uploadEvt.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleAddReview = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanAuthor = reviewerName.trim();
@@ -246,20 +315,41 @@ export const ProductDetailPage: React.FC = () => {
       return;
     }
 
+    setIsSubmittingReview(true);
+    let uploadedPhotoUrl: string | undefined = undefined;
+
+    if (reviewPhotoFile) {
+      try {
+        const uploadRes = await uploadToCloudinary(reviewPhotoFile, {
+          folder: 'muety/reviews',
+          publicId: `patron_rev_${Date.now()}`
+        });
+        if (uploadRes && uploadRes.url) {
+          uploadedPhotoUrl = uploadRes.url;
+        }
+      } catch (err: any) {
+        console.warn('PDP review photo upload note:', err);
+        if (reviewPhotoPreview) {
+          uploadedPhotoUrl = reviewPhotoPreview;
+        }
+      }
+    }
+
     try {
       const createdReview = await reviewService.addReview({
         productId: product.id,
         productSlug: product.slug,
         productName: product.name,
         authorName: cleanAuthor,
-        authorLocation: 'India',
+        authorLocation: reviewerLocation.trim() || 'India',
         rating: reviewRating,
         title: cleanTitle,
         quote: cleanComment,
         comment: cleanComment,
         status: 'approved',
         isFeatured: false,
-        verifiedPurchase: true
+        verifiedPurchase: true,
+        photoUrl: uploadedPhotoUrl
       });
 
       // Audit Log for REVIEW_CREATED
@@ -274,13 +364,18 @@ export const ProductDetailPage: React.FC = () => {
         reason: `Submitted review for ${product.name}`
       });
 
-      success('Thank you! Your testimonial has been published to Firestore.', 'Review Added');
-      setReviewerName('');
+      success('Thank you! Your testimonial and photograph have been published.', 'Review Added');
+      setReviewerName(user?.displayName || '');
+      setReviewerLocation('India');
       setReviewTitle('');
       setReviewComment('');
+      setReviewPhotoFile(null);
+      setReviewPhotoPreview(null);
       setShowReviewForm(false);
     } catch (err: any) {
       warning(err?.message || 'Failed to submit review.');
+    } finally {
+      setIsSubmittingReview(false);
     }
   };
 
@@ -372,8 +467,8 @@ export const ProductDetailPage: React.FC = () => {
               <button 
                 type="button"
                 onClick={() => {
-                  setActiveTab('reviews');
-                  const el = document.getElementById('pdp-tabs-section');
+                  setOpenAccordion(prev => ({ ...prev, reviews: true }));
+                  const el = document.getElementById('pdp-accordion-reviews');
                   if (el) el.scrollIntoView({ behavior: 'smooth' });
                 }}
                 className="pdp-review-count"
@@ -532,181 +627,568 @@ export const ProductDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Product Information Tabs */}
-        <div id="pdp-tabs-section" className="pdp-tabs-container">
-          {/* Mobile Tab Dropdown Selector (shown on mobile, hidden on desktop) */}
-          <div className="pdp-tabs-mobile-dropdown">
-            <label htmlFor="pdp-mobile-tab-select" className="pdp-tabs-mobile-label">
-              Product Details Section
-            </label>
-            <div className="pdp-tabs-select-wrapper">
-              <select
-                id="pdp-mobile-tab-select"
-                value={activeTab}
-                onChange={(e) => setActiveTab(e.target.value as any)}
-                className="pdp-tabs-select"
-                aria-label="Select product details section"
-              >
-                <option value="details">Description &amp; Craft</option>
-                <option value="specs">Specifications</option>
-                <option value="reviews">
-                  Patron Reviews ({liveReviews.length || (product.reviews ? product.reviews.length : product.reviewCount || 0)})
-                </option>
-                <option value="shipping">Shipping &amp; Care</option>
-              </select>
-              <ChevronDown size={18} className="pdp-tabs-select-icon" />
-            </div>
-          </div>
-
-          {/* Desktop/Tablet Horizontal Tabs (hidden on mobile, shown on desktop) */}
-          <div className="pdp-tabs-nav">
-            {(['details', 'specs', 'reviews', 'shipping'] as const).map(tab => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`pdp-tab-btn ${activeTab === tab ? 'active' : ''}`}
-              >
-                {tab === 'details' && 'Description & Craft'}
-                {tab === 'specs' && 'Specifications'}
-                {tab === 'reviews' && `Patron Reviews (${liveReviews.length || (product.reviews ? product.reviews.length : product.reviewCount || 0)})`}
-                {tab === 'shipping' && 'Shipping & Care'}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ minHeight: '200px' }}>
-            {activeTab === 'details' && (
-              <div style={{ maxWidth: '800px', lineHeight: 1.8, color: 'var(--text-secondary)', fontSize: '0.98rem' }}>
+        {/* Product Details Section Accordion (Matching Atelier Reference Design) */}
+        <div id="pdp-tabs-section" className="pdp-accordion-container">
+          {/* Description */}
+          <div className="pdp-accordion-item">
+            <button
+              type="button"
+              className="pdp-accordion-header"
+              onClick={() => toggleAccordion('description')}
+              aria-expanded={openAccordion.description}
+            >
+              <span className="pdp-accordion-title">Description</span>
+              <ChevronDown
+                size={18}
+                strokeWidth={1.5}
+                className={`pdp-accordion-chevron ${openAccordion.description ? 'open' : ''}`}
+              />
+            </button>
+            {openAccordion.description && (
+              <div className="pdp-accordion-body">
                 <p style={{ marginBottom: '1.25rem' }}>{product.description}</p>
                 <p>
                   Every MUETY piece is handcrafted by master artisans in accordance with centuries-old heritage techniques. From the initial thread selection to the final hand-finishing, quality control is uncompromising.
                 </p>
               </div>
             )}
+          </div>
 
-            {activeTab === 'specs' && (
-              <div style={{ maxWidth: '600px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {Object.entries(product.specifications || {}).map(([key, val]) => (
-                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--brand-border)', gap: '1rem', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>{key}</span>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{val}</span>
+          {/* Product Information */}
+          <div className="pdp-accordion-item">
+            <button
+              type="button"
+              className="pdp-accordion-header"
+              onClick={() => toggleAccordion('information')}
+              aria-expanded={openAccordion.information}
+            >
+              <span className="pdp-accordion-title">Product Information</span>
+              <ChevronDown
+                size={18}
+                strokeWidth={1.5}
+                className={`pdp-accordion-chevron ${openAccordion.information ? 'open' : ''}`}
+              />
+            </button>
+            {openAccordion.information && (
+              <div className="pdp-accordion-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '640px' }}>
+                  {product.sku && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>SKU / Identifier</span>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{product.sku}</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'reviews' && (
-              <div style={{ maxWidth: '800px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div>
-                    <h3 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)', margin: 0 }}>Patron Testimonials</h3>
-                    <p style={{ color: 'var(--brand-muted)', fontSize: '0.88rem', margin: '4px 0 0' }}>Authentic feedback from verified collectors.</p>
-                  </div>
-                  <button onClick={() => setShowReviewForm(!showReviewForm)} className="btn btn-outline btn-sm">
-                    {showReviewForm ? 'Cancel' : 'Write a Review'}
-                  </button>
-                </div>
-
-                {showReviewForm && (
-                  <form onSubmit={handleAddReview} style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--brand-border)', marginBottom: '2rem' }}>
-                    <h4 style={{ marginBottom: '1rem' }}>Submit Your Testimonial</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '4px' }}>Your Name</label>
-                        <input type="text" value={reviewerName} onChange={e => setReviewerName(e.target.value)} required className="form-input" placeholder="e.g. Ananya Sharma" />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '4px' }}>Rating</label>
-                        <select value={reviewRating} onChange={e => setReviewRating(Number(e.target.value))} className="form-select">
-                          <option value={5}>5 Stars (Exceptional)</option>
-                          <option value={4}>4 Stars (Very Good)</option>
-                          <option value={3}>3 Stars (Average)</option>
-                        </select>
-                      </div>
+                  )}
+                  {product.category && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>Category</span>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', textTransform: 'capitalize' }}>{product.category}</span>
                     </div>
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '4px' }}>Review Comment</label>
-                      <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)} required rows={3} className="form-input" placeholder="Describe your experience with this creation..." />
-                    </div>
-                    <button type="submit" className="btn btn-primary btn-sm">Submit Review</button>
-                  </form>
-                )}
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  {liveReviews.length === 0 && (!product.reviews || product.reviews.length === 0) ? (
-                    <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#ffffff', borderRadius: 'var(--radius-md)', border: '1px dashed var(--brand-border)', color: 'var(--text-secondary)' }}>
-                      No testimonials published yet for this piece. Be the first patron to share your experience.
-                    </div>
-                  ) : (
-                    (liveReviews.length > 0 ? liveReviews : (product.reviews || [])).map((rev: any) => (
-                      <div key={rev.id} style={{ padding: '1.25rem', backgroundColor: '#ffffff', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--brand-primary)' }}>{rev.authorName || rev.userName}</span>
-                            {rev.authorLocation && (
-                              <span style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>({rev.authorLocation})</span>
-                            )}
-                          </div>
-                          <div style={{ display: 'flex', color: '#f59e0b' }}>
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} size={14} fill={i < (rev.rating || 5) ? '#f59e0b' : 'none'} color="#f59e0b" />
-                            ))}
-                          </div>
-                        </div>
-                        {rev.title && (
-                          <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--brand-primary)', marginBottom: '4px' }}>
-                            "{rev.title}"
-                          </div>
-                        )}
-                        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-                          {rev.quote || rev.comment}
-                        </p>
+                  )}
+                  {product.specifications && Object.entries(product.specifications).length > 0 ? (
+                    Object.entries(product.specifications).map(([key, val]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>{key}</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{val}</span>
                       </div>
                     ))
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>Fabric &amp; Purity</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Authentic Pure Handloom Silk (Silk Mark Certified)</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>Origin &amp; Weave</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Salem Traditional Mastercraft Weave</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>Zari Craft</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Tested Gold / Silver Zari Motifs</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>Length &amp; Inclusions</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>6.2 Metres (Includes unstitched running blouse piece)</span>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
             )}
+          </div>
 
-            {activeTab === 'shipping' && (
-              <div style={{ maxWidth: '800px', lineHeight: 1.8, color: 'var(--text-secondary)', fontSize: '0.98rem' }}>
-                <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
-                  Pan-India Tracked Courier Delivery (₹89 Flat)
-                </h4>
-                <p style={{ marginBottom: '1rem' }}>
-                  Orders are dispatched to serviceable PIN codes across India via trusted courier partners. Dispatch is initiated promptly after online payment confirmation or COD advance verification. A tracking link is provided upon courier pickup. Timelines are estimates and vary depending on courier network coverage and destination PIN code.
-                </p>
+          {/* Product Care */}
+          <div className="pdp-accordion-item">
+            <button
+              type="button"
+              className="pdp-accordion-header"
+              onClick={() => toggleAccordion('care')}
+              aria-expanded={openAccordion.care}
+            >
+              <span className="pdp-accordion-title">Product Care</span>
+              <ChevronDown
+                size={18}
+                strokeWidth={1.5}
+                className={`pdp-accordion-chevron ${openAccordion.care ? 'open' : ''}`}
+              />
+            </button>
+            {openAccordion.care && (
+              <div className="pdp-accordion-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <div>
+                    <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.35rem', fontSize: '1rem', fontWeight: 600 }}>
+                      Silk Care &amp; Preservation
+                    </h4>
+                    <p style={{ margin: 0 }}>
+                      Dry clean only recommended to preserve pure silk luster and intricate zari threads. Store draped in a breathable cotton or muslin cover away from direct sunlight and humidity. Iron on reverse at low temperature with a protective cloth barrier.
+                    </p>
+                  </div>
 
-                <div style={{ backgroundColor: 'var(--bg-main)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)', marginBottom: '1.5rem', fontSize: '0.92rem' }}>
-                  <strong>Transparent Order Total Calculation:</strong><br />
-                  <code style={{ wordBreak: 'break-word', whiteSpace: 'normal', display: 'block', marginTop: '6px' }}>
-                    Order Total = Item Subtotal − Discount + Applicable Tax (5% GST) + ₹89 Flat Delivery Charge
-                  </code>
+                  <div>
+                    <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.35rem', fontSize: '1rem', fontWeight: 600 }}>
+                      Pan-India Tracked Courier Delivery (₹89 Flat)
+                    </h4>
+                    <p style={{ margin: 0 }}>
+                      Dispatched to serviceable PIN codes across India via trusted courier partners. Dispatch is initiated promptly after online payment confirmation or COD advance verification. A tracking link is provided upon courier pickup.
+                    </p>
+                  </div>
+
+                  <div style={{ backgroundColor: 'var(--bg-main)', padding: '0.85rem 1.15rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)', fontSize: '0.9rem' }}>
+                    <strong>Transparent Total:</strong> Item Subtotal − Discount + 5% GST + ₹89 Flat Delivery Charge
+                  </div>
+
+                  <div>
+                    <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.35rem', fontSize: '1rem', fontWeight: 600 }}>
+                      3-Day Review Window &amp; Unboxing Requirement
+                    </h4>
+                    <p style={{ margin: 0 }}>
+                      In the rare event of damaged or defective items, reach out to <strong>support@muety.in</strong> within <strong>3 days of delivery</strong> with continuous, unedited unboxing video evidence.
+                    </p>
+                  </div>
+
+                  <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Review our full{' '}
+                    <Link to="/shipping-policy" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>Shipping Policy</Link>{' '}
+                    and{' '}
+                    <Link to="/return-refund-policy" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>Return &amp; Cancellation Policy</Link>.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Patron Reviews */}
+          <div id="pdp-accordion-reviews" className="pdp-accordion-item">
+            <button
+              type="button"
+              className="pdp-accordion-header"
+              onClick={() => toggleAccordion('reviews')}
+              aria-expanded={openAccordion.reviews}
+            >
+              <span className="pdp-accordion-title">
+                Patron Reviews ({effectiveReviewCount})
+              </span>
+              <ChevronDown
+                size={18}
+                strokeWidth={1.5}
+                className={`pdp-accordion-chevron ${openAccordion.reviews ? 'open' : ''}`}
+              />
+            </button>
+            {openAccordion.reviews && (
+              <div className="pdp-accordion-body">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.25rem', color: 'var(--brand-primary)', margin: 0, fontFamily: 'var(--font-heading)' }}>Patron Testimonials</h3>
+                    <p style={{ color: 'var(--brand-muted)', fontSize: '0.88rem', margin: '4px 0 0' }}>Authentic reflections from verified patrons draped in MUETY creations.</p>
+                  </div>
+                  <button 
+                    onClick={() => setShowReviewForm(!showReviewForm)} 
+                    className="btn btn-outline btn-sm"
+                    style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    {showReviewForm ? (
+                      <>
+                        <X size={15} />
+                        <span>Cancel Review</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={15} color="#c9a227" />
+                        <span>Write a Review</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
-                <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
-                  Flexible Payment &amp; COD Advance Confirmation
-                </h4>
-                <p style={{ marginBottom: '1rem' }}>
-                  Choose full online payment via Razorpay (UPI, Credit/Debit Cards, NetBanking) for zero-contact delivery, or select Cash on Delivery (COD) with an advance confirmation fee of <strong>₹89</strong> paid online. The ₹89 advance is credited directly toward your total order amount; the remaining balance is collected at delivery. Per policy, the advance is non-refundable for ordinary customer cancellations or refusal to accept delivery once dispatched.
-                </p>
+                {showReviewForm && (
+                  <div className="pdp-muety-form-wrapper">
+                    <div className="pdp-muety-form-gold-bar" />
+                    <div className="pdp-muety-form-body">
+                      <div className="pdp-muety-form-badge">
+                        <Sparkles size={13} />
+                        <span>MUETY Patron Sanctuary</span>
+                      </div>
+                      <h4 className="pdp-muety-form-title">Submit Your Drape Experience</h4>
+                      <p className="pdp-muety-form-subtitle">
+                        Share your authentic reflections on fabric feel, drape elegance, and artisanal luster.
+                      </p>
 
-                <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
-                  3-Day Review Window &amp; Unboxing Video Requirement
-                </h4>
-                <p style={{ marginBottom: '1rem' }}>
-                  In the rare event of damaged, defective, incorrect or materially misdescribed items, contact <strong>support@muety.in</strong> within <strong>3 days of delivery</strong> with continuous, unedited unboxing video evidence. No returns are accepted for change of mind or personal preference. Statutory consumer rights under Indian law remain fully preserved.
-                </p>
+                      <form onSubmit={handleAddReview}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '1.25rem' }}>
+                          <div>
+                            <label className="pdp-muety-form-label">Your Full Name *</label>
+                            <input 
+                              type="text" 
+                              value={reviewerName} 
+                              onChange={e => setReviewerName(e.target.value)} 
+                              required 
+                              className="pdp-muety-form-input" 
+                              placeholder="e.g. Ananya Sharma" 
+                            />
+                          </div>
+                          <div>
+                            <label className="pdp-muety-form-label">City / Location (Optional)</label>
+                            <input 
+                              type="text" 
+                              value={reviewerLocation} 
+                              onChange={e => setReviewerLocation(e.target.value)} 
+                              className="pdp-muety-form-input" 
+                              placeholder="e.g. Chennai, Tamil Nadu" 
+                            />
+                          </div>
+                        </div>
 
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', margin: 0 }}>
-                  For full details, please review our{' '}
-                  <Link to="/shipping-policy" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>Shipping Policy</Link>{' '}
-                  and{' '}
-                  <Link to="/return-refund-policy" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>Return, Refund &amp; Cancellation Policy</Link>.
-                </p>
+                        {/* Interactive 5-Star Rating Selector */}
+                        <div style={{ marginBottom: '1.25rem' }}>
+                          <label className="pdp-muety-form-label">Patron Rating *</label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                            <div 
+                              style={{ display: 'inline-flex', gap: '6px', padding: '6px 10px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #e7e2dc' }}
+                              onMouseLeave={() => setHoverRating(null)}
+                            >
+                              {[1, 2, 3, 4, 5].map((val) => {
+                                const activeStarRating = hoverRating !== null ? hoverRating : reviewRating;
+                                const isFilled = val <= activeStarRating;
+                                return (
+                                  <button
+                                    key={val}
+                                    type="button"
+                                    onClick={() => setReviewRating(val)}
+                                    onMouseEnter={() => setHoverRating(val)}
+                                    className="pdp-muety-star-btn"
+                                    title={`${val} Star${val > 1 ? 's' : ''}`}
+                                    aria-label={`Select ${val} star rating`}
+                                  >
+                                    <Star 
+                                      size={26} 
+                                      fill={isFilled ? '#f59e0b' : 'none'} 
+                                      color={isFilled ? '#f59e0b' : '#cbd5e1'} 
+                                      strokeWidth={1.5}
+                                    />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#2a0813' }}>
+                              {(hoverRating ?? reviewRating) === 5 && '★★★★★ 5 Stars (Exceptional)'}
+                              {(hoverRating ?? reviewRating) === 4 && '★★★★☆ 4 Stars (Very Good)'}
+                              {(hoverRating ?? reviewRating) === 3 && '★★★☆☆ 3 Stars (Average)'}
+                              {(hoverRating ?? reviewRating) === 2 && '★★☆☆☆ 2 Stars (Fair)'}
+                              {(hoverRating ?? reviewRating) === 1 && '★☆☆☆☆ 1 Star (Needs Improvement)'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ marginBottom: '1.25rem' }}>
+                          <label className="pdp-muety-form-label">Review Title (Optional)</label>
+                          <input 
+                            type="text" 
+                            value={reviewTitle} 
+                            onChange={e => setReviewTitle(e.target.value)} 
+                            className="pdp-muety-form-input" 
+                            placeholder="e.g. Royal luster and exquisite zari craftsmanship" 
+                          />
+                        </div>
+
+                        <div style={{ marginBottom: '1.25rem' }}>
+                          <label className="pdp-muety-form-label">Review Comment *</label>
+                          <textarea 
+                            value={reviewComment} 
+                            onChange={e => setReviewComment(e.target.value)} 
+                            required 
+                            rows={3} 
+                            className="pdp-muety-form-input" 
+                            placeholder="Describe your drape experience with this creation..." 
+                            style={{ resize: 'vertical' }}
+                          />
+                        </div>
+
+                        {/* Patron Photograph Upload */}
+                        <div style={{ marginBottom: '1.75rem' }}>
+                          <label className="pdp-muety-form-label">
+                            Attach Drape / Saree Photo (Optional)
+                          </label>
+                          <div className="pdp-muety-photo-dropzone">
+                            <label style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '8px 18px',
+                              borderRadius: '9999px',
+                              border: '1px solid #c9a227',
+                              backgroundColor: '#ffffff',
+                              cursor: 'pointer',
+                              fontSize: '0.85rem',
+                              fontWeight: 600,
+                              color: '#2a0813',
+                              boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+                              transition: 'all 0.2s ease'
+                            }}>
+                              <Upload size={16} color="#c9a227" />
+                              <span>{reviewPhotoFile ? 'Change Photo' : 'Upload Photo'}</span>
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                onChange={handlePhotoSelect} 
+                                style={{ display: 'none' }} 
+                              />
+                            </label>
+
+                            {reviewPhotoPreview ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                  width: '46px',
+                                  height: '46px',
+                                  borderRadius: '6px',
+                                  overflow: 'hidden',
+                                  border: '1.5px solid #c9a227',
+                                  backgroundColor: '#0f172a'
+                                }}>
+                                  <img 
+                                    src={reviewPhotoPreview} 
+                                    alt="Preview" 
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                  />
+                                </div>
+                                <span style={{ fontSize: '0.82rem', color: '#64748b', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {reviewPhotoFile?.name}
+                                </span>
+                                <button 
+                                  type="button" 
+                                  onClick={() => { setReviewPhotoFile(null); setReviewPhotoPreview(null); }}
+                                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                                  title="Remove photo"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: '0.82rem', color: '#8b95a5' }}>
+                                PNG, JPG or WebP up to 10MB
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <button 
+                          type="submit" 
+                          disabled={isSubmittingReview}
+                          className="pdp-muety-submit-btn"
+                        >
+                          {isSubmittingReview ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin" />
+                              <span>Publishing Reflection...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={16} />
+                              <span>Submit Patron Review</span>
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* Star Filter Bar & Horizontal Carousel Controls */}
+                {allProductReviews.length > 0 && (
+                  <div className="pdp-reviews-filter-bar">
+                    <div className="pdp-reviews-filter-pills">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRatingFilter('all')}
+                        className={`pdp-rating-filter-pill ${selectedRatingFilter === 'all' ? 'active' : ''}`}
+                      >
+                        <span>All Reviews</span>
+                        <span className="pdp-filter-count">({allProductReviews.length})</span>
+                      </button>
+
+                      {[5, 4, 3, 2, 1].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setSelectedRatingFilter(prev => prev === star ? 'all' : star)}
+                          className={`pdp-rating-filter-pill ${selectedRatingFilter === star ? 'active' : ''}`}
+                        >
+                          <span style={{ color: '#f59e0b' }}>★</span>
+                          <span>{star} Star</span>
+                          <span className="pdp-filter-count">({ratingCounts[star] || 0})</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="pdp-reviews-scroll-controls">
+                      <button
+                        type="button"
+                        onClick={() => scrollReviews('left')}
+                        className="pdp-reviews-scroll-btn"
+                        title="Scroll reviews left"
+                        aria-label="Previous reviews"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => scrollReviews('right')}
+                        className="pdp-reviews-scroll-btn"
+                        title="Scroll reviews right"
+                        aria-label="Next reviews"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Horizontal Scrolling Reviews Track */}
+                {filteredReviews.length === 0 ? (
+                  <div style={{ padding: '2.5rem', textAlign: 'center', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px dashed #e7e2dc', color: 'var(--text-secondary)' }}>
+                    {allProductReviews.length === 0 
+                      ? 'No testimonials published yet for this piece. Be the first patron to share your experience.'
+                      : `No ${selectedRatingFilter}-star reviews found. Try selecting "All Reviews".`}
+                  </div>
+                ) : (
+                  <div className="pdp-reviews-horizontal-track" ref={reviewsScrollRef}>
+                    {filteredReviews.map((rev: any) => (
+                      <div 
+                        key={rev.id} 
+                        className="pdp-review-card-horizontal"
+                      >
+                        <div>
+                          {/* Header row: Author & rating */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
+                            <div>
+                              <div style={{ fontWeight: 700, color: 'var(--brand-primary)', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span>{rev.authorName || rev.userName}</span>
+                                {rev.authorLocation && (
+                                  <span style={{ fontSize: '0.78rem', color: 'var(--brand-muted)', fontWeight: 400 }}>
+                                    ({rev.authorLocation})
+                                  </span>
+                                )}
+                              </div>
+                              {rev.verifiedPurchase && (
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  color: '#15803d',
+                                  backgroundColor: '#dcfce7',
+                                  padding: '2px 7px',
+                                  borderRadius: '9999px',
+                                  marginTop: '4px'
+                                }}>
+                                  <CheckCircle2 size={10} /> Verified Patron
+                                </span>
+                              )}
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                              <div style={{ display: 'flex', color: '#f59e0b' }}>
+                                {[...Array(5)].map((_, i) => (
+                                  <Star key={i} size={14} fill={i < (rev.rating || 5) ? '#f59e0b' : 'none'} color="#f59e0b" />
+                                ))}
+                              </div>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--brand-primary)' }}>
+                                {Number(rev.rating || 5).toFixed(1)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Review Title */}
+                          {rev.title && (
+                            <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--brand-primary)', margin: '8px 0 4px', fontStyle: 'italic' }}>
+                              "{rev.title}"
+                            </div>
+                          )}
+
+                          {/* Review Comment */}
+                          <p style={{ 
+                            fontSize: '0.88rem', 
+                            color: 'var(--text-secondary)', 
+                            lineHeight: 1.55, 
+                            margin: '6px 0 10px',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 4,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}>
+                            {rev.quote || rev.comment}
+                          </p>
+                        </div>
+
+                        {/* Bottom row: Optional attached photo + Date */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #f1ece7' }}>
+                          {rev.photoUrl ? (
+                            <div 
+                              onClick={() => setPreviewPhotoModal({ url: rev.photoUrl, author: rev.authorName || rev.userName })}
+                              style={{
+                                position: 'relative',
+                                width: '48px',
+                                height: '56px',
+                                borderRadius: '6px',
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                border: '1.5px solid rgba(201, 162, 39, 0.5)',
+                                flexShrink: 0,
+                                backgroundColor: '#0f172a',
+                                boxShadow: '0 2px 5px rgba(0,0,0,0.06)'
+                              }}
+                              title="Click to view patron drape photo"
+                            >
+                              <img 
+                                src={rev.photoUrl} 
+                                alt={rev.authorName || 'Patron'} 
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                              />
+                              <div style={{
+                                position: 'absolute',
+                                inset: 0,
+                                backgroundColor: 'rgba(0,0,0,0.25)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#ffffff'
+                              }}>
+                                <Eye size={14} />
+                              </div>
+                            </div>
+                          ) : (
+                            <div />
+                          )}
+
+                          {rev.createdAt && (
+                            <div style={{ fontSize: '0.74rem', color: 'var(--brand-muted)' }}>
+                              {new Date(rev.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -823,6 +1305,68 @@ export const ProductDetailPage: React.FC = () => {
                 </button>
               </>
             )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Patron Photo Full Preview Lightbox */}
+      {previewPhotoModal && createPortal(
+        <div 
+          onClick={() => setPreviewPhotoModal(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(5, 8, 15, 0.94)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 999999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.5rem',
+            animation: 'fadeIn 0.2s ease'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            style={{
+              position: 'relative',
+              maxWidth: '92vw',
+              maxHeight: '90vh',
+              backgroundColor: '#ffffff',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--brand-border)',
+              backgroundColor: '#fafaf9'
+            }}>
+              <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--brand-primary)' }}>
+                Patron Photo by {previewPhotoModal.author}
+              </span>
+              <button 
+                type="button" 
+                onClick={() => setPreviewPhotoModal(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-primary)', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: '8px', backgroundColor: '#0f172a', display: 'flex', justifyContent: 'center' }}>
+              <img 
+                src={previewPhotoModal.url} 
+                alt={previewPhotoModal.author} 
+                style={{ maxWidth: '85vw', maxHeight: '78vh', objectFit: 'contain', borderRadius: '4px' }} 
+              />
+            </div>
           </div>
         </div>,
         document.body

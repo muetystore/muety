@@ -18,6 +18,11 @@
 # API Functions
 # ------------------------------------------------------------------------------
 [[redirects]]
+  from = "/api/admin/*"
+  to = "/.netlify/functions/admin-api"
+  status = 200
+
+[[redirects]]
   from = "/api/media/cloudinary-signature"
   to = "/.netlify/functions/cloudinary-signature"
   status = 200
@@ -83,6 +88,11 @@
   force = true
 
 # Admin subdomain API routes (must precede wildcard)
+[[redirects]]
+  from = "https://admin.muety.in/api/admin/*"
+  to = "/.netlify/functions/admin-api"
+  status = 200
+
 [[redirects]]
   from = "https://admin.muety.in/api/media/cloudinary-signature"
   to = "/.netlify/functions/cloudinary-signature"

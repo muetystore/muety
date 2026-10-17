@@ -1,23 +1,49 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { productService } from '@/features/catalog/services/productService';
 import { storageService } from '@/lib/storage/storageService';
 import { ProductCard } from '@/features/catalog/components/ProductCard';
 import { QuickViewModal } from '@/features/catalog/components/QuickViewModal';
+import { SortDropdown } from '@/features/catalog/components/SortDropdown';
+import { ProductFilterPanel } from '@/features/catalog/components/ProductFilterPanel';
+import { ProductFilterDrawer } from '@/features/catalog/components/ProductFilterDrawer';
+import { ActiveFilterChips } from '@/features/catalog/components/ActiveFilterChips';
 import { Product, Category } from '@/types';
+import { 
+  ProductFilterState, 
+  SortOption, 
+  filterProducts, 
+  sortProducts, 
+  getCatalogPriceBounds, 
+  calculateCategoryCounts, 
+  getActiveFilterCount, 
+  DEFAULT_FILTER_STATE 
+} from '../utils/productFilters';
 import { 
   SlidersHorizontal, 
   Search, 
   X, 
   Sparkles,
-  RotateCcw
+  RotateCcw,
+  Loader2,
+  Grid
 } from 'lucide-react';
 
 export const ProductsPage: React.FC = () => {
-  useDocumentTitle('Products');
+  useDocumentTitle('Pure Silk Sarees & Ethnic Catalog | MUETY');
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Load initial products & categories from cache
+  const [allProducts, setAllProducts] = useState<Product[]>(() => storageService.getProducts());
+  const [categories, setCategories] = useState<Category[]>(() => storageService.getCategories());
+  const [productsLoading, setProductsLoading] = useState<boolean>(() => storageService.getProducts().length === 0);
+  const [productsError, setProductsError] = useState<string | null>(null);
+
+  // Dynamic price bounds
+  const priceBounds = useMemo(() => getCatalogPriceBounds(allProducts), [allProducts]);
+
+  // Read URL params initially
   const queryParam = searchParams.get('q') || '';
   const categoryParam = searchParams.get('cat') || 'all';
   const occasionParam = searchParams.get('occasion') || '';
@@ -27,58 +53,60 @@ export const ProductsPage: React.FC = () => {
   const collectionParam = searchParams.get('collection') || searchParams.get('col') || '';
   const minPriceParam = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : null;
   const maxPriceParam = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : null;
+  const inStockParam = searchParams.get('inStock') === 'true';
+  const ratingParam = searchParams.get('rating') ? Number(searchParams.get('rating')) : null;
+  const sortParam = (searchParams.get('sort') as SortOption) || 'featured';
 
-  const [searchTerm, setSearchTerm] = useState(queryParam);
-  const [selectedCategory, setSelectedCategory] = useState(categoryParam);
-  const [allProducts, setAllProducts] = useState<Product[]>(() => storageService.getProducts());
-  const [categories, setCategories] = useState<Category[]>(() => storageService.getCategories());
-  
-  const [productsLoading, setProductsLoading] = useState<boolean>(() => storageService.getProducts().length === 0);
-  const [categoriesLoading, setCategoriesLoading] = useState<boolean>(() => storageService.getCategories().length === 0);
-  const [productsError, setProductsError] = useState<string | null>(null);
-  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  // Filter & Sort State
+  const [filters, setFilters] = useState<ProductFilterState>({
+    search: queryParam,
+    category: categoryParam,
+    minPrice: minPriceParam,
+    maxPrice: maxPriceParam,
+    inStockOnly: inStockParam,
+    minRating: ratingParam,
+    occasion: occasionParam || undefined,
+    fabric: fabricParam || undefined,
+    style: styleParam || undefined,
+    tag: tagParam || undefined,
+    collection: collectionParam || undefined
+  });
 
-  const maxAvailablePrice = useMemo(() => {
-    const highest = Math.max(...allProducts.map(p => p.price || 0), 2500);
-    return Math.max(5000, Math.ceil(highest / 500) * 500 + 500);
-  }, [allProducts]);
+  const [sortBy, setSortBy] = useState<SortOption>(
+    ['featured', 'newest', 'price-low', 'price-high', 'rating'].includes(sortParam)
+      ? sortParam
+      : 'featured'
+  );
 
-  const [priceRange, setPriceRange] = useState<number>(100000);
-  const [sortBy, setSortBy] = useState<string>('featured');
-  const [onlyInStock, setOnlyInStock] = useState<boolean>(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState<boolean>(false);
   const [mobileLayout, setMobileLayout] = useState<'2col' | '1col'>('2col');
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [searchInputVal, setSearchInputVal] = useState(queryParam);
 
+  // Subscribe to real-time products and categories
   useEffect(() => {
-    setProductsLoading(true);
+    setProductsLoading(allProducts.length === 0);
     setProductsError(null);
-    setCategoriesLoading(true);
-    setCategoriesError(null);
 
     const unsubProducts = productService.subscribeToProducts(
       (all) => {
-        setAllProducts(all);
+        setAllProducts(all || []);
         setProductsLoading(false);
         setProductsError(null);
       },
       (err) => {
         console.error('ProductsPage subscribeToProducts error:', err);
-        setProductsError(err?.message || 'Unable to load catalog from Firestore.');
+        setProductsError(err?.message || 'Unable to connect to live Firestore catalog.');
         setProductsLoading(false);
       }
     );
 
     const unsubCategories = productService.subscribeToCategories(
       (cats) => {
-        setCategories(cats);
-        setCategoriesLoading(false);
-        setCategoriesError(null);
+        setCategories(cats || []);
       },
       (err) => {
         console.warn('ProductsPage subscribeToCategories error:', err);
-        setCategoriesError(err?.message || 'Unable to load categories.');
-        setCategoriesLoading(false);
       }
     );
 
@@ -88,326 +116,274 @@ export const ProductsPage: React.FC = () => {
     };
   }, []);
 
+  // Sync state when URL query params change (e.g. forward/back navigation or incoming link)
   useEffect(() => {
-    if (maxAvailablePrice > priceRange && priceRange !== 100000) {
-      setPriceRange(maxAvailablePrice);
+    const q = searchParams.get('q') || '';
+    const cat = searchParams.get('cat') || 'all';
+    const minP = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : null;
+    const maxP = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : null;
+    const inStk = searchParams.get('inStock') === 'true';
+    const rt = searchParams.get('rating') ? Number(searchParams.get('rating')) : null;
+    const s = (searchParams.get('sort') as SortOption) || 'featured';
+
+    setFilters(prev => ({
+      ...prev,
+      search: q,
+      category: cat,
+      minPrice: minP,
+      maxPrice: maxP,
+      inStockOnly: inStk,
+      minRating: rt,
+      occasion: searchParams.get('occasion') || undefined,
+      fabric: searchParams.get('fabric') || undefined,
+      style: searchParams.get('style') || undefined,
+      tag: searchParams.get('tag') || undefined,
+      collection: searchParams.get('collection') || searchParams.get('col') || undefined
+    }));
+
+    setSearchInputVal(q);
+
+    if (['featured', 'newest', 'price-low', 'price-high', 'rating'].includes(s)) {
+      setSortBy(s);
     }
-  }, [maxAvailablePrice]);
+  }, [searchParams]);
 
-  useEffect(() => {
-    setSearchTerm(queryParam);
-    setSelectedCategory(categoryParam);
-  }, [queryParam, categoryParam]);
+  // Push filter & sort updates to URL query parameters
+  const updateUrlParams = useCallback((newFilters: ProductFilterState, newSort: SortOption) => {
+    setSearchParams(prev => {
+      const params = new URLSearchParams();
 
-  const products = useMemo(() => {
-    let list = [...allProducts];
-
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase().trim();
-      list = list.filter(
-        p => (p.name || '').toLowerCase().includes(q) ||
-             (p.description || '').toLowerCase().includes(q) ||
-             (p.shortDescription || '').toLowerCase().includes(q) ||
-             (p.category || '').toLowerCase().includes(q) ||
-             (p.categorySlug || '').toLowerCase().includes(q) ||
-             ((p.tags || []).some(tag => (tag || '').toLowerCase().includes(q))) ||
-             (p.sku || '').toLowerCase().includes(q)
-      );
-    }
-
-    if (selectedCategory && selectedCategory !== 'all') {
-      const catLower = selectedCategory.toLowerCase();
-      list = list.filter(p => 
-        (p.categorySlug || '').toLowerCase() === catLower || 
-        (p.category || '').toLowerCase() === catLower
-      );
-    }
-
-    // Occasion filter
-    if (occasionParam) {
-      const occ = occasionParam.toLowerCase().trim();
-      list = list.filter(p => 
-        (p.occasion || '').toLowerCase().includes(occ) ||
-        (p.description || '').toLowerCase().includes(occ) ||
-        (p.shortDescription || '').toLowerCase().includes(occ) ||
-        (p.name || '').toLowerCase().includes(occ) ||
-        (p.tags || []).some(t => (t || '').toLowerCase().includes(occ))
-      );
-    }
-
-    // Fabric filter
-    if (fabricParam) {
-      const fab = fabricParam.toLowerCase().replace(/-/g, ' ').trim();
-      const fabTokens = fab.split(' ').filter(Boolean);
-      list = list.filter(p => {
-        const textToSearch = [
-          p.fabric || '',
-          p.material || '',
-          p.silkType || '',
-          p.name || '',
-          p.description || '',
-          ...(p.tags || [])
-        ].join(' ').toLowerCase();
-        return fabTokens.some(tok => textToSearch.includes(tok));
-      });
-    }
-
-    // Style filter
-    if (styleParam) {
-      const sty = styleParam.toLowerCase().trim();
-      list = list.filter(p => 
-        (p.borderType || '').toLowerCase().includes(sty) ||
-        (p.weaveTechnique || '').toLowerCase().includes(sty) ||
-        (p.craftsmanship || '').toLowerCase().includes(sty) ||
-        (p.name || '').toLowerCase().includes(sty) ||
-        (p.description || '').toLowerCase().includes(sty) ||
-        (p.tags || []).some(t => (t || '').toLowerCase().includes(sty))
-      );
-    }
-
-    // Tag / Special edits filter
-    if (tagParam) {
-      const tg = tagParam.toLowerCase().trim();
-      if (tg === 'new') {
-        list = list.filter(p => p.isNewArrival || p.newArrival || (p.tags || []).some(t => (t || '').toLowerCase().includes('new')));
-      } else if (tg === 'bestseller') {
-        list = list.filter(p => p.isBestSeller || p.bestseller || (p.tags || []).some(t => (t || '').toLowerCase().includes('bestseller') || (t || '').toLowerCase().includes('best seller')));
-      } else if (tg === 'sale') {
-        list = list.filter(p => Boolean((p.originalPrice && p.originalPrice > p.price) || (p.tags || []).some(t => (t || '').toLowerCase().includes('sale') || (t || '').toLowerCase().includes('festive'))));
-      } else {
-        list = list.filter(p => 
-          (p.tags || []).some(t => (t || '').toLowerCase().includes(tg)) ||
-          (p.name || '').toLowerCase().includes(tg)
-        );
+      if (newFilters.search && newFilters.search.trim()) {
+        params.set('q', newFilters.search.trim());
       }
-    }
-
-    // Collection filter
-    if (collectionParam) {
-      const col = collectionParam.toLowerCase().trim();
-      list = list.filter(p => 
-        (p.collectionId || '').toLowerCase() === col ||
-        (p.categorySlug || '').toLowerCase().includes(col) ||
-        (p.occasion || '').toLowerCase().includes(col) ||
-        (p.tags || []).some(t => (t || '').toLowerCase().includes(col)) ||
-        (p.name || '').toLowerCase().includes(col)
-      );
-    }
-
-    // Min and Max price filters
-    if (minPriceParam !== null) {
-      list = list.filter(p => p.price >= minPriceParam);
-    }
-    if (maxPriceParam !== null) {
-      list = list.filter(p => p.price <= maxPriceParam);
-    }
-
-    list = list.filter(p => p.price <= priceRange);
-
-    if (onlyInStock) {
-      list = list.filter(p => p.stock > 0);
-    }
-
-    if (sortBy) {
-      switch (sortBy) {
-        case 'price-low':
-          list.sort((a, b) => a.price - b.price);
-          break;
-        case 'price-high':
-          list.sort((a, b) => b.price - a.price);
-          break;
-        case 'rating':
-          list.sort((a, b) => a.rating - b.rating);
-          break;
-        case 'newest':
-          list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          break;
-        default:
-          break;
+      if (newFilters.category && newFilters.category !== 'all') {
+        params.set('cat', newFilters.category);
       }
-    }
+      if (newFilters.minPrice !== null && newFilters.minPrice > priceBounds.min) {
+        params.set('minPrice', String(newFilters.minPrice));
+      }
+      if (newFilters.maxPrice !== null && newFilters.maxPrice < priceBounds.max) {
+        params.set('maxPrice', String(newFilters.maxPrice));
+      }
+      if (newFilters.inStockOnly) {
+        params.set('inStock', 'true');
+      }
+      if (newFilters.minRating !== null && newFilters.minRating > 0) {
+        params.set('rating', String(newFilters.minRating));
+      }
+      if (newSort && newSort !== 'featured') {
+        params.set('sort', newSort);
+      }
 
-    return list;
-  }, [allProducts, searchTerm, selectedCategory, occasionParam, fabricParam, styleParam, tagParam, minPriceParam, maxPriceParam, priceRange, sortBy, onlyInStock]);
+      // Preserve special campaign tags if present
+      if (newFilters.occasion) params.set('occasion', newFilters.occasion);
+      if (newFilters.fabric) params.set('fabric', newFilters.fabric);
+      if (newFilters.style) params.set('style', newFilters.style);
+      if (newFilters.tag) params.set('tag', newFilters.tag);
+      if (newFilters.collection) params.set('collection', newFilters.collection);
 
-  const getCategoryCount = (slug: string) => {
-    if (slug === 'all') return allProducts.length;
-    return allProducts.filter(p => 
-      (p.categorySlug || '').toLowerCase() === slug.toLowerCase() ||
-      (p.category || '').toLowerCase() === slug.toLowerCase()
-    ).length;
+      return params;
+    }, { replace: true });
+  }, [priceBounds, setSearchParams]);
+
+  // Handle changing filters
+  const handleFilterChange = (partial: Partial<ProductFilterState>) => {
+    setFilters(prev => {
+      const updated = { ...prev, ...partial };
+      updateUrlParams(updated, sortBy);
+      return updated;
+    });
   };
 
+  // Handle changing sort option
+  const handleSortChange = (newSort: SortOption) => {
+    setSortBy(newSort);
+    updateUrlParams(filters, newSort);
+  };
+
+  // Handle mobile drawer apply
+  const handleApplyMobileFilters = (draft: ProductFilterState) => {
+    setFilters(draft);
+    updateUrlParams(draft, sortBy);
+  };
+
+  // Remove individual filter chip
+  const handleRemoveFilter = (key: keyof ProductFilterState) => {
+    setFilters(prev => {
+      let updated: ProductFilterState;
+      if (key === 'category') {
+        updated = { ...prev, category: 'all' };
+      } else if (key === 'search') {
+        updated = { ...prev, search: '' };
+        setSearchInputVal('');
+      } else if (key === 'minPrice') {
+        updated = { ...prev, minPrice: null };
+      } else if (key === 'maxPrice') {
+        updated = { ...prev, maxPrice: null };
+      } else if (key === 'inStockOnly') {
+        updated = { ...prev, inStockOnly: false };
+      } else if (key === 'minRating') {
+        updated = { ...prev, minRating: null };
+      } else {
+        const copy = { ...prev };
+        delete copy[key];
+        updated = copy;
+      }
+      updateUrlParams(updated, sortBy);
+      return updated;
+    });
+  };
+
+  // Reset all filters
+  const resetFilters = () => {
+    const fresh: ProductFilterState = {
+      ...DEFAULT_FILTER_STATE,
+      category: 'all',
+      search: '',
+      minPrice: null,
+      maxPrice: null,
+      inStockOnly: false,
+      minRating: null
+    };
+    setFilters(fresh);
+    setSearchInputVal('');
+    setSortBy('featured');
+    updateUrlParams(fresh, 'featured');
+  };
+
+  // Handle search submit
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setSearchParams(prev => {
-      const params = new URLSearchParams(prev);
-      if (searchTerm) params.set('q', searchTerm);
-      else params.delete('q');
-      return params;
-    });
+    handleFilterChange({ search: searchInputVal });
   };
 
-  const handleCategorySelect = (slug: string) => {
-    setSelectedCategory(slug);
-    setSearchParams(prev => {
-      const params = new URLSearchParams(prev);
-      if (slug !== 'all') params.set('cat', slug);
-      else params.delete('cat');
-      return params;
-    });
+  // Clear search input directly
+  const handleClearSearch = () => {
+    setSearchInputVal('');
+    handleFilterChange({ search: '' });
   };
 
-  const resetFilters = () => {
-    setSearchTerm('');
-    setSelectedCategory('all');
-    setPriceRange(maxAvailablePrice);
-    setOnlyInStock(false);
-    setSortBy('featured');
-    setSearchParams({});
-  };
+  // Filter products using strict AND semantics across all active criteria
+  const filteredProducts = useMemo(() => {
+    return filterProducts(allProducts, filters);
+  }, [allProducts, filters]);
+
+  // Sort filtered products deterministically
+  const sortedProducts = useMemo(() => {
+    return sortProducts(filteredProducts, sortBy);
+  }, [filteredProducts, sortBy]);
+
+  // Calculate live category counts taking other active filters into account
+  const categoryCounts = useMemo(() => {
+    return calculateCategoryCounts(allProducts, categories, filters);
+  }, [allProducts, categories, filters]);
+
+  // Number of active non-default filters
+  const activeFilterCount = useMemo(() => {
+    return getActiveFilterCount(filters, priceBounds);
+  }, [filters, priceBounds]);
 
   return (
-    <div className="products-page animate-fade-in" style={{ paddingBottom: '5rem' }}>
-      <div style={{
-        backgroundColor: '#0f172a',
-        color: '#ffffff',
-        padding: '2.5rem 0 2rem',
-        marginBottom: '1.5rem'
-      }}>
-        <div className="container">
-          <div style={{ maxWidth: '640px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', color: '#d4af37', textTransform: 'uppercase' }}>
-              {occasionParam || fabricParam || styleParam || tagParam ? 'CURATED EDIT' : 'THE COMPLETE REPERTORY'}
-            </span>
-            <h1 style={{ color: '#ffffff', fontSize: '2.2rem', marginTop: '4px', marginBottom: '0.4rem' }}>
-              {occasionParam 
-                ? `Shop by Occasion: ${occasionParam.charAt(0).toUpperCase() + occasionParam.slice(1)}`
-                : fabricParam
-                ? `Shop by Fabric: ${fabricParam.replace(/-/g, ' ').toUpperCase()}`
-                : styleParam
-                ? `Shop by Style: ${styleParam.charAt(0).toUpperCase() + styleParam.slice(1)}`
-                : tagParam === 'new'
-                ? '✨ New Arrivals Edit'
-                : tagParam === 'bestseller'
-                ? '👑 Royal Best Sellers'
-                : tagParam === 'sale'
-                ? '🔥 Festive Special Offers'
-                : selectedCategory !== 'all'
-                ? categories.find(c => c.slug === selectedCategory)?.name || 'Collection'
-                : 'MUETY Collections'
-              }
-            </h1>
-            <p style={{ color: '#94a3b8', fontSize: '0.92rem' }}>
-              Explore pure silk sarees, festive handlooms, bridal couture, and royal temple jewelry.
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="products-page animate-fade-in" style={{ paddingBottom: 'clamp(4rem, 8vw, 6rem)', paddingTop: '1.25rem' }}>
+      <h1 style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
+        MUETY Pure Silk Sarees & Ethnic Catalog
+      </h1>
 
       <div className="container">
-        <div className="mobile-catalog-toolbar" style={{
-          display: 'none',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 0',
-          borderBottom: '1px solid var(--brand-border)',
-          marginBottom: '1rem',
-          backgroundColor: 'var(--bg-main)',
-          position: 'sticky',
-          top: 'var(--header-height-mobile, 52px)',
-          zIndex: 90
-        }}>
+        {/* Mobile Search Input (Visible only on < 1024px) */}
+        <div className="mobile-search-bar">
+          <form onSubmit={handleSearchSubmit} style={{ position: 'relative', width: '100%' }}>
+            <input
+              type="text"
+              placeholder="Search pieces, materials, SKUs..."
+              value={searchInputVal}
+              onChange={(e) => setSearchInputVal(e.target.value)}
+              className="form-input"
+              style={{ paddingLeft: '2.4rem', paddingRight: '2rem', height: '42px', fontSize: '0.88rem', borderRadius: '8px' }}
+            />
+            <Search size={16} color="var(--brand-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            {searchInputVal && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                aria-label="Clear search text"
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--brand-muted)', padding: '4px' }}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </form>
+        </div>
+
+        {/* Mobile / Tablet Compact Catalog Toolbar */}
+        <div className="mobile-catalog-toolbar">
           <button
-            onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '0.85rem',
-              fontWeight: 700,
-              color: 'var(--brand-primary)',
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-sm)',
-              backgroundColor: '#ffffff',
-              border: '1px solid var(--brand-border)'
-            }}
+            type="button"
+            onClick={() => setMobileFilterOpen(true)}
+            className="filter-btn-mobile"
+            aria-label={`Open filters. ${activeFilterCount} active`}
           >
-            <SlidersHorizontal size={14} />
+            <SlidersHorizontal size={14} color="#c9a227" />
             <span>Filter</span>
-            {(selectedCategory !== 'all' || onlyInStock || priceRange < maxAvailablePrice) && (
-              <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#ea580c' }} />
+            {activeFilterCount > 0 && (
+              <span className="filter-badge-pill">{activeFilterCount}</span>
             )}
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              style={{
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                color: 'var(--brand-primary)',
-                padding: '6px 8px',
-                borderRadius: 'var(--radius-sm)',
-                backgroundColor: '#ffffff',
-                border: '1px solid var(--brand-border)',
-                outline: 'none'
-              }}
-            >
-              <option value="featured">Featured</option>
-              <option value="newest">Newest</option>
-              <option value="price-low">Price: Low</option>
-              <option value="price-high">Price: High</option>
-              <option value="rating">Top Rated</option>
-            </select>
-          </div>
+          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {sortedProducts.length} {sortedProducts.length === 1 ? 'item' : 'items'}
+          </span>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <SortDropdown
+              value={sortBy}
+              onChange={handleSortChange}
+              compact={true}
+            />
+
             <button
+              type="button"
               onClick={() => setMobileLayout(mobileLayout === '2col' ? '1col' : '2col')}
               style={{
-                padding: '6px 10px',
-                fontSize: '0.75rem',
+                padding: '6px 8px',
+                fontSize: '0.74rem',
                 fontWeight: 700,
                 backgroundColor: '#ffffff',
-                border: '1px solid var(--brand-border)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--brand-primary)'
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                color: '#10172a',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '2px',
+                cursor: 'pointer'
               }}
               title="Toggle Grid View"
+              aria-label={mobileLayout === '2col' ? 'Switch to 1-column view' : 'Switch to 2-column view'}
             >
               {mobileLayout === '2col' ? '|| 2 Col' : '[ ] 1 Col'}
             </button>
           </div>
         </div>
 
-        <div className="desktop-catalog-toolbar" style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1rem',
-          marginBottom: '2rem',
-          paddingBottom: '1.25rem',
-          borderBottom: '1px solid var(--brand-border)'
-        }}>
-          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', minWidth: '280px', maxWidth: '400px', flex: 1 }}>
+        {/* Desktop Catalog Toolbar (1024px and wider) */}
+        <div className="desktop-catalog-toolbar">
+          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', minWidth: '280px', maxWidth: '420px', flex: 1 }}>
             <div style={{ position: 'relative', width: '100%' }}>
               <input
                 type="text"
                 placeholder="Search pieces, materials, SKUs..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchInputVal}
+                onChange={(e) => setSearchInputVal(e.target.value)}
                 className="form-input"
-                style={{ paddingLeft: '2.5rem', paddingRight: '2rem', height: '44px' }}
+                style={{ paddingLeft: '2.5rem', paddingRight: '2rem', height: '44px', borderRadius: '8px' }}
               />
               <Search size={18} color="var(--brand-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-              {searchTerm && (
+              {searchInputVal && (
                 <button
                   type="button"
-                  onClick={() => { setSearchTerm(''); setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('q'); return p; }); }}
-                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--brand-muted)' }}
+                  onClick={handleClearSearch}
+                  aria-label="Clear search input"
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--brand-muted)', padding: '4px' }}
                 >
                   <X size={16} />
                 </button>
@@ -415,189 +391,125 @@ export const ProductsPage: React.FC = () => {
             </div>
           </form>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              Showing <strong>{products.length}</strong> items
+              Showing <strong style={{ color: '#10172a' }}>{sortedProducts.length}</strong> {sortedProducts.length === 1 ? 'creation' : 'creations'}
             </span>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--brand-muted)', fontWeight: 600 }}>Sort:</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="form-select"
-                style={{ width: 'auto', padding: '0.45rem 2rem 0.45rem 0.75rem', fontSize: '0.875rem' }}
-              >
-                <option value="featured">Featured Picks</option>
-                <option value="newest">Newest Arrivals</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-                <option value="rating">Highest Rated</option>
-              </select>
-            </div>
+            <SortDropdown
+              value={sortBy}
+              onChange={handleSortChange}
+            />
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '2.5rem' }} className="products-layout-grid">
-          <aside className={`filter-sidebar ${mobileFilterOpen ? 'mobile-open' : ''}`} style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '2rem'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '1.15rem' }}>Filters</h3>
-              <button 
-                onClick={resetFilters}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', color: 'var(--brand-accent-hover)', fontWeight: 600 }}
-              >
-                <RotateCcw size={13} /> Reset
-              </button>
-            </div>
-
-            <div>
-              <h4 style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--brand-muted)', marginBottom: '0.75rem' }}>
-                Categories
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <button
-                  onClick={() => handleCategorySelect('all')}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: selectedCategory === 'all' ? 'var(--brand-primary)' : 'transparent',
-                    color: selectedCategory === 'all' ? '#ffffff' : 'var(--text-primary)',
-                    fontWeight: selectedCategory === 'all' ? 700 : 500,
-                    fontSize: '0.9rem',
-                    textAlign: 'left'
-                  }}
-                >
-                  <span>All Collections</span>
-                  <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>
-                    ({allProducts.length})
-                  </span>
-                </button>
-
-                {categories.map(cat => (
-                  <button
-                    key={cat.id}
-                    onClick={() => handleCategorySelect(cat.slug)}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      backgroundColor: selectedCategory === cat.slug ? 'var(--brand-primary)' : 'transparent',
-                      color: selectedCategory === cat.slug ? '#ffffff' : 'var(--text-primary)',
-                      fontWeight: selectedCategory === cat.slug ? 700 : 500,
-                      fontSize: '0.9rem',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <span>{cat.name}</span>
-                    <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>
-                      ({getCategoryCount(cat.slug)})
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <h4 style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--brand-muted)' }}>
-                  Max Price
-                </h4>
-                <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--brand-primary)' }}>
-                  ₹{priceRange >= maxAvailablePrice ? `${maxAvailablePrice.toLocaleString()}+` : priceRange.toLocaleString()}
-                </span>
-              </div>
-              <input
-                type="range"
-                min={50}
-                max={maxAvailablePrice}
-                step={50}
-                value={priceRange}
-                onChange={(e) => setPriceRange(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#0f172a' }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--brand-muted)', marginTop: '4px' }}>
-                <span>₹50</span>
-                <span>₹{maxAvailablePrice.toLocaleString()}+</span>
-              </div>
-            </div>
-
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px',
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--brand-border)',
-              borderRadius: 'var(--radius-md)'
-            }}>
-              <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>In Stock Only</span>
-              <input
-                type="checkbox"
-                checked={onlyInStock}
-                onChange={(e) => setOnlyInStock(e.target.checked)}
-                style={{ width: '18px', height: '18px', accentColor: '#0f172a' }}
-              />
-            </div>
+        {/* Two-Column Shop Layout: Desktop Sidebar + Product Results */}
+        <div className="products-layout-grid">
+          {/* Desktop Filter Sidebar */}
+          <aside className="products-desktop-sidebar">
+            <ProductFilterPanel
+              filters={filters}
+              onChange={handleFilterChange}
+              onReset={resetFilters}
+              categories={categories}
+              categoryCounts={categoryCounts}
+              priceBounds={priceBounds}
+              isMobileDrawer={false}
+            />
           </aside>
 
-          <div>
+          {/* Product Results Area */}
+          <main style={{ minWidth: 0, width: '100%' }}>
+            {/* Removable Active Filter Chips */}
+            <ActiveFilterChips
+              filters={filters}
+              categories={categories}
+              priceBounds={priceBounds}
+              onRemoveFilter={handleRemoveFilter}
+              onResetAll={resetFilters}
+            />
+
+            {/* Catalog Loading State */}
             {productsLoading ? (
               <div style={{
                 textAlign: 'center',
                 padding: '5rem 2rem',
                 backgroundColor: '#ffffff',
-                borderRadius: 'var(--radius-lg)',
+                borderRadius: 'var(--radius-lg, 12px)',
                 border: '1px solid var(--brand-border)'
               }}>
-                <div className="animate-spin" style={{ display: 'inline-block', width: '32px', height: '32px', border: '3px solid #cbd5e1', borderTopColor: '#0f172a', borderRadius: '50%', marginBottom: '1rem' }} />
-                <h3 style={{ fontSize: '1.2rem', color: 'var(--brand-primary)', marginBottom: '0.5rem' }}>Connecting to MUETY Firestore...</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Retrieving live handcrafted creations from cloud database.</p>
+                <Loader2 size={32} className="animate-spin" color="#c9a227" style={{ margin: '0 auto 1rem' }} />
+                <h3 style={{ fontSize: '1.2rem', color: '#10172a', marginBottom: '0.5rem' }}>
+                  Connecting to MUETY Atelier...
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
+                  Retrieving genuine Salem handloom creations from our live cloud catalog.
+                </p>
               </div>
             ) : productsError ? (
               <div style={{
                 textAlign: 'center',
                 padding: '4rem 2rem',
                 backgroundColor: '#fef2f2',
-                borderRadius: 'var(--radius-lg)',
+                borderRadius: 'var(--radius-lg, 12px)',
                 border: '1px solid #fca5a5'
               }}>
-                <h3 style={{ color: '#991b1b', marginBottom: '0.5rem' }}>Unable to load the catalog right now.</h3>
+                <h3 style={{ color: '#991b1b', marginBottom: '0.5rem' }}>
+                  Unable to load catalog pieces right now.
+                </h3>
                 <p style={{ color: '#7f1d1d', fontSize: '0.9rem', marginBottom: '1.5rem', maxWidth: '480px', margin: '0 auto 1.5rem' }}>
                   {productsError}
                 </p>
-                <button onClick={() => window.location.reload()} className="btn btn-primary btn-sm">
+                <button 
+                  type="button" 
+                  onClick={() => window.location.reload()} 
+                  className="btn btn-primary btn-sm"
+                >
                   Retry Connection
                 </button>
               </div>
-            ) : products.length === 0 ? (
+            ) : sortedProducts.length === 0 ? (
+              /* Empty Results State */
               <div style={{
                 textAlign: 'center',
-                padding: '5rem 2rem',
+                padding: '4.5rem 2rem',
                 backgroundColor: '#ffffff',
-                borderRadius: 'var(--radius-lg)',
-                border: '1px dashed var(--brand-border)'
+                borderRadius: 'var(--radius-lg, 12px)',
+                border: '1.5px dashed #e2e8f0'
               }}>
-                <Sparkles size={48} color="var(--brand-accent)" style={{ marginBottom: '1rem' }} />
-                <h3 style={{ marginBottom: '0.5rem' }}>Products are being prepared for launch.</h3>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', maxWidth: '440px', margin: '0 auto 1.5rem' }}>
-                  The MUETY Atelier is currently updating our luxury handloom collection. Please check back shortly or adjust your filter selection.
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(201, 162, 39, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 1.25rem',
+                  color: '#c9a227'
+                }}>
+                  <Sparkles size={32} />
+                </div>
+                <h3 style={{ fontSize: '1.25rem', color: '#10172a', marginBottom: '0.5rem' }}>
+                  No handlooms match your chosen filters.
+                </h3>
+                <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.75rem', maxWidth: '440px', margin: '0 auto 1.75rem', lineHeight: 1.6 }}>
+                  Try removing some filter constraints, broadening your price range, or searching for other weave techniques.
                 </p>
-                <button onClick={resetFilters} className="btn btn-primary btn-sm">
-                  Reset All Filters
+                <button 
+                  type="button"
+                  onClick={resetFilters} 
+                  className="btn btn-primary btn-sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <RotateCcw size={14} />
+                  <span>Reset All Filters</span>
                 </button>
               </div>
             ) : (
+              /* Product Grid */
               <div className={`products-grid-3col ${mobileLayout === '1col' ? 'grid-view-1col' : ''}`}>
-                {products.map(product => (
+                {sortedProducts.map(product => (
                   <ProductCard 
                     key={product.id} 
                     product={product} 
@@ -606,39 +518,27 @@ export const ProductsPage: React.FC = () => {
                 ))}
               </div>
             )}
-          </div>
+          </main>
         </div>
       </div>
 
+      {/* Quick View Modal */}
       <QuickViewModal 
         product={quickViewProduct} 
         onClose={() => setQuickViewProduct(null)} 
       />
 
-      <style>{`
-        @media (max-width: 860px) {
-          .products-layout-grid {
-            grid-template-columns: 1fr !important;
-          }
-          .mobile-catalog-toolbar {
-            display: flex !important;
-          }
-          .desktop-catalog-toolbar {
-            display: none !important;
-          }
-          .filter-sidebar {
-            display: none;
-            background: #ffffff;
-            padding: 1.25rem;
-            border-radius: var(--radius-md);
-            border: 1px solid var(--brand-border);
-            margin-bottom: 1.25rem;
-          }
-          .filter-sidebar.mobile-open {
-            display: flex !important;
-          }
-        }
-      `}</style>
+      {/* Mobile Slide-Up Filter Drawer (Rendered via React Portal) */}
+      <ProductFilterDrawer
+        isOpen={mobileFilterOpen}
+        onClose={() => setMobileFilterOpen(false)}
+        appliedFilters={filters}
+        onApply={handleApplyMobileFilters}
+        allProducts={allProducts}
+        categories={categories}
+        categoryCounts={categoryCounts}
+        priceBounds={priceBounds}
+      />
     </div>
   );
 };

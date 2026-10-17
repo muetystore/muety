@@ -136,43 +136,38 @@ export const Header: React.FC = () => {
     };
   }, []);
 
-  // Memoized collections for Shop By dropdown
+  // Memoized collections for Shop By dropdown (Strictly real admin data only)
   const shopByOccasions = useMemo(() => {
-    const list = collections.filter(c => c.showInShopBy !== false && (c.type === 'occasion' || !c.type));
-    if (list.length > 0) return list;
-    return [
-      { id: 'col-bridal', slug: 'bridal', name: 'Wedding & Bridal Sarees' },
-      { id: 'col-festive', slug: 'festive', name: 'Festive Handlooms' },
-      { id: 'col-reception', slug: 'reception', name: 'Party & Reception Wear' },
-      { id: 'col-temple', slug: 'temple', name: 'Grand Celebrations' }
-    ];
+    return collections
+      .filter(c => c.showInShopBy !== false && (c.type === 'occasion' || !c.type))
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
   }, [collections]);
 
   const shopByFabrics = useMemo(() => {
-    const list = collections.filter(c => c.showInShopBy !== false && c.type === 'fabric');
-    if (list.length > 0) return list;
-    return [
-      { id: 'col-fab-mulberry', slug: 'pure-silk', name: 'Pure Mulberry Silk' },
-      { id: 'col-fab-kanchi', slug: 'kanchipuram', name: 'Kanchipuram Silk' },
-      { id: 'col-fab-cotton', slug: 'cotton', name: 'Traditional Cotton Handloom' },
-      { id: 'col-fab-georgette', slug: 'georgette', name: 'Georgette & Soft Crepe' }
-    ];
+    return collections
+      .filter(c => c.showInShopBy !== false && c.type === 'fabric')
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
   }, [collections]);
 
   const shopByStyles = useMemo(() => {
-    const list = collections.filter(c => c.showInShopBy !== false && c.type === 'style');
-    if (list.length > 0) return list;
-    return [
-      { id: 'col-style-classic', slug: 'traditional', name: 'Traditional Classic' },
-      { id: 'col-style-designer', slug: 'contemporary', name: 'Contemporary Designer' },
-      { id: 'col-style-temple', slug: 'temple-borders', name: 'Royal Temple Borders' },
-      { id: 'col-style-gold-zari', slug: 'gold-zari', name: 'Pure Gold Zari Handlooms' }
-    ];
+    return collections
+      .filter(c => c.showInShopBy !== false && c.type === 'style')
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
   }, [collections]);
 
   const shopByCurated = useMemo(() => {
-    return collections.filter(c => c.showInShopBy !== false && (c.type === 'curated' || c.type === 'collection'));
+    return collections
+      .filter(c => c.showInShopBy !== false && (c.type === 'curated' || c.type === 'collection'))
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
   }, [collections]);
+
+  const activeShopByColsCount = useMemo(() => {
+    let count = 1; // Price & Curated edits column is always present
+    if (shopByOccasions.length > 0) count++;
+    if (shopByFabrics.length > 0) count++;
+    if (shopByStyles.length > 0) count++;
+    return count;
+  }, [shopByOccasions.length, shopByFabrics.length, shopByStyles.length]);
 
   // Collections hover handlers with debounce bridge
   const handleCollectionsEnter = () => {
@@ -264,51 +259,61 @@ export const Header: React.FC = () => {
                 {shopByMenuOpen && (
                   <div 
                     className="shopby-megamenu animate-fade-in"
+                    style={{ width: `${Math.min(760, Math.max(360, activeShopByColsCount * 190))}px` }}
                     onMouseEnter={handleShopByEnter}
                     onMouseLeave={handleShopByLeave}
                   >
-                    <div className="shopby-megamenu-grid">
+                    <div 
+                      className="shopby-megamenu-grid"
+                      style={{ gridTemplateColumns: `repeat(${activeShopByColsCount}, minmax(160px, 1fr))` }}
+                    >
                       {/* Column 1: Occasion */}
-                      <div className="shopby-column">
-                        <div className="shopby-column-title">Shop by Occasion</div>
-                        <ul className="shopby-link-list">
-                          {shopByOccasions.map(col => (
-                            <li key={col.id}>
-                              <Link to={`/products?occasion=${col.slug}`} onClick={() => setShopByMenuOpen(false)}>
-                                {col.name}
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      {shopByOccasions.length > 0 && (
+                        <div className="shopby-column">
+                          <div className="shopby-column-title">Shop by Occasion</div>
+                          <ul className="shopby-link-list">
+                            {shopByOccasions.map(col => (
+                              <li key={col.id}>
+                                <Link to={`/products?occasion=${col.slug}`} onClick={() => setShopByMenuOpen(false)}>
+                                  {col.name}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
                       {/* Column 2: Fabric */}
-                      <div className="shopby-column">
-                        <div className="shopby-column-title">Shop by Fabric</div>
-                        <ul className="shopby-link-list">
-                          {shopByFabrics.map(col => (
-                            <li key={col.id}>
-                              <Link to={`/products?fabric=${col.slug}`} onClick={() => setShopByMenuOpen(false)}>
-                                {col.name}
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      {shopByFabrics.length > 0 && (
+                        <div className="shopby-column">
+                          <div className="shopby-column-title">Shop by Fabric</div>
+                          <ul className="shopby-link-list">
+                            {shopByFabrics.map(col => (
+                              <li key={col.id}>
+                                <Link to={`/products?fabric=${col.slug}`} onClick={() => setShopByMenuOpen(false)}>
+                                  {col.name}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
                       {/* Column 3: Style */}
-                      <div className="shopby-column">
-                        <div className="shopby-column-title">Shop by Style</div>
-                        <ul className="shopby-link-list">
-                          {shopByStyles.map(col => (
-                            <li key={col.id}>
-                              <Link to={`/products?style=${col.slug}`} onClick={() => setShopByMenuOpen(false)}>
-                                {col.name}
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      {shopByStyles.length > 0 && (
+                        <div className="shopby-column">
+                          <div className="shopby-column-title">Shop by Style</div>
+                          <ul className="shopby-link-list">
+                            {shopByStyles.map(col => (
+                              <li key={col.id}>
+                                <Link to={`/products?style=${col.slug}`} onClick={() => setShopByMenuOpen(false)}>
+                                  {col.name}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
                       {/* Column 4: Price & Curated Edits */}
                       <div className="shopby-column shopby-column-highlight">
@@ -365,7 +370,7 @@ export const Header: React.FC = () => {
                 )}
               </div>
 
-              {/* 3. Collections Dropdown */}
+              {/* 3. Categories Dropdown */}
               <div 
                 ref={collectionsRef}
                 className="nav-dropdown-wrapper"
@@ -382,7 +387,7 @@ export const Header: React.FC = () => {
                   aria-haspopup="true"
                   aria-expanded={collectionsMenuOpen}
                 >
-                  <span>Collections</span>
+                  <span>Categories</span>
                   <ChevronDown 
                     size={14} 
                     className={`nav-chevron ${collectionsMenuOpen ? 'rotated' : ''}`}
@@ -673,38 +678,44 @@ export const Header: React.FC = () => {
 
                 {mobileShopByOpen && (
                   <div style={{ padding: '6px 0 10px 12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Occasion</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
-                        {shopByOccasions.map(col => (
-                          <Link key={col.id} to={`/products?occasion=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
-                            {col.name}
-                          </Link>
-                        ))}
+                    {shopByOccasions.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Occasion</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
+                          {shopByOccasions.map(col => (
+                            <Link key={col.id} to={`/products?occasion=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
+                              {col.name}
+                            </Link>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Fabric</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
-                        {shopByFabrics.map(col => (
-                          <Link key={col.id} to={`/products?fabric=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
-                            {col.name}
-                          </Link>
-                        ))}
+                    {shopByFabrics.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Fabric</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
+                          {shopByFabrics.map(col => (
+                            <Link key={col.id} to={`/products?fabric=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
+                              {col.name}
+                            </Link>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Style</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
-                        {shopByStyles.map(col => (
-                          <Link key={col.id} to={`/products?style=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
-                            {col.name}
-                          </Link>
-                        ))}
+                    {shopByStyles.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Style</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
+                          {shopByStyles.map(col => (
+                            <Link key={col.id} to={`/products?style=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
+                              {col.name}
+                            </Link>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div>
                       <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Price Range</div>
@@ -718,7 +729,7 @@ export const Header: React.FC = () => {
                 )}
               </div>
 
-              {/* Mobile Collections Accordion */}
+              {/* Mobile Categories Accordion */}
               <div style={{ borderBottom: '1px solid #f1f5f9', padding: '6px 0' }}>
                 <button
                   type="button"
@@ -738,7 +749,7 @@ export const Header: React.FC = () => {
                   }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Layers size={16} color="#c9a227" /> Collections
+                    <Layers size={16} color="#c9a227" /> Categories
                   </span>
                   <ChevronDown size={16} style={{ transform: mobileCollectionsOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
                 </button>

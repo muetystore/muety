@@ -7,6 +7,18 @@
 # ==============================================================================
 
 # 1. API & Netlify Functions
+/api/admin/create-user          /.netlify/functions/admin-api            200
+/api/admin/update-role          /.netlify/functions/admin-api            200
+/api/admin/set-role             /.netlify/functions/admin-api            200
+/api/admin/resend-invitation    /.netlify/functions/admin-api            200
+/api/admin/disable-user         /.netlify/functions/admin-api            200
+/api/admin/create-department    /.netlify/functions/admin-api            200
+/api/admin/update-department    /.netlify/functions/admin-api            200
+/api/admin/create-role          /.netlify/functions/admin-api            200
+/api/admin/update-role-definition /.netlify/functions/admin-api         200
+/api/admin/profile              /.netlify/functions/admin-api            200
+/api/admin/config-status        /.netlify/functions/admin-api            200
+/api/admin/*                    /.netlify/functions/admin-api            200
 /api/newsletter/subscribe       /.netlify/functions/subscribe            200
 /api/launch-status              /.netlify/functions/launch-status         200
 /api/media/cloudinary-signature /.netlify/functions/cloudinary-signature 200
@@ -26,6 +38,18 @@ https://muety.in/            /countdown.html                  200!
 https://www.muety.in/        /countdown.html                  200!
 
 # Admin subdomain API routes (must precede Admin SPA wildcard)
+https://admin.muety.in/api/admin/create-user          /.netlify/functions/admin-api            200
+https://admin.muety.in/api/admin/update-role          /.netlify/functions/admin-api            200
+https://admin.muety.in/api/admin/set-role             /.netlify/functions/admin-api            200
+https://admin.muety.in/api/admin/resend-invitation    /.netlify/functions/admin-api            200
+https://admin.muety.in/api/admin/disable-user         /.netlify/functions/admin-api            200
+https://admin.muety.in/api/admin/create-department    /.netlify/functions/admin-api            200
+https://admin.muety.in/api/admin/update-department    /.netlify/functions/admin-api            200
+https://admin.muety.in/api/admin/create-role          /.netlify/functions/admin-api            200
+https://admin.muety.in/api/admin/update-role-definition /.netlify/functions/admin-api         200
+https://admin.muety.in/api/admin/profile              /.netlify/functions/admin-api            200
+https://admin.muety.in/api/admin/config-status        /.netlify/functions/admin-api            200
+https://admin.muety.in/api/admin/*                    /.netlify/functions/admin-api            200
 https://admin.muety.in/api/newsletter/subscribe       /.netlify/functions/subscribe            200
 https://admin.muety.in/api/launch-status              /.netlify/functions/launch-status         200
 https://admin.muety.in/api/media/cloudinary-signature /.netlify/functions/cloudinary-signature 200

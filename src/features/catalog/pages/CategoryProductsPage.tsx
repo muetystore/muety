@@ -106,14 +106,14 @@ export const CategoryProductsPage: React.FC = () => {
             <ChevronRight size={14} />
             <Link to="/categories" style={{ color: '#cbd5e1' }}>Categories</Link>
             <ChevronRight size={14} />
-            <span style={{ color: 'var(--brand-accent)', fontWeight: 600 }}>{category?.name || 'Collection'}</span>
+            <span style={{ color: 'var(--brand-accent)', fontWeight: 600 }}>{category?.name || 'Category'}</span>
           </div>
 
           <span style={{ fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.12em', color: 'var(--brand-accent)', textTransform: 'uppercase' }}>
             ATELIER WEAVE REPERTORY
           </span>
           <h1 style={{ color: '#ffffff', fontSize: 'clamp(2rem, 4.5vw, 3rem)', marginTop: '4px', marginBottom: '0.75rem', fontWeight: 800 }}>
-            {category?.name || 'Handloom Collection'}
+            {category?.name || 'Handloom Category'}
           </h1>
           <p style={{ color: '#cbd5e1', fontSize: 'clamp(0.92rem, 1.8vw, 1.05rem)', maxWidth: '620px', lineHeight: 1.6 }}>
             {category?.description || 'Authentic pure silk handlooms meticulously woven by master Salem artisans.'}
@@ -135,7 +135,7 @@ export const CategoryProductsPage: React.FC = () => {
           }}
         >
           <span style={{ fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
-            Showing <strong>{products.length}</strong> masterworks in <strong>{category?.name || 'Collection'}</strong>
+            Showing <strong>{products.length}</strong> masterworks in <strong>{category?.name || 'Category'}</strong>
           </span>
           <div style={{ display: 'flex', gap: '8px' }}>
             <Link to="/categories" className="btn btn-outline btn-sm">
@@ -162,7 +162,7 @@ export const CategoryProductsPage: React.FC = () => {
             <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', marginBottom: '1.5rem' }}>
               Our Salem weavers are completing new drapes on the pit-looms. Please check back shortly or explore our full repertory.
             </p>
-            <Link to="/products" className="btn btn-primary btn-sm">Browse Other Collections</Link>
+            <Link to="/products" className="btn btn-primary btn-sm">Browse Other Categories</Link>
           </div>
         ) : (
           <div className="products-grid">

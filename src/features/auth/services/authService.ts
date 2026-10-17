@@ -147,7 +147,7 @@ export class AuthService {
 
     if (db && isLiveFirebase) {
       try {
-        const userDoc = await withTimeout(getDoc(doc(db, 'users', fbUser.uid)), 2000);
+        const userDoc = await withTimeout(getDoc(doc(db, 'users', fbUser.uid)), 6000);
         if (userDoc && userDoc.exists && userDoc.exists()) {
           firestoreProfile = userDoc.data() as UserProfile;
         }
