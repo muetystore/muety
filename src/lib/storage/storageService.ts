@@ -3,6 +3,7 @@ import { Coupon } from '@/features/coupons/types';
 import { Order } from '@/features/orders/types';
 import { PatronReview } from '@/features/reviews/types';
 import { StoreSettings, UserProfile } from '@/shared/types';
+import { ensureContactChannels } from '@/shared/utils/contactChannels';
 import { 
   INITIAL_PRODUCTS, 
   INITIAL_CATEGORIES, 
@@ -454,14 +455,20 @@ class StorageService {
           (parsed as any)._shippingMigratedV2 = true;
           changed = true;
         }
-        if (changed) {
-          this.saveSettings(parsed);
+
+        const ensured = ensureContactChannels(parsed);
+        if (!parsed.contactChannels || parsed.contactChannels.length === 0) {
+          changed = true;
         }
-        return parsed;
+
+        if (changed) {
+          this.saveSettings(ensured);
+        }
+        return ensured;
       }
-      return INITIAL_SETTINGS;
+      return ensureContactChannels(INITIAL_SETTINGS);
     } catch {
-      return INITIAL_SETTINGS;
+      return ensureContactChannels(INITIAL_SETTINGS);
     }
   }
 

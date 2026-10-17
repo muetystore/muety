@@ -1,34 +1,20 @@
 [
   {
     "backgroundColor": "#4a0e2e",
-    "ctaText": "View Policies →",
+    "ctaText": "Shop Edit →",
     "accentColor": "#facc15",
-    "hasCountdown": false,
-    "message": "Insured Courier Delivery Flat ₹89 Across All Pincodes in India",
-    "title": "Courier Shipping Guarantee",
-    "textColor": "#ffffff",
-    "createdAt": "2026-10-03T00:00:00Z",
-    "id": "ann-03",
-    "ctaLink": "/shipping",
-    "campaignLabel": "MUETY DIRECT",
-    "isActive": true,
+    "countdownEndTime": "2026-10-17T14:03:50.205Z",
     "displayOrder": 1,
-    "updatedAt": "2026-10-17T03:21:53.434Z"
-  },
-  {
-    "backgroundColor": "#3b0a24",
-    "ctaText": "Explore Atelier →",
-    "accentColor": "#eab308",
-    "displayOrder": 2,
-    "hasCountdown": false,
-    "message": "100% Pure Mulberry Silk & 24K Certified Gold Zari Handcrafted on Heritage Pit Looms",
-    "title": "Muety Atelier Pure Silk Mark Certification",
-    "textColor": "#ffffff",
-    "createdAt": "2026-10-02T00:00:00Z",
-    "id": "ann-02",
-    "ctaLink": "/about",
-    "campaignLabel": "SILK MARK INDIA",
+    "hasCountdown": true,
     "isActive": true,
-    "updatedAt": "2026-10-17T03:21:53.434Z"
+    "message": "25% Off on Salem Handlooms • Flat ₹89 Delivery Nationwide",
+    "title": "Diwali Festive Sale 2026",
+    "textColor": "#ffffff",
+    "createdAt": "2026-10-01T00:00:00Z",
+    "id": "ann-01",
+    "ctaLink": "/products",
+    "campaignLabel": "ROYAL FESTIVE EDIT 2026",
+    "couponCode": "DIWALI25",
+    "updatedAt": "2026-10-01T00:00:00Z"
   }
 ]

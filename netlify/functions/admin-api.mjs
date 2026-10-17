@@ -408,6 +408,16 @@ export async function handler(event) {
     return handleAdminProfileAction(authHeader, body, corsHeaders);
   }
 
+  // Route 10: Activate Admin User
+  if (rawPath.includes('activate-user') || action === 'activate-user') {
+    return handleActivateUserAction(authHeader, body, corsHeaders);
+  }
+
+  // Route 11: Sync Admin Roster Statuses
+  if (rawPath.includes('sync-status') || action === 'sync-status') {
+    return handleSyncStatusAction(authHeader, body, corsHeaders);
+  }
+
   // Default fallback
   return {
     statusCode: 404,
@@ -949,6 +959,137 @@ async function handleAdminProfileAction(authHeader, body, corsHeaders) {
     body: JSON.stringify({
       success: true,
       message: 'Admin profile updated successfully.'
+    })
+  };
+}
+
+async function handleActivateUserAction(authHeader, body, corsHeaders) {
+  const caller = await verifyIdTokenAndGetCaller(authHeader);
+  if (!caller || (!caller.roles.includes('super_admin') && !caller.roles.includes('superadmin') && !caller.roles.includes('admin'))) {
+    return {
+      statusCode: 403,
+      headers: corsHeaders,
+      body: JSON.stringify({
+        success: false,
+        code: 'PERMISSION_DENIED',
+        error: { code: 'PERMISSION_DENIED', message: 'Only Administrators can activate admin accounts.' }
+      })
+    };
+  }
+
+  const targetUid = body.targetUid || body.uid;
+  if (!targetUid) {
+    return {
+      statusCode: 400,
+      headers: corsHeaders,
+      body: JSON.stringify({
+        success: false,
+        code: 'INVALID_ARGUMENT',
+        error: { code: 'INVALID_ARGUMENT', message: 'targetUid is required.' }
+      })
+    };
+  }
+
+  const auth = getAdminAuthInstance();
+  const db = getAdminFirestoreInstance();
+  const now = new Date().toISOString();
+
+  if (auth) {
+    try {
+      await auth.updateUser(targetUid, { disabled: false });
+    } catch (err) {
+      console.warn('[AdminAPI Netlify] Auth updateUser enable error:', err?.message);
+    }
+  }
+
+  if (db) {
+    try {
+      const updateData = {
+        isBlocked: false,
+        status: 'active',
+        invitationStatus: 'accepted',
+        customerStatus: 'active',
+        invitationAcceptedAt: now,
+        updatedAt: now
+      };
+      await db.collection('users').doc(targetUid).set(updateData, { merge: true });
+      await db.collection('admins').doc(targetUid).set(updateData, { merge: true });
+    } catch (dbErr) {
+      console.warn('[AdminAPI Netlify] Firestore activate write error:', dbErr?.message);
+    }
+  }
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      success: true,
+      message: 'Admin account has been activated.'
+    })
+  };
+}
+
+async function handleSyncStatusAction(authHeader, body, corsHeaders) {
+  const caller = await verifyIdTokenAndGetCaller(authHeader);
+  if (!caller || (!caller.roles.includes('super_admin') && !caller.roles.includes('superadmin') && !caller.roles.includes('admin'))) {
+    return {
+      statusCode: 403,
+      headers: corsHeaders,
+      body: JSON.stringify({
+        success: false,
+        code: 'PERMISSION_DENIED',
+        error: { code: 'PERMISSION_DENIED', message: 'Only Administrators can sync roster statuses.' }
+      })
+    };
+  }
+
+  const auth = getAdminAuthInstance();
+  const db = getAdminFirestoreInstance();
+  const updatedUids = [];
+
+  if (db) {
+    try {
+      const adminSnaps = await db.collection('admins').get();
+      for (const docSnap of adminSnaps.docs) {
+        const adminData = docSnap.data();
+        const uid = docSnap.id;
+        let isAuthActive = false;
+
+        if (auth) {
+          try {
+            const userRecord = await auth.getUser(uid);
+            if (!userRecord.disabled && (userRecord.metadata?.lastSignInTime || userRecord.emailVerified)) {
+              isAuthActive = true;
+            }
+          } catch {}
+        }
+
+        if (isAuthActive || adminData.status === 'active' || adminData.invitationStatus === 'accepted') {
+          const now = new Date().toISOString();
+          const patch = {
+            status: 'active',
+            invitationStatus: 'accepted',
+            customerStatus: 'active',
+            isBlocked: false,
+            updatedAt: now
+          };
+          await db.collection('users').doc(uid).set(patch, { merge: true });
+          await db.collection('admins').doc(uid).set(patch, { merge: true });
+          updatedUids.push(uid);
+        }
+      }
+    } catch (err) {
+      console.warn('[AdminAPI Netlify] sync status error:', err?.message);
+    }
+  }
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      success: true,
+      syncedCount: updatedUids.length,
+      updatedUids
     })
   };
 }

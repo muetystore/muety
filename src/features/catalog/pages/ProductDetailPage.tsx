@@ -44,6 +44,7 @@ export const ProductDetailPage: React.FC = () => {
   const { success, warning } = useNotification();
 
   const [product, setProduct] = useState<Product | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [liveReviews, setLiveReviews] = useState<PatronReview[]>([]);
   const [selectedImage, setSelectedImage] = useState<number>(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
@@ -105,6 +106,7 @@ export const ProductDetailPage: React.FC = () => {
       const cached = productService.getProductBySlug(id);
       if (cached) {
         setProduct(cached);
+        setIsLoading(false);
         storageService.addRecentlyViewed(cached.id);
         setSelectedImage(0);
         resetZoom();
@@ -112,22 +114,32 @@ export const ProductDetailPage: React.FC = () => {
         if (cached.sizes && cached.sizes.length > 0) setSelectedSize(cached.sizes[0]);
         setQuantity(1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        setIsLoading(true);
       }
 
       productService.fetchProductBySlug(id).then(found => {
-        if (isMounted && found) {
-          setProduct(found);
-          storageService.addRecentlyViewed(found.id);
-          if (!cached) {
-            setSelectedImage(0);
-            resetZoom();
-            if (found.colors && found.colors.length > 0) setSelectedColor(found.colors[0]);
-            if (found.sizes && found.sizes.length > 0) setSelectedSize(found.sizes[0]);
-            setQuantity(1);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (isMounted) {
+          if (found) {
+            setProduct(found);
+            storageService.addRecentlyViewed(found.id);
+            if (!cached) {
+              setSelectedImage(0);
+              resetZoom();
+              if (found.colors && found.colors.length > 0) setSelectedColor(found.colors[0]);
+              if (found.sizes && found.sizes.length > 0) setSelectedSize(found.sizes[0]);
+              setQuantity(1);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
           }
+          setIsLoading(false);
         }
+      }).catch(err => {
+        console.warn('Error fetching product by slug:', err);
+        if (isMounted) setIsLoading(false);
       });
+    } else {
+      setIsLoading(false);
     }
     return () => { isMounted = false; };
   }, [id]);
@@ -248,30 +260,18 @@ export const ProductDetailPage: React.FC = () => {
 
   useDocumentTitle(product?.name || 'Creation Details');
 
-  if (!product) {
-    return (
-      <div className="container" style={{ padding: '6rem 1rem', textAlign: 'center' }}>
-        <h2>Creation Not Found</h2>
-        <p style={{ color: 'var(--text-secondary)', margin: '1rem 0 2rem' }}>
-          The requested luxury piece could not be located in our active catalog.
-        </p>
-        <Link to="/products" className="btn btn-primary">Return to Catalog</Link>
-      </div>
-    );
-  }
+  const isSaved = product ? isInWishlist(product.id) : false;
+  const relatedProducts = product ? productService.getRelatedProducts(product.id, 4, product) : [];
 
-  const isSaved = isInWishlist(product.id);
-  const relatedProducts = productService.getRelatedProducts(product.id, 4, product);
-
-  const effectiveReviewCount = liveReviews.length > 0 ? liveReviews.length : (product.reviewCount || 0);
+  const effectiveReviewCount = liveReviews.length > 0 ? liveReviews.length : (product?.reviewCount || 0);
   const calculatedAvg = liveReviews.length > 0 
     ? (liveReviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) / liveReviews.length)
-    : (product.rating || 5.0);
+    : (product?.rating || 5.0);
   const effectiveRating = Number(calculatedAvg.toFixed(1));
 
   const allProductReviews = useMemo(() => {
-    return liveReviews.length > 0 ? liveReviews : (product.reviews || []);
-  }, [liveReviews, product.reviews]);
+    return liveReviews.length > 0 ? liveReviews : (product?.reviews || []);
+  }, [liveReviews, product?.reviews]);
 
   const ratingCounts = useMemo(() => {
     const counts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
@@ -288,6 +288,36 @@ export const ProductDetailPage: React.FC = () => {
     if (selectedRatingFilter === 'all') return allProductReviews;
     return allProductReviews.filter((rev: any) => Math.round(Number(rev.rating) || 5) === selectedRatingFilter);
   }, [allProductReviews, selectedRatingFilter]);
+
+  if (isLoading && !product) {
+    return (
+      <div className="container" style={{ padding: '8rem 1rem', textAlign: 'center', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 className="animate-spin" size={38} style={{ color: 'var(--brand-gold, #d4af37)', marginBottom: '1.25rem' }} />
+        <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.4rem', fontWeight: 600, color: 'var(--brand-primary)', marginBottom: '0.5rem', letterSpacing: '0.04em' }}>
+          MUETY ATELIER
+        </h2>
+        <p style={{ color: 'var(--brand-muted)', fontSize: '0.9rem', letterSpacing: '0.03em' }}>
+          Curating creation details & heritage craftsmanship...
+        </p>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="container" style={{ padding: '6rem 1rem', textAlign: 'center', minHeight: '55vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', color: 'var(--brand-primary)', marginBottom: '1rem' }}>
+          Creation Not Located
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', maxWidth: '480px', margin: '0 auto 2rem', lineHeight: 1.6 }}>
+          The requested luxury piece could not be located in our active catalog or is temporarily unavailable.
+        </p>
+        <Link to="/products" className="btn btn-primary" style={{ padding: '0.75rem 2rem', textDecoration: 'none' }}>
+          Return to Catalog
+        </Link>
+      </div>
+    );
+  }
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

@@ -7,6 +7,7 @@ import { AnnouncementBar } from '@/shared/components/ui/AnnouncementBar';
 import { ProtectedRoute } from '@/shared/components/ui/ProtectedRoute';
 import { MobileBottomNav } from '@/shared/components/ui/MobileBottomNav';
 import { ScrollToTop } from '@/shared/components/ui/ScrollToTop';
+import { ErrorBoundary } from '@/shared/components/ui/ErrorBoundary';
 import { 
   isAdminDomain, 
   isStoreDomain, 
@@ -102,9 +103,11 @@ const CustomerLayout: React.FC = () => {
       <AnnouncementBar />
       <Header />
       <main style={{ flex: 1 }}>
-        <Suspense fallback={<LoadingFallback />}>
-          <Outlet />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={<LoadingFallback />}>
+            <Outlet />
+          </Suspense>
+        </ErrorBoundary>
       </main>
       <CartDrawer />
       <MobileBottomNav />
@@ -240,6 +243,7 @@ export const AppRouter: React.FC = () => {
             <Route path="/" element={<HomePage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/products/:id" element={<ProductDetailPage />} />
+            <Route path="/product/:id" element={<ProductDetailPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/category/:slug" element={<CategoryProductsPage />} />
             <Route path="/cart" element={<CartPage />} />

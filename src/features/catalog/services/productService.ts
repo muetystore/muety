@@ -130,100 +130,141 @@ export const productService = {
   },
 
   getProductBySlug(slug: string): Product | undefined {
-    return storageService.getProducts().find(p => p.slug === slug || p.id === slug);
+    if (!slug) return undefined;
+    const clean = slug.toLowerCase().trim();
+    const products = storageService.getProducts();
+
+    // 1. Direct match on slug or id
+    const exact = products.find(p => 
+      (p.slug && p.slug.toLowerCase().trim() === clean) || 
+      (p.id && p.id.toLowerCase().trim() === clean)
+    );
+    if (exact) return exact;
+
+    // 2. Slugified title or name match
+    const slugified = products.find(p => {
+      const nameSlug = (p.name || p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+      return nameSlug === clean;
+    });
+    if (slugified) return slugified;
+
+    // 3. Fallback name/title match
+    return products.find(p => 
+      (p.name && p.name.toLowerCase().trim() === clean) ||
+      (p.title && p.title.toLowerCase().trim() === clean)
+    );
+  },
+
+  mapFirestoreDocToProduct(docId: string, raw: any, fallbackSlug?: string): Product {
+    const title = raw.title || raw.name || 'Untitled Product';
+    const cleanSlug = (raw.slug || fallbackSlug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || docId).toLowerCase().trim();
+    const stock = raw.stock !== undefined ? Number(raw.stock) : (raw.inventory !== undefined ? Number(raw.inventory) : 10);
+    const category = raw.category || 'Festive Silk Sarees';
+    const categorySlug = raw.categorySlug || 'sarees';
+
+    return {
+      id: docId || raw.id,
+      name: title,
+      title,
+      slug: cleanSlug,
+      description: raw.description || '',
+      shortDescription: raw.shortDescription || '',
+      price: Number(raw.price) || 0,
+      originalPrice: raw.originalPrice ? Number(raw.originalPrice) : undefined,
+      discountPercentage: Number(raw.discountPercentage || 0),
+      rating: Number(raw.rating) || 5.0,
+      reviewCount: Number(raw.reviewCount) || (Array.isArray(raw.reviews) ? raw.reviews.length : 0),
+      stock,
+      inventory: stock,
+      sku: raw.sku || `MUETY-${Math.floor(100 + Math.random() * 900)}`,
+      category,
+      categorySlug,
+      categoryId: raw.categoryId,
+      categoryIds: Array.isArray(raw.categoryIds) ? raw.categoryIds : [],
+      primaryCategoryId: raw.primaryCategoryId,
+      images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'],
+      media: Array.isArray(raw.media) ? raw.media : [],
+      colors: Array.isArray(raw.colors) && raw.colors.length > 0 ? raw.colors : ['Golden Ochre', 'Crimson Red', 'Royal Emerald'],
+      sizes: Array.isArray(raw.sizes) && raw.sizes.length > 0 ? raw.sizes : ['Standard Saree Length (6.3m with Blouse)'],
+      reviews: Array.isArray(raw.reviews) ? raw.reviews : [],
+      featured: Boolean(raw.featured),
+      isNewArrival: Boolean(raw.isNewArrival || raw.newArrival),
+      newArrival: Boolean(raw.isNewArrival || raw.newArrival),
+      isBestSeller: Boolean(raw.isBestSeller || raw.bestseller),
+      bestseller: Boolean(raw.isBestSeller || raw.bestseller),
+      isMostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
+      mostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
+      status: raw.status || 'active',
+      availability: raw.availability || (stock > 0 ? 'available' : 'sold_out'),
+      tags: Array.isArray(raw.tags) ? raw.tags : [],
+      specifications: raw.specifications || {},
+      occasion: raw.occasion || '',
+      occasions: Array.isArray(raw.occasions) ? raw.occasions : (raw.occasion ? [raw.occasion] : []),
+      collectionId: raw.collectionId || '',
+      collectionIds: Array.isArray(raw.collectionIds) ? raw.collectionIds : (raw.collectionId ? [raw.collectionId] : []),
+      createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+      updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString()
+    };
   },
 
   async fetchProductBySlug(slug: string): Promise<Product | undefined> {
+    if (!slug) return undefined;
     const cleanSlug = slug.toLowerCase().trim();
+
+    // 1. Check local cache first
+    const cached = this.getProductBySlug(cleanSlug);
+    if (cached) {
+      return cached;
+    }
 
     if (db) {
       try {
-        const q = query(collection(db, 'products'), where('slug', '==', cleanSlug));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const docSnap = snap.docs[0];
-          const raw = docSnap.data() as any;
-          const title = raw.title || raw.name || 'Untitled Product';
-          const stock = raw.stock !== undefined ? Number(raw.stock) : (raw.inventory !== undefined ? Number(raw.inventory) : 10);
-          const p: Product = {
-            id: docSnap.id || raw.id,
-            name: title,
-            title,
-            slug: raw.slug || cleanSlug,
-            description: raw.description || '',
-            shortDescription: raw.shortDescription || '',
-            price: Number(raw.price) || 0,
-            originalPrice: raw.originalPrice ? Number(raw.originalPrice) : undefined,
-            discountPercentage: Number(raw.discountPercentage || 0),
-            rating: Number(raw.rating) || 5.0,
-            reviewCount: Number(raw.reviewCount) || 0,
-            stock,
-            inventory: stock,
-            sku: raw.sku || `MUETY-${Math.floor(100 + Math.random() * 900)}`,
-            category: raw.category || 'Festive Silk Sarees',
-            categorySlug: raw.categorySlug || 'sarees',
-            images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'],
-            featured: Boolean(raw.featured),
-            isNewArrival: Boolean(raw.isNewArrival || raw.newArrival),
-            newArrival: Boolean(raw.isNewArrival || raw.newArrival),
-            isBestSeller: Boolean(raw.isBestSeller || raw.bestseller),
-            bestseller: Boolean(raw.isBestSeller || raw.bestseller),
-            isMostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
-            mostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
-            status: raw.status || 'active',
-            availability: raw.availability || 'available',
-            tags: Array.isArray(raw.tags) ? raw.tags : [],
-            specifications: raw.specifications || {},
-            createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
-            updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString()
-          };
+        // Query by slug (clean lowercase)
+        const qSlug = query(collection(db, 'products'), where('slug', '==', cleanSlug));
+        const snapSlug = await getDocs(qSlug);
+        if (!snapSlug.empty) {
+          const docSnap = snapSlug.docs[0];
+          const p = this.mapFirestoreDocToProduct(docSnap.id, docSnap.data(), cleanSlug);
           storageService.addProduct(p);
           return p;
         }
 
-        const docRef = doc(db, 'products', cleanSlug);
-        const docSnap = await getDoc(docRef);
-        if (docSnap && docSnap.exists()) {
-          const raw = docSnap.data() as any;
-          const title = raw.title || raw.name || 'Untitled Product';
-          const stock = raw.stock !== undefined ? Number(raw.stock) : (raw.inventory !== undefined ? Number(raw.inventory) : 10);
-          const p: Product = {
-            id: docSnap.id,
-            name: title,
-            title,
-            slug: raw.slug || cleanSlug,
-            description: raw.description || '',
-            shortDescription: raw.shortDescription || '',
-            price: Number(raw.price) || 0,
-            originalPrice: raw.originalPrice ? Number(raw.originalPrice) : undefined,
-            discountPercentage: Number(raw.discountPercentage || 0),
-            rating: Number(raw.rating) || 5.0,
-            reviewCount: Number(raw.reviewCount) || 0,
-            stock,
-            inventory: stock,
-            sku: raw.sku || `MUETY-${Math.floor(100 + Math.random() * 900)}`,
-            category: raw.category || 'Festive Silk Sarees',
-            categorySlug: raw.categorySlug || 'sarees',
-            images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'],
-            featured: Boolean(raw.featured),
-            isNewArrival: Boolean(raw.isNewArrival || raw.newArrival),
-            newArrival: Boolean(raw.isNewArrival || raw.newArrival),
-            isBestSeller: Boolean(raw.isBestSeller || raw.bestseller),
-            bestseller: Boolean(raw.isBestSeller || raw.bestseller),
-            isMostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
-            mostWanted: Boolean(raw.isMostWanted || raw.mostWanted),
-            status: raw.status || 'active',
-            availability: raw.availability || 'available',
-            tags: Array.isArray(raw.tags) ? raw.tags : [],
-            specifications: raw.specifications || {},
-            createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
-            updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString()
-          };
+        // Query by id field
+        const qId = query(collection(db, 'products'), where('id', '==', cleanSlug));
+        const snapId = await getDocs(qId);
+        if (!snapId.empty) {
+          const docSnap = snapId.docs[0];
+          const p = this.mapFirestoreDocToProduct(docSnap.id, docSnap.data(), cleanSlug);
           storageService.addProduct(p);
           return p;
         }
+
+        // Direct document lookup by ID
+        const docRef = doc(db, 'products', cleanSlug);
+        const docSnap = await getDoc(docRef);
+        if (docSnap && docSnap.exists()) {
+          const p = this.mapFirestoreDocToProduct(docSnap.id, docSnap.data(), cleanSlug);
+          storageService.addProduct(p);
+          return p;
+        }
+
+        // Fallback: If not found by exact indexed query (e.g. title-cased slug or special characters in Firestore)
+        const allSnap = await getDocs(collection(db, 'products'));
+        for (const d of allSnap.docs) {
+          const raw = d.data() as any;
+          const rawSlug = (raw.slug || '').toLowerCase().trim();
+          const rawId = (raw.id || d.id || '').toLowerCase().trim();
+          const rawTitle = (raw.title || raw.name || '').toLowerCase().trim();
+          const slugifiedTitle = rawTitle.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+
+          if (rawSlug === cleanSlug || rawId === cleanSlug || rawTitle === cleanSlug || slugifiedTitle === cleanSlug) {
+            const p = this.mapFirestoreDocToProduct(d.id, raw, cleanSlug);
+            storageService.addProduct(p);
+            return p;
+          }
+        }
       } catch (err) {
-        console.warn('Firestore fetchProductBySlug error:', err);
+        console.warn('Firestore fetchProductBySlug note:', err);
       }
     }
 

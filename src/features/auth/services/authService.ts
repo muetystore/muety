@@ -147,12 +147,14 @@ export class AuthService {
 
     if (db && isLiveFirebase) {
       try {
-        const userDoc = await withTimeout(getDoc(doc(db, 'users', fbUser.uid)), 6000);
+        const userDoc = await withTimeout(getDoc(doc(db, 'users', fbUser.uid)), 8000);
         if (userDoc && userDoc.exists && userDoc.exists()) {
           firestoreProfile = userDoc.data() as UserProfile;
         }
-      } catch (err) {
-        console.warn('Firestore fetch user profile skipped/timed out:', err);
+      } catch (err: any) {
+        if (import.meta.env.DEV) {
+          console.debug('[AuthService] Firestore profile fetch deferred/timed out:', err?.message || err);
+        }
       }
     }
 
@@ -177,6 +179,8 @@ export class AuthService {
       resolvedRoles = ['customer'];
     }
 
+    const isAdmin = resolvedRoles.some(r => r !== 'customer');
+
     const profile: UserProfile = {
       uid: fbUser.uid,
       email: fbUser.email || firestoreProfile.email || '',
@@ -186,6 +190,8 @@ export class AuthService {
       role: resolvedRoles[0] || 'customer',
       phoneNumber: fbUser.phoneNumber || firestoreProfile.phoneNumber,
       isBlocked: firestoreProfile.isBlocked || false,
+      status: isAdmin ? (firestoreProfile.isBlocked ? 'disabled' : 'active') : (firestoreProfile.status || 'active'),
+      invitationStatus: isAdmin ? 'accepted' : firestoreProfile.invitationStatus,
       customerStatus: firestoreProfile.customerStatus || (firestoreProfile.isBlocked ? 'blocked' : 'active'),
       addresses: firestoreProfile.addresses || [],
       defaultAddress: firestoreProfile.defaultAddress,
@@ -195,7 +201,11 @@ export class AuthService {
 
     delete (profile as any).password;
 
-    if (db && isLiveFirebase && resolvedRoles.some(r => r !== 'customer')) {
+    if (isAdmin) {
+      storageService.saveUser(profile);
+    }
+
+    if (db && isLiveFirebase && isAdmin) {
       try {
         const syncData = {
           uid: fbUser.uid,
@@ -203,12 +213,27 @@ export class AuthService {
           displayName: profile.displayName,
           roles: resolvedRoles,
           role: resolvedRoles[0],
+          status: profile.isBlocked ? 'disabled' : 'active',
+          invitationStatus: 'accepted',
+          customerStatus: 'active',
+          invitationAcceptedAt: firestoreProfile.invitationAcceptedAt || new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
         await setDoc(doc(db, 'users', fbUser.uid), syncData, { merge: true });
-        await setDoc(doc(db, 'admins', fbUser.uid), syncData, { merge: true });
-      } catch (syncErr) {
-        console.warn('Firestore admin profile sync note:', syncErr);
+
+        // Only sync to /admins if user has superadmin or admin claims, catching rule rejections silently
+        if (resolvedRoles.some(r => ['superadmin', 'super_admin', 'admin'].includes(r))) {
+          await setDoc(doc(db, 'admins', fbUser.uid), syncData, { merge: true }).catch(err => {
+            if (import.meta.env.DEV) {
+              console.debug('[AuthService] Admin roster write note:', err?.message || err);
+            }
+          });
+        }
+      } catch (syncErr: any) {
+        if (import.meta.env.DEV) {
+          console.debug('[AuthService] Firestore admin profile sync note:', syncErr?.message || syncErr);
+        }
       }
     }
 

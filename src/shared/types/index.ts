@@ -124,6 +124,32 @@ export interface CustomerProfile {
   lastLoginAt?: string;
 }
 
+export type ContactChannelType = 
+  | 'phone' 
+  | 'whatsapp' 
+  | 'email' 
+  | 'instagram' 
+  | 'facebook' 
+  | 'youtube' 
+  | 'twitter' 
+  | 'pinterest' 
+  | 'linkedin' 
+  | 'telegram' 
+  | 'location' 
+  | 'custom';
+
+export interface ContactChannel {
+  id: string;
+  name: string;
+  type: ContactChannelType;
+  value: string;
+  link?: string;
+  showInFooter: boolean;
+  enabled: boolean;
+  isPrimary?: boolean;
+  order?: number;
+}
+
 export interface StoreSettings {
   storeName: string;
   legalBusinessName: string;
@@ -134,6 +160,7 @@ export interface StoreSettings {
   contactPhone: string;
   whatsappPhone: string;
   instagramHandle: string;
+  contactChannels?: ContactChannel[];
   address?: string;
   registeredAddress: {
     buildingNo: string;

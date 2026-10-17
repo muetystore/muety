@@ -2,13 +2,38 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
-import { customerService } from '@/features/customers/services/customerService';
+import { customerService, mergeCustomerProfiles } from '@/features/customers/services/customerService';
 import { auditService } from '@/shared/services/auditService';
 import { orgService } from '@/features/admin/services/orgService';
 import { UserProfile, Department, RoleDefinition, AdminStatus, InvitationStatus } from '@/shared/types';
 import { ROLE_LABELS, getUserRoles } from '@/shared/utils/permissions';
-import { auth } from '@/lib/firebase/firebase';
+import { auth, db } from '@/lib/firebase/firebase';
+import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
+import { storageService } from '@/lib/storage/storageService';
 import { AdminModal } from '@/features/admin/components/AdminModal';
+
+export const isUserDisabled = (u: UserProfile | null | undefined): boolean => {
+  if (!u) return false;
+  return Boolean(u.isBlocked || (u.status as string) === 'disabled');
+};
+
+export const isUserActive = (u: UserProfile | null | undefined): boolean => {
+  if (!u || isUserDisabled(u)) return false;
+  return (u.status as string) === 'active' || (u.invitationStatus as string) === 'accepted';
+};
+
+export const isUserInvited = (u: UserProfile | null | undefined): boolean => {
+  if (!u || isUserDisabled(u) || isUserActive(u)) return false;
+  const statusStr = (u.status as string) || '';
+  const invStr = (u.invitationStatus as string) || '';
+  return (
+    statusStr === 'invited' ||
+    statusStr === 'pending_invite' ||
+    invStr === 'pending' ||
+    invStr === 'sent' ||
+    invStr === 'pending_setup'
+  );
+};
 import { 
   UserCheck, 
   UserPlus, 
@@ -105,6 +130,8 @@ export const AdminUsers: React.FC = () => {
     count: 0
   });
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const loadAllData = async () => {
     setIsLoading(true);
     try {
@@ -117,6 +144,48 @@ export const AdminUsers: React.FC = () => {
 
       setDepartments(deptsList);
       setRoles(rolesList);
+
+      // Fetch live user and admin records directly from Firestore if available
+      if (db) {
+        try {
+          const userSnaps = await getDocs(collection(db, 'users'));
+          if (!userSnaps.empty) {
+            const customerMap = new Map<string, UserProfile>();
+            storageService.getUsers().forEach(u => {
+              if (u.uid) customerMap.set(u.uid, u);
+            });
+
+            userSnaps.forEach(docSnap => {
+              const raw = docSnap.data() as any;
+              const uid = raw.uid || docSnap.id;
+              if (uid) {
+                const incoming: UserProfile = {
+                  ...raw,
+                  uid,
+                  email: raw.email || raw.muetyEmail || 'admin@muety.in',
+                  displayName: raw.displayName || raw.fullName || 'MUETY Admin',
+                  role: raw.role || 'admin',
+                  status: raw.status || (raw.invitationStatus === 'accepted' ? 'active' : 'invited'),
+                  invitationStatus: raw.invitationStatus,
+                  customerStatus: raw.customerStatus || (raw.isBlocked ? 'blocked' : 'active'),
+                  createdAt: raw.createdAt || new Date().toISOString()
+                };
+
+                if (customerMap.has(uid)) {
+                  customerMap.set(uid, mergeCustomerProfiles(customerMap.get(uid)!, incoming));
+                } else {
+                  customerMap.set(uid, incoming);
+                }
+              }
+            });
+
+            const mergedList = Array.from(customerMap.values());
+            storageService.saveUsers(mergedList);
+          }
+        } catch (dbErr) {
+          console.warn('[AdminUsers] Live Firestore fetch skipped/offline:', dbErr);
+        }
+      }
 
       const allUsers = customerService.getAllCustomers();
       const adminsOnly = allUsers.filter(u => {
@@ -541,6 +610,97 @@ export const AdminUsers: React.FC = () => {
     }
   };
 
+  const handleActivateAdmin = async (u: UserProfile) => {
+    try {
+      const idToken = await getAuthToken();
+
+      try {
+        await fetch('/api/admin/activate-user', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': idToken ? `Bearer ${idToken}` : ''
+          },
+          body: JSON.stringify({ action: 'activate-user', targetUid: u.uid })
+        });
+      } catch {}
+
+      const now = new Date().toISOString();
+      const updated: UserProfile = {
+        ...u,
+        status: 'active',
+        invitationStatus: 'accepted' as InvitationStatus,
+        customerStatus: 'active',
+        invitationAcceptedAt: now,
+        isBlocked: false,
+        updatedAt: now
+      };
+
+      await customerService.saveCustomer(updated);
+      if (db) {
+        try {
+          await setDoc(doc(db, 'users', u.uid), {
+            status: 'active',
+            invitationStatus: 'accepted',
+            customerStatus: 'active',
+            invitationAcceptedAt: now,
+            isBlocked: false,
+            updatedAt: now
+          }, { merge: true });
+          await setDoc(doc(db, 'admins', u.uid), {
+            status: 'active',
+            invitationStatus: 'accepted',
+            customerStatus: 'active',
+            invitationAcceptedAt: now,
+            isBlocked: false,
+            updatedAt: now
+          }, { merge: true });
+        } catch {}
+      }
+
+      await auditService.logAction({
+        actorUid: currentUser?.uid || 'system',
+        actorEmail: currentUser?.email || 'admin',
+        actorRole: getUserRoles(currentUser)[0] || 'superadmin',
+        action: 'ADMIN_ACTIVATED',
+        entityType: 'ADMIN',
+        entityId: u.uid,
+        reason: `Super Admin manually marked ${u.displayName || u.email} as active in Admin Roster`
+      });
+
+      success(`Admin ${u.displayName || u.email} is now Active.`);
+      loadAllData();
+    } catch (err: any) {
+      error(err?.message || 'Failed to activate admin.');
+    }
+  };
+
+  const handleSyncRosterStatuses = async () => {
+    setIsSyncing(true);
+    try {
+      let idToken = '';
+      try { idToken = await getAuthToken(); } catch {}
+
+      if (idToken) {
+        await fetch('/api/admin/sync-status', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({ action: 'sync-status' })
+        }).catch(() => {});
+      }
+
+      await loadAllData();
+      success('Admin roster statuses synchronized successfully.');
+    } catch {
+      await loadAllData();
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Filtered Roster Users
   const filteredUsers = users.filter(u => {
     const q = searchQuery.toLowerCase();
@@ -552,10 +712,14 @@ export const AdminUsers: React.FC = () => {
     const matchDept = deptFilter === 'all' || u.departmentId === deptFilter;
     const matchRole = roleFilter === 'all' || u.roleSlug === roleFilter || u.role === roleFilter;
 
+    const isDisabled = isUserDisabled(u);
+    const isInvited = isUserInvited(u);
+    const isActive = !isDisabled && !isInvited;
+
     let matchStatus = true;
-    if (statusFilter === 'active') matchStatus = !u.isBlocked && u.status !== 'invited' && u.status !== 'disabled';
-    if (statusFilter === 'invited') matchStatus = u.status === 'invited' || u.invitationStatus === 'pending' || u.invitationStatus === 'sent';
-    if (statusFilter === 'disabled') matchStatus = u.isBlocked || u.status === 'disabled';
+    if (statusFilter === 'active') matchStatus = isActive;
+    if (statusFilter === 'invited') matchStatus = isInvited;
+    if (statusFilter === 'disabled') matchStatus = isDisabled;
 
     return matchQuery && matchDept && matchRole && matchStatus;
   });
@@ -615,14 +779,27 @@ export const AdminUsers: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={openCreateAdminModal}
-          className="btn btn-primary"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}
-        >
-          <UserPlus size={18} />
-          <span>Create New Admin</span>
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleSyncRosterStatuses}
+            disabled={isSyncing}
+            className="btn btn-outline"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 600, borderColor: '#d4af37', color: '#d4af37' }}
+            title="Synchronize live admin account statuses from Firebase"
+          >
+            <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
+            <span>{isSyncing ? 'Syncing...' : 'Sync Statuses'}</span>
+          </button>
+
+          <button
+            onClick={openCreateAdminModal}
+            className="btn btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}
+          >
+            <UserPlus size={18} />
+            <span>Create New Admin</span>
+          </button>
+        </div>
       </div>
 
       {/* Navigation Sub-Tabs */}
@@ -808,7 +985,9 @@ export const AdminUsers: React.FC = () => {
                       const deptLabel = deptDef ? deptDef.name : u.departmentName || 'Management';
 
                       const isCurrent = u.uid === currentUser?.uid;
-                      const isInvited = u.status === 'invited' || u.invitationStatus === 'pending' || u.invitationStatus === 'sent';
+                      const isDisabled = isUserDisabled(u);
+                      const isInvited = isUserInvited(u);
+                      const isActive = !isDisabled && !isInvited;
 
                       return (
                         <tr key={u.uid} style={{ borderBottom: '1px solid var(--brand-border)', backgroundColor: isCurrent ? 'rgba(212, 175, 55, 0.04)' : 'transparent' }}>
@@ -876,7 +1055,7 @@ export const AdminUsers: React.FC = () => {
                           </td>
 
                           <td style={{ padding: '14px 18px' }}>
-                            {u.isBlocked || u.status === 'disabled' ? (
+                            {isDisabled ? (
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#ef4444', fontWeight: 700, fontSize: '0.82rem', backgroundColor: '#fef2f2', padding: '3px 8px', borderRadius: '6px', border: '1px solid #fecaca' }}>
                                 <XCircle size={14} /> DISABLED
                               </span>
@@ -909,6 +1088,16 @@ export const AdminUsers: React.FC = () => {
 
                               {isInvited && (
                                 <>
+                                  <button
+                                    onClick={() => handleActivateAdmin(u)}
+                                    className="btn btn-sm"
+                                    style={{ borderColor: '#10b981', color: '#047857', backgroundColor: '#ecfdf5', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', fontWeight: 700 }}
+                                    title="Mark admin account as Active"
+                                  >
+                                    <CheckCircle2 size={13} />
+                                    <span>Mark Active</span>
+                                  </button>
+
                                   <button
                                     onClick={() => handleCopySetupLink(u)}
                                     className="btn btn-outline btn-sm"
@@ -978,7 +1167,9 @@ export const AdminUsers: React.FC = () => {
                 const deptDef = departments.find(d => d.id === u.departmentId);
                 const deptLabel = deptDef ? deptDef.name : u.departmentName || 'Management';
                 const isCurrent = u.uid === currentUser?.uid;
-                const isInvited = u.status === 'invited' || u.invitationStatus === 'pending' || u.invitationStatus === 'sent';
+                const isDisabled = isUserDisabled(u);
+                const isInvited = isUserInvited(u);
+                const isActive = !isDisabled && !isInvited;
 
                 return (
                   <div key={u.uid} className="admin-mobile-card">
@@ -1013,7 +1204,7 @@ export const AdminUsers: React.FC = () => {
                         </div>
                       </div>
 
-                      {u.isBlocked || u.status === 'disabled' ? (
+                      {isDisabled ? (
                         <span style={{ color: '#ef4444', fontSize: '0.72rem', fontWeight: 800, backgroundColor: '#fef2f2', padding: '2px 6px', borderRadius: '4px' }}>DISABLED</span>
                       ) : isInvited ? (
                         <span style={{ color: '#d97706', fontSize: '0.72rem', fontWeight: 800, backgroundColor: '#fffbebeb', padding: '2px 6px', borderRadius: '4px' }}>INVITED</span>
@@ -1034,6 +1225,16 @@ export const AdminUsers: React.FC = () => {
                     </div>
 
                     <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      {isInvited && (
+                        <button
+                          onClick={() => handleActivateAdmin(u)}
+                          className="btn btn-sm"
+                          style={{ borderColor: '#10b981', color: '#047857', backgroundColor: '#ecfdf5', fontSize: '0.75rem', padding: '4px 10px', fontWeight: 700 }}
+                          title="Mark admin account as Active"
+                        >
+                          Mark Active
+                        </button>
+                      )}
                       <button onClick={() => setViewingAdmin(u)} className="btn btn-outline btn-sm" style={{ fontSize: '0.75rem', padding: '4px 10px' }}>
                         View Profile
                       </button>
@@ -1484,10 +1685,10 @@ export const AdminUsers: React.FC = () => {
                       fontWeight: 700,
                       padding: '2px 8px',
                       borderRadius: '6px',
-                      backgroundColor: (viewingAdmin.isBlocked || viewingAdmin.status === 'disabled') ? '#fee2e2' : ((viewingAdmin.status === 'invited' || viewingAdmin.invitationStatus === 'pending' || viewingAdmin.invitationStatus === 'sent') ? '#fef3c7' : '#dcfce7'),
-                      color: (viewingAdmin.isBlocked || viewingAdmin.status === 'disabled') ? '#991b1b' : ((viewingAdmin.status === 'invited' || viewingAdmin.invitationStatus === 'pending' || viewingAdmin.invitationStatus === 'sent') ? '#92400e' : '#166534')
+                      backgroundColor: isUserDisabled(viewingAdmin) ? '#fee2e2' : (isUserInvited(viewingAdmin) ? '#fef3c7' : '#dcfce7'),
+                      color: isUserDisabled(viewingAdmin) ? '#991b1b' : (isUserInvited(viewingAdmin) ? '#92400e' : '#166534')
                     }}>
-                      {(viewingAdmin.isBlocked || viewingAdmin.status === 'disabled') ? 'DISABLED' : ((viewingAdmin.status === 'invited' || viewingAdmin.invitationStatus === 'pending' || viewingAdmin.invitationStatus === 'sent') ? 'INVITED' : 'ACTIVE')}
+                      {isUserDisabled(viewingAdmin) ? 'DISABLED' : (isUserInvited(viewingAdmin) ? 'INVITED' : 'ACTIVE')}
                     </span>
                     <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                       UID: {viewingAdmin.uid}

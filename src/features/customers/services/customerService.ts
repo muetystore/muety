@@ -126,6 +126,17 @@ export function mergeCustomerProfiles(primary: UserProfile, secondary: Partial<U
   const isBlocked = Boolean(primary.isBlocked || secondary.isBlocked);
   const customerStatus: CustomerStatus = isBlocked ? 'blocked' : (primary.customerStatus === 'VIP' || secondary.customerStatus === 'VIP' ? 'VIP' : (primary.customerStatus || secondary.customerStatus || 'active'));
 
+  // Active & Invitation status resolution: prioritize active and accepted status
+  const status = isBlocked
+    ? 'disabled'
+    : ((primary.status === 'active' || secondary.status === 'active')
+        ? 'active'
+        : (preferSecondary ? (secondary.status || primary.status) : (primary.status || secondary.status)));
+
+  const invitationStatus = (primary.invitationStatus === 'accepted' || secondary.invitationStatus === 'accepted')
+    ? 'accepted'
+    : (preferSecondary ? (secondary.invitationStatus || primary.invitationStatus) : (primary.invitationStatus || secondary.invitationStatus));
+
   // Merge addresses deduplicated by id or street+postal
   const addressMap = new Map<string, Address>();
   (primary.addresses || []).forEach(a => {
@@ -159,6 +170,8 @@ export function mergeCustomerProfiles(primary: UserProfile, secondary: Partial<U
     whatsappPhone,
     alternatePhone,
     isBlocked,
+    status: status as any,
+    invitationStatus: invitationStatus as any,
     customerStatus,
     addresses: mergedAddresses,
     defaultAddress: primary.defaultAddress || secondary.defaultAddress || mergedAddresses.find(a => a.isDefault) || mergedAddresses[0],
@@ -382,12 +395,17 @@ export const customerService = {
 
     if (db) {
       try {
+        const writes = [
+          setDoc(doc(db, 'users', user.uid), sanitizedUser, { merge: true }),
+          setDoc(doc(db, 'customers', user.uid), sanitizedUser, { merge: true })
+        ];
+        if (isStaffOrAdminUser(user)) {
+          writes.push(setDoc(doc(db, 'admins', user.uid), sanitizedUser, { merge: true }));
+        }
+
         await Promise.race([
-          Promise.all([
-            setDoc(doc(db, 'users', user.uid), sanitizedUser, { merge: true }),
-            setDoc(doc(db, 'customers', user.uid), sanitizedUser, { merge: true })
-          ]),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 1200))
+          Promise.all(writes),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore write timeout')), 1500))
         ]);
       } catch (err: any) {
         console.warn('Firestore user/customer save warning:', err?.message || err);

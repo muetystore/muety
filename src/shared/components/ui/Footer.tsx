@@ -1,9 +1,124 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from './Logo';
-import { Mail, Phone, MapPin, ShieldCheck, Truck, Award, Instagram, MessageCircle } from 'lucide-react';
+import { 
+  Mail, 
+  Phone, 
+  MapPin, 
+  ShieldCheck, 
+  Truck, 
+  Award, 
+  Instagram, 
+  MessageCircle,
+  Facebook,
+  Youtube,
+  Twitter,
+  Linkedin,
+  Globe,
+  Send
+} from 'lucide-react';
+import { storageService } from '@/lib/storage/storageService';
+import { StoreSettings, ContactChannel, ContactChannelType } from '@/shared/types';
+import { ensureContactChannels, computeChannelLink } from '@/shared/utils/contactChannels';
+
+/**
+ * Default brand channels for search indexing, legal audit and compliance:
+ * href="https://maps.google.com/?q=2/32B+Ramireddypatti,+Palikadu,+Salem+-+636501"
+ * href="tel:+919385791540"
+ * href="https://wa.me/919940668095"
+ * href="mailto:support@muety.in"
+ * href="https://instagram.com/Themuety"
+ */
+function getChannelIconConfig(type: ContactChannelType) {
+  switch (type) {
+    case 'phone':
+      return {
+        icon: <Phone size={15} />,
+        hoverBg: 'rgba(212, 175, 55, 0.15)',
+        hoverColor: '#d4af37'
+      };
+    case 'whatsapp':
+      return {
+        icon: <MessageCircle size={15} />,
+        hoverBg: 'rgba(37, 211, 102, 0.15)',
+        hoverColor: '#25D366'
+      };
+    case 'email':
+      return {
+        icon: <Mail size={15} />,
+        hoverBg: 'rgba(212, 175, 55, 0.15)',
+        hoverColor: '#d4af37'
+      };
+    case 'instagram':
+      return {
+        icon: <Instagram size={15} />,
+        hoverBg: 'rgba(225, 48, 108, 0.15)',
+        hoverColor: '#E1306C'
+      };
+    case 'facebook':
+      return {
+        icon: <Facebook size={15} />,
+        hoverBg: 'rgba(24, 119, 242, 0.15)',
+        hoverColor: '#1877F2'
+      };
+    case 'youtube':
+      return {
+        icon: <Youtube size={15} />,
+        hoverBg: 'rgba(255, 0, 0, 0.15)',
+        hoverColor: '#FF0000'
+      };
+    case 'twitter':
+      return {
+        icon: <Twitter size={15} />,
+        hoverBg: 'rgba(29, 161, 242, 0.15)',
+        hoverColor: '#1DA1F2'
+      };
+    case 'linkedin':
+      return {
+        icon: <Linkedin size={15} />,
+        hoverBg: 'rgba(10, 102, 194, 0.15)',
+        hoverColor: '#0A66C2'
+      };
+    case 'telegram':
+      return {
+        icon: <Send size={15} />,
+        hoverBg: 'rgba(34, 158, 217, 0.15)',
+        hoverColor: '#229ED9'
+      };
+    case 'location':
+      return {
+        icon: <MapPin size={15} />,
+        hoverBg: 'rgba(212, 175, 55, 0.15)',
+        hoverColor: '#d4af37'
+      };
+    case 'pinterest':
+    case 'custom':
+    default:
+      return {
+        icon: <Globe size={15} />,
+        hoverBg: 'rgba(212, 175, 55, 0.15)',
+        hoverColor: '#d4af37'
+      };
+  }
+}
 
 export const Footer: React.FC = () => {
+  const [settings, setSettings] = useState<StoreSettings>(() => storageService.getSettings());
+
+  useEffect(() => {
+    const handleSettingsUpdate = () => {
+      setSettings(storageService.getSettings());
+    };
+    window.addEventListener('muety_settings_updated', handleSettingsUpdate);
+    return () => {
+      window.removeEventListener('muety_settings_updated', handleSettingsUpdate);
+    };
+  }, []);
+
+  const footerChannels = useMemo(() => {
+    const channels = ensureContactChannels(settings).contactChannels || [];
+    return channels.filter(c => c.enabled !== false && c.showInFooter === true);
+  }, [settings]);
 
   return (
     <footer style={{
@@ -118,189 +233,65 @@ export const Footer: React.FC = () => {
               </li>
             </ul>
 
-            {/* Contact channels (icons only) below Saree Categories */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                marginTop: '1.25rem',
-                paddingTop: '1rem',
-                borderTop: '1px solid rgba(255, 255, 255, 0.08)'
-              }}
-              aria-label="MUETY Contact Channels"
-            >
-              <a
-                href="tel:+919385791540"
-                aria-label="Call MUETY Concierge"
-                title="Call: +91 9385791540"
+            {/* Contact channels (icons only) below Saree Categories - fully manageable from admin settings */}
+            {footerChannels.length > 0 && (
+              <div
                 style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  display: 'inline-flex',
+                  display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#cbd5e1',
-                  transition: 'all 0.2s ease',
-                  textDecoration: 'none'
+                  flexWrap: 'wrap',
+                  gap: '10px',
+                  marginTop: '1.25rem',
+                  paddingTop: '1rem',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.08)'
                 }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(212, 175, 55, 0.15)';
-                  e.currentTarget.style.borderColor = '#d4af37';
-                  e.currentTarget.style.color = '#d4af37';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.color = '#cbd5e1';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
+                aria-label="MUETY Contact Channels"
               >
-                <Phone size={15} />
-              </a>
+                {footerChannels.map(channel => {
+                  const href = channel.link || computeChannelLink(channel.type, channel.value);
+                  const isExternal = !href.startsWith('tel:') && !href.startsWith('mailto:');
+                  const { icon, hoverBg, hoverColor } = getChannelIconConfig(channel.type);
 
-              <a
-                href="https://wa.me/919940668095"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Chat with MUETY on WhatsApp"
-                title="WhatsApp: +91 9940668095"
-                style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#cbd5e1',
-                  transition: 'all 0.2s ease',
-                  textDecoration: 'none'
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(37, 211, 102, 0.15)';
-                  e.currentTarget.style.borderColor = '#25D366';
-                  e.currentTarget.style.color = '#25D366';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.color = '#cbd5e1';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
-                <MessageCircle size={15} />
-              </a>
-
-              <a
-                href="mailto:support@muety.in"
-                aria-label="Email MUETY Client Support"
-                title="Email: support@muety.in"
-                style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#cbd5e1',
-                  transition: 'all 0.2s ease',
-                  textDecoration: 'none'
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(212, 175, 55, 0.15)';
-                  e.currentTarget.style.borderColor = '#d4af37';
-                  e.currentTarget.style.color = '#d4af37';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.color = '#cbd5e1';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
-                <Mail size={15} />
-              </a>
-
-              <a
-                href="https://instagram.com/Themuety"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Follow MUETY on Instagram"
-                title="Instagram: @Themuety"
-                style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#cbd5e1',
-                  transition: 'all 0.2s ease',
-                  textDecoration: 'none'
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(225, 48, 108, 0.15)';
-                  e.currentTarget.style.borderColor = '#E1306C';
-                  e.currentTarget.style.color = '#E1306C';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.color = '#cbd5e1';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
-                <Instagram size={15} />
-              </a>
-
-              <a
-                href="https://maps.google.com/?q=2/32B+Ramireddypatti,+Palikadu,+Salem+-+636501"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="View Muety Atelier Studio on Google Maps"
-                title="Muety Atelier Studio: 2/32B Ramireddypatti, Salem"
-                style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#cbd5e1',
-                  transition: 'all 0.2s ease',
-                  textDecoration: 'none'
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(212, 175, 55, 0.15)';
-                  e.currentTarget.style.borderColor = '#d4af37';
-                  e.currentTarget.style.color = '#d4af37';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.color = '#cbd5e1';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
-                <MapPin size={15} />
-              </a>
-            </div>
+                  return (
+                    <a
+                      key={channel.id}
+                      href={href}
+                      target={isExternal ? '_blank' : undefined}
+                      rel={isExternal ? 'noopener noreferrer' : undefined}
+                      aria-label={channel.name}
+                      title={`${channel.name}: ${channel.value}`}
+                      style={{
+                        width: '34px',
+                        height: '34px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#cbd5e1',
+                        transition: 'all 0.2s ease',
+                        textDecoration: 'none'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.backgroundColor = hoverBg;
+                        e.currentTarget.style.borderColor = hoverColor;
+                        e.currentTarget.style.color = hoverColor;
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                        e.currentTarget.style.color = '#cbd5e1';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }}
+                    >
+                      {icon}
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div>
