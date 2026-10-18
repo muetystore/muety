@@ -371,8 +371,13 @@ class StorageService {
     return this.getOrders().find(o => o.id === id || o.orderNumber === id);
   }
 
-  getCustomerOrders(customerId: string): Order[] {
-    return this.getOrders().filter(o => o.customerId === customerId);
+  getCustomerOrders(customerId: string, customerEmail?: string): Order[] {
+    const normEmail = (customerEmail || '').trim().toLowerCase();
+    return this.getOrders().filter(o => {
+      if (o.customerId === customerId) return true;
+      if (normEmail && o.customerEmail && o.customerEmail.trim().toLowerCase() === normEmail) return true;
+      return false;
+    });
   }
 
   saveOrders(orders: Order[]): void {
@@ -384,15 +389,23 @@ class StorageService {
 
   createOrder(order: Order): Order {
     const orders = this.getOrders();
-    orders.unshift(order);
+    const existingIndex = orders.findIndex(o => o.id === order.id || (order.orderNumber && o.orderNumber === order.orderNumber));
+    if (existingIndex !== -1) {
+      orders[existingIndex] = { ...orders[existingIndex], ...order };
+    } else {
+      orders.unshift(order);
+    }
     this.saveOrders(orders);
     
     // Decrement stock for purchased products
     const products = this.getProducts();
     order.items.forEach(item => {
-      const pIndex = products.findIndex(p => p.id === item.product.id);
-      if (pIndex !== -1) {
-        products[pIndex].stock = Math.max(0, products[pIndex].stock - item.quantity);
+      const pId = item.product?.id || (item as any).productId;
+      if (pId) {
+        const pIndex = products.findIndex(p => p.id === pId);
+        if (pIndex !== -1) {
+          products[pIndex].stock = Math.max(0, products[pIndex].stock - item.quantity);
+        }
       }
     });
     this.saveProducts(products);

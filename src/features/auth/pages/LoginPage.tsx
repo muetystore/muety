@@ -4,11 +4,13 @@ import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { Logo } from '@/shared/components/ui/Logo';
-import { Mail, Lock, ArrowRight, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { useCart } from '@/shared/context/CartContext';
+import { Mail, Lock, ArrowRight, Eye, EyeOff, KeyRound, ShoppingBag, Heart, Tag, Sparkles } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   useDocumentTitle('Sign In | MUETY Atelier');
   const { login, loginWithGoogle, sendPasswordReset } = useAuth();
+  const { items, subtotal, appliedCoupon, wishlist } = useCart();
   const { error, success, info } = useNotification();
   const navigate = useNavigate();
   const location = useLocation();
@@ -103,6 +105,50 @@ export const LoginPage: React.FC = () => {
             Access your private orders, wishlist, and concierge services.
           </p>
         </div>
+
+        {/* Before-Login Session Activities Banner */}
+        {(items.length > 0 || (wishlist && wishlist.length > 0)) && (
+          <div style={{
+            padding: '1rem',
+            borderRadius: '12px',
+            backgroundColor: '#fffdf7',
+            border: '1.5px solid rgba(201, 162, 39, 0.4)',
+            marginBottom: '1.5rem',
+            boxShadow: '0 2px 6px rgba(201, 162, 39, 0.08)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.76rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#b38a1b', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <ShoppingBag size={13} /> Active Atelier Session
+              </span>
+              <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#0f172a' }}>
+                ₹{subtotal.toLocaleString('en-IN')}
+              </span>
+            </div>
+
+            {items.length > 0 && (
+              <div style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '6px' }}>
+                {items.length} handloom{items.length > 1 ? 's' : ''} reserved in your bag ({items.map(i => i.product?.name).slice(0, 2).join(', ')}{items.length > 2 ? '...' : ''}).
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', fontSize: '0.72rem' }}>
+              {appliedCoupon && (
+                <span style={{ backgroundColor: '#ecfdf5', color: '#065f46', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  <Tag size={10} /> Promo "{appliedCoupon.code}" Active
+                </span>
+              )}
+              {wishlist && wishlist.length > 0 && (
+                <span style={{ backgroundColor: '#fdf2f8', color: '#9d174d', padding: '2px 6px', borderRadius: '4px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  <Heart size={10} /> {wishlist.length} in Wishlist
+                </span>
+              )}
+            </div>
+
+            <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '6px', fontStyle: 'italic' }}>
+              ✨ All active bag items, discounts, and preferences will be seamlessly bound to your account upon signing in.
+            </div>
+          </div>
+        )}
 
         {/* Email Password Form */}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>

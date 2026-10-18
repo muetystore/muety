@@ -39,7 +39,7 @@ import { uploadToCloudinary } from '@/lib/media/cloudinary';
 export const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated, openAuthModal } = useAuth();
   const { addToCart, toggleWishlist, isInWishlist, setIsDrawerOpen } = useCart();
   const { success, warning } = useNotification();
 
@@ -608,6 +608,10 @@ export const ProductDetailPage: React.FC = () => {
                     if (isSoldOut) return;
                     addToCart(product, quantity, selectedColor, selectedSize);
                     setIsDrawerOpen(false);
+                    if (!isAuthenticated) {
+                      openAuthModal({ redirectPath: '/checkout', reason: 'buy_now' });
+                      return;
+                    }
                     navigate('/checkout');
                   }}
                   disabled={isSoldOut}

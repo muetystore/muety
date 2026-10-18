@@ -1,9 +1,11 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/shared/context/CartContext';
+import { useAuth } from '@/shared/context/AuthContext';
 import { X, Trash2, Plus, Minus, ArrowRight, ShoppingBag } from 'lucide-react';
 
 export const CartDrawer: React.FC = () => {
+  const { isAuthenticated, openAuthModal } = useAuth();
   const { 
     items, 
     removeFromCart, 
@@ -212,6 +214,10 @@ export const CartDrawer: React.FC = () => {
               <button 
                 onClick={() => {
                   setIsDrawerOpen(false);
+                  if (!isAuthenticated) {
+                    openAuthModal({ redirectPath: '/checkout', reason: 'checkout' });
+                    return;
+                  }
                   navigate('/checkout');
                 }}
                 className="btn btn-accent"

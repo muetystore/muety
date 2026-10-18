@@ -83,6 +83,8 @@ export interface Product {
   craftsmanship?: string;
   occasion?: string;
   occasions?: string[];
+  brand?: string;
+  gender?: string;
   careInstructions?: string;
   authenticityInformation?: string;
 

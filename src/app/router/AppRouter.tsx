@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Header } from '@/shared/components/ui/Header';
 import { Footer } from '@/shared/components/ui/Footer';
 import { CartDrawer } from '@/features/cart/components/CartDrawer';
+import { PatronAuthModal } from '@/shared/components/ui/PatronAuthModal';
 import { AnnouncementBar } from '@/shared/components/ui/AnnouncementBar';
 import { ProtectedRoute } from '@/shared/components/ui/ProtectedRoute';
 import { MobileBottomNav } from '@/shared/components/ui/MobileBottomNav';
@@ -110,6 +111,7 @@ const CustomerLayout: React.FC = () => {
         </ErrorBoundary>
       </main>
       <CartDrawer />
+      <PatronAuthModal />
       <MobileBottomNav />
       <Footer />
     </div>

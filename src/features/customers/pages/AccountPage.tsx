@@ -202,10 +202,15 @@ export const AccountPage: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    // Real-time subscription to customer orders
-    const unsubscribe = orderService.subscribeToCustomerOrders(user.uid, (userOrders) => {
-      setOrders(userOrders);
-    });
+    // Real-time subscription to customer orders (matches both user.uid and user.email)
+    const unsubscribe = orderService.subscribeToCustomerOrders(
+      user.uid, 
+      (userOrders) => {
+        setOrders(userOrders);
+      },
+      undefined,
+      user.email || undefined
+    );
 
     // Fetch wishlist products
     const allProds = productService.getAllProducts();

@@ -54,8 +54,13 @@ export const ProductsPage: React.FC = () => {
   const minPriceParam = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : null;
   const maxPriceParam = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : null;
   const inStockParam = searchParams.get('inStock') === 'true';
-  const ratingParam = searchParams.get('rating') ? Number(searchParams.get('rating')) : null;
   const sortParam = (searchParams.get('sort') as SortOption) || 'featured';
+
+  const sareeTypesParam = searchParams.get('sareeTypes') ? searchParams.get('sareeTypes')!.split(',').filter(Boolean) : [];
+  const fabricsParam = searchParams.get('fabrics') ? searchParams.get('fabrics')!.split(',').filter(Boolean) : (fabricParam ? [fabricParam] : []);
+  const colorsParam = searchParams.get('colors') ? searchParams.get('colors')!.split(',').filter(Boolean) : [];
+  const occasionsParam = searchParams.get('occasions') ? searchParams.get('occasions')!.split(',').filter(Boolean) : (occasionParam ? [occasionParam] : []);
+  const patternsParam = searchParams.get('patterns') ? searchParams.get('patterns')!.split(',').filter(Boolean) : [];
 
   // Filter & Sort State
   const [filters, setFilters] = useState<ProductFilterState>({
@@ -64,7 +69,12 @@ export const ProductsPage: React.FC = () => {
     minPrice: minPriceParam,
     maxPrice: maxPriceParam,
     inStockOnly: inStockParam,
-    minRating: ratingParam,
+    minRating: null,
+    sareeTypes: sareeTypesParam,
+    fabrics: fabricsParam,
+    colors: colorsParam,
+    occasions: occasionsParam,
+    patterns: patternsParam,
     occasion: occasionParam || undefined,
     fabric: fabricParam || undefined,
     style: styleParam || undefined,
@@ -123,8 +133,13 @@ export const ProductsPage: React.FC = () => {
     const minP = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : null;
     const maxP = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : null;
     const inStk = searchParams.get('inStock') === 'true';
-    const rt = searchParams.get('rating') ? Number(searchParams.get('rating')) : null;
     const s = (searchParams.get('sort') as SortOption) || 'featured';
+
+    const stParam = searchParams.get('sareeTypes') ? searchParams.get('sareeTypes')!.split(',').filter(Boolean) : [];
+    const fbParam = searchParams.get('fabrics') ? searchParams.get('fabrics')!.split(',').filter(Boolean) : (searchParams.get('fabric') ? [searchParams.get('fabric')!] : []);
+    const clParam = searchParams.get('colors') ? searchParams.get('colors')!.split(',').filter(Boolean) : [];
+    const ocParam = searchParams.get('occasions') ? searchParams.get('occasions')!.split(',').filter(Boolean) : (searchParams.get('occasion') ? [searchParams.get('occasion')!] : []);
+    const ptParam = searchParams.get('patterns') ? searchParams.get('patterns')!.split(',').filter(Boolean) : [];
 
     setFilters(prev => ({
       ...prev,
@@ -133,7 +148,12 @@ export const ProductsPage: React.FC = () => {
       minPrice: minP,
       maxPrice: maxP,
       inStockOnly: inStk,
-      minRating: rt,
+      minRating: null,
+      sareeTypes: stParam,
+      fabrics: fbParam,
+      colors: clParam,
+      occasions: ocParam,
+      patterns: ptParam,
       occasion: searchParams.get('occasion') || undefined,
       fabric: searchParams.get('fabric') || undefined,
       style: searchParams.get('style') || undefined,
@@ -168,11 +188,25 @@ export const ProductsPage: React.FC = () => {
       if (newFilters.inStockOnly) {
         params.set('inStock', 'true');
       }
-      if (newFilters.minRating !== null && newFilters.minRating > 0) {
-        params.set('rating', String(newFilters.minRating));
-      }
       if (newSort && newSort !== 'featured') {
         params.set('sort', newSort);
+      }
+
+      // Facet arrays in URL
+      if (newFilters.sareeTypes && newFilters.sareeTypes.length > 0) {
+        params.set('sareeTypes', newFilters.sareeTypes.join(','));
+      }
+      if (newFilters.fabrics && newFilters.fabrics.length > 0) {
+        params.set('fabrics', newFilters.fabrics.join(','));
+      }
+      if (newFilters.colors && newFilters.colors.length > 0) {
+        params.set('colors', newFilters.colors.join(','));
+      }
+      if (newFilters.occasions && newFilters.occasions.length > 0) {
+        params.set('occasions', newFilters.occasions.join(','));
+      }
+      if (newFilters.patterns && newFilters.patterns.length > 0) {
+        params.set('patterns', newFilters.patterns.join(','));
       }
 
       // Preserve special campaign tags if present
@@ -207,8 +241,8 @@ export const ProductsPage: React.FC = () => {
     updateUrlParams(draft, sortBy);
   };
 
-  // Remove individual filter chip
-  const handleRemoveFilter = (key: keyof ProductFilterState) => {
+  // Remove individual filter chip (handles array values as well)
+  const handleRemoveFilter = (key: keyof ProductFilterState, valueToRemove?: string) => {
     setFilters(prev => {
       let updated: ProductFilterState;
       if (key === 'category') {
@@ -224,6 +258,9 @@ export const ProductsPage: React.FC = () => {
         updated = { ...prev, inStockOnly: false };
       } else if (key === 'minRating') {
         updated = { ...prev, minRating: null };
+      } else if (valueToRemove && Array.isArray(prev[key])) {
+        const arr = (prev[key] as string[]).filter(v => v !== valueToRemove);
+        updated = { ...prev, [key]: arr };
       } else {
         const copy = { ...prev };
         delete copy[key];
@@ -243,7 +280,12 @@ export const ProductsPage: React.FC = () => {
       minPrice: null,
       maxPrice: null,
       inStockOnly: false,
-      minRating: null
+      minRating: null,
+      sareeTypes: [],
+      fabrics: [],
+      colors: [],
+      occasions: [],
+      patterns: []
     };
     setFilters(fresh);
     setSearchInputVal('');
@@ -414,6 +456,7 @@ export const ProductsPage: React.FC = () => {
               categories={categories}
               categoryCounts={categoryCounts}
               priceBounds={priceBounds}
+              allProducts={allProducts}
               isMobileDrawer={false}
             />
           </aside>

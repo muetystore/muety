@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { useCart } from '@/shared/context/CartContext';
@@ -17,7 +17,8 @@ import {
   Truck,
   Banknote,
   MapPin,
-  CheckCircle2
+  CheckCircle2,
+  ArrowRight
 } from 'lucide-react';
 import { Address } from '@/shared/types';
 import { calculateOrderFinancials } from '@/shared/utils/pricingEngine';
@@ -30,7 +31,7 @@ import {
 export const CheckoutPage: React.FC = () => {
   useDocumentTitle('Checkout');
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, openAuthModal } = useAuth();
   const { 
     items, 
     subtotal, 
@@ -88,6 +89,105 @@ export const CheckoutPage: React.FC = () => {
     taxRate: settings.taxRate || 5,
     paymentMethod
   });
+
+  // Automatically prompt login modal if user lands on checkout without being signed in
+  useEffect(() => {
+    if (!isAuthenticated && !authLoading) {
+      openAuthModal({ redirectPath: '/checkout', reason: 'checkout' });
+    }
+  }, [isAuthenticated, authLoading, openAuthModal]);
+
+  // Synchronize authenticated user profile and saved addresses upon sign-in
+  useEffect(() => {
+    if (user) {
+      if (!email && user.email) setEmail(user.email);
+      if (!fullName && user.displayName) setFullName(user.displayName);
+      const addrs = customerAddressService.getAddresses(user.uid);
+      setSavedAddresses(addrs);
+      if (addrs.length > 0 && !selectedAddressId) {
+        const def = addrs.find(a => a.isDefault) || addrs[0];
+        handleSelectSavedAddress(def);
+      }
+    }
+  }, [user]);
+
+  if (!isAuthenticated && !authLoading) {
+    return (
+      <div className="container" style={{ maxWidth: '640px', padding: '5rem 1.5rem', textAlign: 'center' }}>
+        <div style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 'var(--radius-xl)',
+          padding: '3rem 2.25rem',
+          border: '1.5px solid rgba(201, 162, 39, 0.4)',
+          boxShadow: 'var(--shadow-xl)'
+        }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            backgroundColor: 'rgba(201, 162, 39, 0.12)',
+            color: '#b38a1b',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1.25rem'
+          }}>
+            <Lock size={30} />
+          </div>
+
+          <span style={{
+            fontSize: '0.78rem',
+            fontWeight: 800,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            color: '#b38a1b',
+            display: 'block',
+            marginBottom: '0.4rem'
+          }}>
+            Patron Privilege Access
+          </span>
+
+          <h2 style={{
+            fontSize: '1.75rem',
+            fontFamily: 'var(--font-heading)',
+            color: '#0f172a',
+            margin: '0 0 0.85rem',
+            fontWeight: 800
+          }}>
+            Sign In to Complete Your Order
+          </h2>
+
+          <p style={{
+            color: 'var(--text-secondary)',
+            fontSize: '0.94rem',
+            maxWidth: '480px',
+            margin: '0 auto 1.75rem',
+            lineHeight: 1.6
+          }}>
+            To guarantee authentic handloom reservation, enable order tracking, and preserve your purchase invoice, please sign in or register before checking out.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => openAuthModal({ redirectPath: '/checkout', reason: 'checkout' })}
+            className="btn btn-accent btn-lg"
+            style={{
+              width: '100%',
+              maxWidth: '320px',
+              margin: '0 auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            <span>Sign In / Create Account</span>
+            <ArrowRight size={18} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (

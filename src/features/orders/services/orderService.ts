@@ -2,6 +2,7 @@ import {
   collection, 
   doc, 
   setDoc, 
+  getDoc,
   getDocs,
   deleteDoc,
   onSnapshot, 
@@ -41,8 +42,8 @@ export const orderService = {
     return storageService.getOrderById(id);
   },
 
-  getCustomerOrders(customerId: string): Order[] {
-    return storageService.getCustomerOrders(customerId);
+  getCustomerOrders(customerId: string, customerEmail?: string): Order[] {
+    return storageService.getCustomerOrders(customerId, customerEmail);
   },
 
   async createOrder(params: {
@@ -210,7 +211,8 @@ export const orderService = {
     if (db && !isTestEnv()) {
       try {
         const orderRef = doc(db, 'orders', order.id);
-        await setDoc(orderRef, order);
+        const sanitizedOrder = JSON.parse(JSON.stringify(order));
+        await setDoc(orderRef, sanitizedOrder);
       } catch (err: any) {
         console.warn('Firebase Firestore write error:', err?.message || err);
       }
@@ -227,7 +229,8 @@ export const orderService = {
     if (db && !isTestEnv()) {
       try {
         const orderRef = doc(db, 'orders', orderId);
-        await setDoc(orderRef, updated, { merge: true });
+        const sanitized = JSON.parse(JSON.stringify(updated));
+        await setDoc(orderRef, sanitized, { merge: true });
       } catch (err: any) {
         console.warn('Firebase Firestore update error:', err?.message || err);
       }
@@ -276,7 +279,8 @@ export const orderService = {
     if (db && !isTestEnv()) {
       try {
         const orderRef = doc(db, 'orders', orderId);
-        await setDoc(orderRef, updated, { merge: true });
+        const sanitized = JSON.parse(JSON.stringify(updated));
+        await setDoc(orderRef, sanitized, { merge: true });
       } catch (err: any) {
         console.warn('Firebase Firestore cancellation write error:', err);
       }
@@ -286,23 +290,52 @@ export const orderService = {
   },
 
   subscribeToOrder(orderId: string, callback: (order: Order | null) => void): () => void {
+    // 1. Immediately provide cached local order if present
     const cached = storageService.getOrderById(orderId);
-    callback(cached || null);
+    if (cached) {
+      callback(cached);
+    }
 
     let firestoreUnsub: Unsubscribe | null = null;
 
     if (db) {
       try {
         const orderRef = doc(db, 'orders', orderId);
+
+        // Explicit getDoc for fast non-snapshot resolution
+        getDoc(orderRef).then(snap => {
+          if (snap.exists()) {
+            const data = snap.data() as Order;
+            const fullOrder = { ...data, id: data.id || snap.id };
+            storageService.createOrder(fullOrder);
+            callback(fullOrder);
+          } else {
+            const current = storageService.getOrderById(orderId);
+            callback(current || null);
+          }
+        }).catch(() => {
+          const current = storageService.getOrderById(orderId);
+          callback(current || null);
+        });
+
+        // Realtime listener
         firestoreUnsub = onSnapshot(orderRef, (snap) => {
           if (snap.exists()) {
             const data = snap.data() as Order;
-            callback(data);
+            const fullOrder = { ...data, id: data.id || snap.id };
+            storageService.createOrder(fullOrder);
+            callback(fullOrder);
           }
         }, (_err) => {
-          console.warn('Firestore onSnapshot error for order:', _err);
+          const current = storageService.getOrderById(orderId);
+          if (current) callback(current);
         });
-      } catch {}
+      } catch {
+        const current = storageService.getOrderById(orderId);
+        callback(current || null);
+      }
+    } else {
+      callback(cached || null);
     }
 
     const handleLocalSync = () => {
@@ -318,14 +351,18 @@ export const orderService = {
       }
     };
 
-    window.addEventListener('muety_orders_updated', handleLocalSync);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('muety_orders_updated', handleLocalSync);
+    }
     if (channel) {
       channel.addEventListener('message', handleChannelMessage);
     }
 
     return () => {
       if (firestoreUnsub) firestoreUnsub();
-      window.removeEventListener('muety_orders_updated', handleLocalSync);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('muety_orders_updated', handleLocalSync);
+      }
       if (channel) {
         channel.removeEventListener('message', handleChannelMessage);
       }
@@ -333,28 +370,41 @@ export const orderService = {
   },
 
   subscribeToAllOrders(callback: (orders: Order[]) => void, onError?: (err: Error) => void): () => void {
+    // 1. Immediately provide cached orders so UI never starts empty
+    callback(storageService.getOrders());
+
     let firestoreUnsub: Unsubscribe | null = null;
 
     if (db) {
       try {
         const ordersCol = collection(db, 'orders');
         firestoreUnsub = onSnapshot(ordersCol, (snapshot) => {
+          const cloudOrders: Order[] = [];
           if (!snapshot.empty) {
-            const cloudOrders: Order[] = [];
             snapshot.forEach(docSnap => {
               const raw = docSnap.data() as Order;
               if (raw && (raw.id || docSnap.id)) {
                 cloudOrders.push({ ...raw, id: raw.id || docSnap.id });
               }
             });
-
-            cloudOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            storageService.saveOrders(cloudOrders);
-            callback(cloudOrders);
-          } else {
-            storageService.saveOrders([]);
-            callback([]);
           }
+
+          // Merge cloud orders with local storage orders by ID (never wipe local orders!)
+          const mergedMap = new Map<string, Order>();
+          cloudOrders.forEach(o => mergedMap.set(o.id, o));
+          const localOrders = storageService.getOrders();
+          localOrders.forEach(o => {
+            if (!mergedMap.has(o.id)) {
+              mergedMap.set(o.id, o);
+            }
+          });
+
+          const mergedOrders = Array.from(mergedMap.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+
+          storageService.saveOrders(mergedOrders);
+          callback(mergedOrders);
         }, (err) => {
           console.error('[orderService] Firestore onSnapshot error on orders collection:', err?.message || err);
           if (onError) {
@@ -381,21 +431,34 @@ export const orderService = {
       }
     };
 
-    window.addEventListener('muety_orders_updated', handleLocalSync);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('muety_orders_updated', handleLocalSync);
+    }
     if (channel) {
       channel.addEventListener('message', handleChannelMessage);
     }
 
     return () => {
       if (firestoreUnsub) firestoreUnsub();
-      window.removeEventListener('muety_orders_updated', handleLocalSync);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('muety_orders_updated', handleLocalSync);
+      }
       if (channel) {
         channel.removeEventListener('message', handleChannelMessage);
       }
     };
   },
 
-  subscribeToCustomerOrders(customerId: string, callback: (orders: Order[]) => void, onError?: (err: Error) => void): () => void {
+  subscribeToCustomerOrders(
+    customerId: string, 
+    callback: (orders: Order[]) => void, 
+    onError?: (err: Error) => void,
+    customerEmail?: string
+  ): () => void {
+    // 1. Immediately provide cached orders for customer (matches customerId OR email)
+    const initialLocal = storageService.getCustomerOrders(customerId, customerEmail);
+    callback(initialLocal);
+
     let firestoreUnsub: Unsubscribe | null = null;
 
     if (db) {
@@ -408,32 +471,50 @@ export const orderService = {
             const raw = d.data() as Order;
             if (raw) userOrders.push({ ...raw, id: raw.id || d.id });
           });
-          userOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          callback(userOrders);
+
+          // Merge with local orders that belong to this customer
+          const currentLocal = storageService.getCustomerOrders(customerId, customerEmail);
+          const mergedMap = new Map<string, Order>();
+          userOrders.forEach(o => mergedMap.set(o.id, o));
+          currentLocal.forEach(o => {
+            if (!mergedMap.has(o.id)) {
+              mergedMap.set(o.id, o);
+            }
+          });
+
+          const finalList = Array.from(mergedMap.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+
+          callback(finalList);
         }, (err) => {
           console.error('[orderService] Firestore customer orders onSnapshot error:', err?.message || err);
           if (onError) onError(err);
-          else callback(storageService.getCustomerOrders(customerId));
+          else callback(storageService.getCustomerOrders(customerId, customerEmail));
         });
       } catch (e: any) {
         if (onError) onError(e);
       }
     } else {
-      callback(storageService.getCustomerOrders(customerId));
+      callback(storageService.getCustomerOrders(customerId, customerEmail));
     }
 
     const handleLocalSync = () => {
-      callback(storageService.getCustomerOrders(customerId));
+      callback(storageService.getCustomerOrders(customerId, customerEmail));
     };
 
-    window.addEventListener('muety_orders_updated', handleLocalSync);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('muety_orders_updated', handleLocalSync);
+    }
     if (channel) {
       channel.addEventListener('message', handleLocalSync);
     }
 
     return () => {
       if (firestoreUnsub) firestoreUnsub();
-      window.removeEventListener('muety_orders_updated', handleLocalSync);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('muety_orders_updated', handleLocalSync);
+      }
       if (channel) {
         channel.removeEventListener('message', handleLocalSync);
       }

@@ -18,6 +18,8 @@ import {
   Send
 } from 'lucide-react';
 import { storageService } from '@/lib/storage/storageService';
+import { isLiveFirebase, db } from '@/lib/firebase/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { StoreSettings, ContactChannel, ContactChannelType } from '@/shared/types';
 import { ensureContactChannels, computeChannelLink } from '@/shared/utils/contactChannels';
 
@@ -110,8 +112,24 @@ export const Footer: React.FC = () => {
       setSettings(storageService.getSettings());
     };
     window.addEventListener('muety_settings_updated', handleSettingsUpdate);
+    window.addEventListener('storage', handleSettingsUpdate);
+
+    if (db && isLiveFirebase) {
+      getDoc(doc(db, 'storeSettings', 'config')).then(snap => {
+        if (snap.exists()) {
+          const cloud = snap.data() as StoreSettings;
+          if (cloud && cloud.contactChannels && Array.isArray(cloud.contactChannels)) {
+            const merged = ensureContactChannels({ ...storageService.getSettings(), ...cloud });
+            storageService.saveSettings(merged);
+            setSettings(merged);
+          }
+        }
+      }).catch(() => {});
+    }
+
     return () => {
       window.removeEventListener('muety_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('storage', handleSettingsUpdate);
     };
   }, []);
 

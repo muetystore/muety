@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Product } from '@/types';
 import { useCart } from '@/shared/context/CartContext';
+import { useAuth } from '@/shared/context/AuthContext';
 import { Heart, ShoppingBag, Eye, Star, Zap, Check } from 'lucide-react';
 
 interface ProductCardProps {
@@ -11,6 +12,7 @@ interface ProductCardProps {
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView }) => {
   const { addToCart, toggleWishlist, isInWishlist, setIsDrawerOpen } = useCart();
+  const { isAuthenticated, openAuthModal } = useAuth();
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
@@ -33,6 +35,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView }
     if (isSoldOut) return;
     addToCart(product, 1);
     setIsDrawerOpen(false);
+    if (!isAuthenticated) {
+      openAuthModal({ redirectPath: '/checkout', reason: 'buy_now' });
+      return;
+    }
     navigate('/checkout');
   };
 

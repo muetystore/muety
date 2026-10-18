@@ -16,6 +16,7 @@ export const OrderConfirmationPage: React.FC = () => {
   useDocumentTitle('Order Confirmation');
   const { orderId } = useParams<{ orderId: string }>();
   const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     // Fire confetti on mount
@@ -30,19 +31,50 @@ export const OrderConfirmationPage: React.FC = () => {
       // safe fallback
     }
 
-    if (!orderId) return;
+    if (!orderId) {
+      setLoading(false);
+      return;
+    }
 
     // Real-time Firebase Firestore / Multi-tab Subscription
     const unsubscribe = orderService.subscribeToOrder(orderId, (liveOrder) => {
       if (liveOrder) {
         setOrder(liveOrder);
+        setLoading(false);
       }
     });
 
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 2000);
+
     return () => {
+      clearTimeout(timeout);
       unsubscribe();
     };
   }, [orderId]);
+
+  if (loading && !order) {
+    return (
+      <div className="container" style={{ padding: '8rem 1rem', textAlign: 'center' }}>
+        <div style={{
+          width: '42px',
+          height: '42px',
+          border: '3px solid rgba(212, 175, 55, 0.2)',
+          borderTopColor: '#d4af37',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+          margin: '0 auto 1.5rem'
+        }} />
+        <h2 style={{ fontFamily: 'var(--font-heading)', color: 'var(--brand-primary)', margin: '0 0 0.5rem' }}>
+          Loading Order Confirmation...
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+          Synchronizing with the MUETY order vault.
+        </p>
+      </div>
+    );
+  }
 
   if (!order) {
     return (

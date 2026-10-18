@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Product } from '@/types';
 import { useCart } from '@/shared/context/CartContext';
+import { useAuth } from '@/shared/context/AuthContext';
 import { X, Star, Heart, ShoppingBag, Zap } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -11,6 +12,7 @@ interface QuickViewModalProps {
 
 export const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
   const { addToCart, toggleWishlist, isInWishlist, setIsDrawerOpen } = useCart();
+  const { isAuthenticated, openAuthModal } = useAuth();
   const navigate = useNavigate();
   const [selectedImage, setSelectedImage] = useState<number>(0);
   const [selectedColor, setSelectedColor] = useState<string>('');
@@ -242,6 +244,10 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, onClose
                 addToCart(product, quantity, currentColor, currentSize);
                 setIsDrawerOpen(false);
                 onClose();
+                if (!isAuthenticated) {
+                  openAuthModal({ redirectPath: '/checkout', reason: 'buy_now' });
+                  return;
+                }
                 navigate('/checkout');
               }}
               disabled={product.stock === 0}

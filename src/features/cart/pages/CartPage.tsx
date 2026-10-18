@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { useCart } from '@/shared/context/CartContext';
+import { useAuth } from '@/shared/context/AuthContext';
 import { 
   ShoppingBag, 
   Trash2, 
@@ -19,6 +20,7 @@ import { storageService } from '@/lib/storage/storageService';
 export const CartPage: React.FC = () => {
   useDocumentTitle('Cart');
   const navigate = useNavigate();
+  const { isAuthenticated, openAuthModal } = useAuth();
   const { 
     items, 
     updateQuantity, 
@@ -389,7 +391,13 @@ export const CartPage: React.FC = () => {
             </div>
 
             <button
-              onClick={() => navigate('/checkout')}
+              onClick={() => {
+                if (!isAuthenticated) {
+                  openAuthModal({ redirectPath: '/checkout', reason: 'checkout' });
+                  return;
+                }
+                navigate('/checkout');
+              }}
               className="btn btn-accent btn-lg"
               style={{ width: '100%', marginBottom: '1rem' }}
             >

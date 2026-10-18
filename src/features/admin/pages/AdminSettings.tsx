@@ -145,60 +145,88 @@ export const AdminSettings: React.FC = () => {
     }
   }, []);
 
+  const persistAndSyncSettings = (nextSettings: StoreSettings) => {
+    setSettings(nextSettings);
+    storageService.saveSettings(nextSettings);
+    if (db && isLiveFirebase) {
+      setDoc(doc(db, 'storeSettings', 'config'), nextSettings, { merge: true }).catch(() => {});
+      setDoc(doc(db, 'settings', 'store_settings'), nextSettings, { merge: true }).catch(() => {});
+    }
+  };
+
   const updateQuickContactField = (field: 'contactEmail' | 'ordersEmail' | 'contactPhone' | 'whatsappPhone' | 'instagramHandle', val: string) => {
-    setSettings(prev => {
-      const nextSettings = { ...prev, [field]: val };
-      const channels = (prev.contactChannels || []).map(ch => {
-        if (field === 'contactEmail' && ch.id === 'channel-email-support') {
-          return { ...ch, value: val, link: computeChannelLink('email', val) };
-        }
-        if (field === 'ordersEmail' && ch.id === 'channel-email-orders') {
-          return { ...ch, value: val, link: computeChannelLink('email', val) };
-        }
-        if (field === 'contactPhone' && ch.id === 'channel-phone') {
-          return { ...ch, value: val, link: computeChannelLink('phone', val) };
-        }
-        if (field === 'whatsappPhone' && ch.id === 'channel-whatsapp') {
-          return { ...ch, value: val, link: computeChannelLink('whatsapp', val) };
-        }
-        if (field === 'instagramHandle' && ch.id === 'channel-instagram') {
-          return { ...ch, value: val, link: computeChannelLink('instagram', val) };
-        }
-        return ch;
-      });
-      return { ...nextSettings, contactChannels: channels };
+    const nextSettings = { ...settings, [field]: val };
+    const channels = (settings.contactChannels || []).map(ch => {
+      if (field === 'contactEmail' && ch.id === 'channel-email-support') {
+        return { ...ch, value: val, link: computeChannelLink('email', val) };
+      }
+      if (field === 'ordersEmail' && ch.id === 'channel-email-orders') {
+        return { ...ch, value: val, link: computeChannelLink('email', val) };
+      }
+      if (field === 'contactPhone' && ch.id === 'channel-phone') {
+        return { ...ch, value: val, link: computeChannelLink('phone', val) };
+      }
+      if (field === 'whatsappPhone' && ch.id === 'channel-whatsapp') {
+        return { ...ch, value: val, link: computeChannelLink('whatsapp', val) };
+      }
+      if (field === 'instagramHandle' && ch.id === 'channel-instagram') {
+        return { ...ch, value: val, link: computeChannelLink('instagram', val) };
+      }
+      return ch;
     });
+    nextSettings.contactChannels = channels;
+    persistAndSyncSettings(nextSettings);
+  };
+
+  const handleUpdateChannelInline = (channelId: string, value: string) => {
+    const channels = (settings.contactChannels || []).map(ch => {
+      if (ch.id === channelId) {
+        return {
+          ...ch,
+          value,
+          link: computeChannelLink(ch.type, value)
+        };
+      }
+      return ch;
+    });
+    const nextSettings = { ...settings, contactChannels: channels };
+    persistAndSyncSettings(nextSettings);
   };
 
   const handleToggleFooter = (channelId: string) => {
-    setSettings(prev => {
-      const channels = (prev.contactChannels || []).map(ch => {
-        if (ch.id === channelId) {
-          return { ...ch, showInFooter: !ch.showInFooter };
-        }
-        return ch;
-      });
-      return { ...prev, contactChannels: channels };
+    const channels = (settings.contactChannels || []).map(ch => {
+      if (ch.id === channelId) {
+        return { ...ch, showInFooter: !ch.showInFooter };
+      }
+      return ch;
     });
+    const nextSettings = { ...settings, contactChannels: channels };
+    persistAndSyncSettings(nextSettings);
+    const target = channels.find(c => c.id === channelId);
+    if (target) {
+      success(`"${target.name}" is now ${target.showInFooter ? 'visible' : 'hidden'} in website footer.`);
+    }
   };
 
   const handleToggleEnabled = (channelId: string) => {
-    setSettings(prev => {
-      const channels = (prev.contactChannels || []).map(ch => {
-        if (ch.id === channelId) {
-          return { ...ch, enabled: !ch.enabled };
-        }
-        return ch;
-      });
-      return { ...prev, contactChannels: channels };
+    const channels = (settings.contactChannels || []).map(ch => {
+      if (ch.id === channelId) {
+        return { ...ch, enabled: ch.enabled === false };
+      }
+      return ch;
     });
+    const nextSettings = { ...settings, contactChannels: channels };
+    persistAndSyncSettings(nextSettings);
   };
 
   const handleDeleteChannel = (channelId: string) => {
-    setSettings(prev => ({
-      ...prev,
-      contactChannels: (prev.contactChannels || []).filter(ch => ch.id !== channelId)
-    }));
+    const target = (settings.contactChannels || []).find(ch => ch.id === channelId);
+    const channels = (settings.contactChannels || []).filter(ch => ch.id !== channelId);
+    const nextSettings = { ...settings, contactChannels: channels };
+    persistAndSyncSettings(nextSettings);
+    if (target) {
+      success(`Channel "${target.name}" removed.`);
+    }
   };
 
   const openAddChannelModal = () => {
@@ -239,72 +267,71 @@ export const AdminSettings: React.FC = () => {
     const computed = computeChannelLink(channelForm.type, channelForm.value);
     const finalLink = channelForm.link.trim() || computed;
 
-    setSettings(prev => {
-      const channels = [...(prev.contactChannels || [])];
-      let updatedSettings = { ...prev };
+    const channels = [...(settings.contactChannels || [])];
+    const updatedSettings: StoreSettings = { ...settings };
 
-      if (channelForm.id) {
-        // Edit existing
-        const updatedChannels = channels.map(ch => {
-          if (ch.id === channelForm.id) {
-            return {
-              ...ch,
-              name: channelForm.name.trim(),
-              type: channelForm.type,
-              value: channelForm.value.trim(),
-              link: finalLink,
-              showInFooter: channelForm.showInFooter,
-              enabled: channelForm.enabled
-            };
-          }
-          return ch;
-        });
+    if (channelForm.id) {
+      // Edit existing
+      const updatedChannels = channels.map(ch => {
+        if (ch.id === channelForm.id) {
+          return {
+            ...ch,
+            name: channelForm.name.trim(),
+            type: channelForm.type,
+            value: channelForm.value.trim(),
+            link: finalLink,
+            showInFooter: channelForm.showInFooter,
+            enabled: channelForm.enabled
+          };
+        }
+        return ch;
+      });
 
-        // Sync primary fields if this was a canonical channel
-        if (channelForm.id === 'channel-phone') updatedSettings.contactPhone = channelForm.value.trim();
-        if (channelForm.id === 'channel-whatsapp') updatedSettings.whatsappPhone = channelForm.value.trim();
-        if (channelForm.id === 'channel-email-support') updatedSettings.contactEmail = channelForm.value.trim();
-        if (channelForm.id === 'channel-email-orders') updatedSettings.ordersEmail = channelForm.value.trim();
-        if (channelForm.id === 'channel-instagram') updatedSettings.instagramHandle = channelForm.value.trim();
+      // Sync primary fields if this was a canonical channel
+      if (channelForm.id === 'channel-phone') updatedSettings.contactPhone = channelForm.value.trim();
+      if (channelForm.id === 'channel-whatsapp') updatedSettings.whatsappPhone = channelForm.value.trim();
+      if (channelForm.id === 'channel-email-support') updatedSettings.contactEmail = channelForm.value.trim();
+      if (channelForm.id === 'channel-email-orders') updatedSettings.ordersEmail = channelForm.value.trim();
+      if (channelForm.id === 'channel-instagram') updatedSettings.instagramHandle = channelForm.value.trim();
 
-        return { ...updatedSettings, contactChannels: updatedChannels };
-      } else {
-        // Add new
-        const newCh: ContactChannel = {
-          id: `channel-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          name: channelForm.name.trim(),
-          type: channelForm.type,
-          value: channelForm.value.trim(),
-          link: finalLink,
-          showInFooter: channelForm.showInFooter,
-          enabled: channelForm.enabled,
-          order: channels.length + 1
-        };
-        return { ...prev, contactChannels: [...channels, newCh] };
-      }
-    });
+      updatedSettings.contactChannels = updatedChannels;
+      persistAndSyncSettings(updatedSettings);
+      success(`Channel "${channelForm.name}" updated and saved.`);
+    } else {
+      // Add new
+      const newCh: ContactChannel = {
+        id: `channel-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        name: channelForm.name.trim(),
+        type: channelForm.type,
+        value: channelForm.value.trim(),
+        link: finalLink,
+        showInFooter: channelForm.showInFooter,
+        enabled: channelForm.enabled,
+        order: channels.length + 1
+      };
+      updatedSettings.contactChannels = [...channels, newCh];
+      persistAndSyncSettings(updatedSettings);
+      success(`Channel "${channelForm.name}" created and published to storefront footer!`);
+    }
 
     setShowChannelModal(false);
     setEditingChannel(null);
   };
 
   const handleMoveChannel = (id: string, direction: 'up' | 'down') => {
-    setSettings(prev => {
-      const channels = [...(prev.contactChannels || [])];
-      const index = channels.findIndex(c => c.id === id);
-      if (index === -1) return prev;
-      const targetIndex = direction === 'up' ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= channels.length) return prev;
+    const channels = [...(settings.contactChannels || [])];
+    const index = channels.findIndex(c => c.id === id);
+    if (index === -1) return;
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= channels.length) return;
 
-      const updated = [...channels];
-      const [moved] = updated.splice(index, 1);
-      updated.splice(targetIndex, 0, moved);
+    const updated = [...channels];
+    const [moved] = updated.splice(index, 1);
+    updated.splice(targetIndex, 0, moved);
 
-      return {
-        ...prev,
-        contactChannels: updated.map((c, i) => ({ ...c, order: i + 1 }))
-      };
-    });
+    const reordered = updated.map((c, i) => ({ ...c, order: i + 1 }));
+    const nextSettings = { ...settings, contactChannels: reordered };
+    persistAndSyncSettings(nextSettings);
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -632,6 +659,125 @@ export const AdminSettings: React.FC = () => {
                 </a>
               </div>
             </div>
+
+            {/* Custom & Added Support Channels (e.g. Facebook, YouTube, LinkedIn, Custom Links) */}
+            {(settings.contactChannels || [])
+              .filter(ch => !ch.isPrimary)
+              .map(ch => {
+                const targetUrl = ch.link || computeChannelLink(ch.type, ch.value);
+                const isFooterVisible = ch.showInFooter && ch.enabled !== false;
+
+                return (
+                  <div
+                    key={ch.id}
+                    style={{
+                      padding: '1.15rem',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '10px',
+                      border: `1.5px solid ${isFooterVisible ? 'rgba(212, 175, 55, 0.45)' : '#e2e8f0'}`,
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      transition: 'border-color 0.2s ease',
+                      position: 'relative'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                      <label className="form-label" style={{ margin: 0, fontWeight: 700, fontSize: '0.86rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {renderChannelIcon(ch.type, 16)}
+                        <span>{ch.name}</span>
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#f1f5f9', color: '#475569', fontWeight: 700, textTransform: 'uppercase' }}>
+                          {ch.type}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openEditChannelModal(ch)}
+                          title="Edit channel details"
+                          style={{
+                            border: 'none',
+                            background: 'none',
+                            cursor: 'pointer',
+                            color: '#64748b',
+                            padding: '2px',
+                            display: 'inline-flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Edit3 size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteChannel(ch.id)}
+                          title="Delete channel"
+                          style={{
+                            border: 'none',
+                            background: 'none',
+                            cursor: 'pointer',
+                            color: '#ef4444',
+                            padding: '2px',
+                            display: 'inline-flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <input 
+                      type="text" 
+                      value={ch.value} 
+                      onChange={e => handleUpdateChannelInline(ch.id, e.target.value)} 
+                      className="form-input" 
+                      placeholder={ch.type === 'facebook' ? 'e.g. the_muety' : 'Channel handle, phone, or URL'}
+                      style={{ fontSize: '0.9rem' }}
+                    />
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', fontSize: '0.76rem', color: '#64748b' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span 
+                          onClick={() => handleToggleFooter(ch.id)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            color: isFooterVisible ? '#15803d' : '#94a3b8',
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                          title="Click to toggle footer visibility"
+                        >
+                          {isFooterVisible ? <Eye size={12} /> : <EyeOff size={12} />}
+                          <span>{isFooterVisible ? 'In Footer' : 'Hidden'}</span>
+                        </span>
+                        <span 
+                          onClick={() => handleToggleEnabled(ch.id)}
+                          style={{
+                            cursor: 'pointer',
+                            color: ch.enabled !== false ? '#0284c7' : '#f59e0b',
+                            fontWeight: 600
+                          }}
+                          title="Click to toggle active status"
+                        >
+                          • {ch.enabled !== false ? 'Active' : 'Paused'}
+                        </span>
+                      </div>
+
+                      {targetUrl && (
+                        <a 
+                          href={targetUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          style={{ color: 'var(--brand-accent)', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                        >
+                          <span>Test {ch.type}</span>
+                          <ExternalLink size={10} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
 
           {/* Channel Roster & Storefront Footer Visibility Control Panel */}

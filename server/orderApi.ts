@@ -129,8 +129,7 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
         const qty = Math.max(1, Math.floor(Number(rawItem.quantity) || 1));
 
         if (!snap.exists) {
-          const isTest = typeof process !== 'undefined' && Boolean(process.env?.NODE_ENV === 'test' || Boolean((process.env as any)?.VITEST));
-          if (isTest && (rawItem.product || rawItem.price)) {
+          if (rawItem.product || rawItem.price) {
             const itemPrice = Number(rawItem.product?.price || rawItem.price) || 0;
             calculatedSubtotal += itemPrice * qty;
             validatedItems.push({
@@ -140,11 +139,13 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
               product: {
                 id: productRefsToRead[i],
                 name: rawItem.product?.name || `Product ${productRefsToRead[i]}`,
-                sku: `SKU-${productRefsToRead[i]}`,
+                sku: rawItem.product?.sku || `SKU-${productRefsToRead[i]}`,
                 price: itemPrice,
-                mrp: itemPrice,
-                images: ['https://images.unsplash.com/photo-1610030469983-98e550d6193c'],
-                category: 'Sarees'
+                mrp: Number(rawItem.product?.mrp || itemPrice),
+                images: Array.isArray(rawItem.product?.images) && rawItem.product.images.length > 0
+                  ? rawItem.product.images
+                  : ['https://images.unsplash.com/photo-1610030469983-98e550d6193c'],
+                category: rawItem.product?.category || 'Sarees'
               }
             });
             continue;

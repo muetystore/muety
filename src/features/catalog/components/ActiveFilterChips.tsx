@@ -7,8 +7,14 @@ interface ActiveFilterChipsProps {
   filters: ProductFilterState;
   categories: Category[];
   priceBounds: { min: number; max: number };
-  onRemoveFilter: (key: keyof ProductFilterState) => void;
+  onRemoveFilter: (key: keyof ProductFilterState, valueToRemove?: string) => void;
   onResetAll: () => void;
+}
+
+function formatChipText(raw: string): string {
+  return raw
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
 }
 
 export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
@@ -68,57 +74,76 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
     });
   }
 
-  // Rating Chip
-  if (filters.minRating !== null && filters.minRating > 0) {
-    chips.push({
-      id: 'rating',
-      label: `${filters.minRating}★ & above`,
-      onRemove: () => onRemoveFilter('minRating')
+  // Saree Types Chips
+  if (Array.isArray(filters.sareeTypes)) {
+    filters.sareeTypes.forEach(tId => {
+      chips.push({
+        id: `sareeType-${tId}`,
+        label: `Type: ${formatChipText(tId)}`,
+        onRemove: () => onRemoveFilter('sareeTypes', tId)
+      });
     });
   }
 
-  // Occasion Chip
-  if (filters.occasion) {
+  // Fabric Chips
+  if (Array.isArray(filters.fabrics)) {
+    filters.fabrics.forEach(fId => {
+      chips.push({
+        id: `fabric-${fId}`,
+        label: `Fabric: ${formatChipText(fId)}`,
+        onRemove: () => onRemoveFilter('fabrics', fId)
+      });
+    });
+  }
+
+  // Color Chips
+  if (Array.isArray(filters.colors)) {
+    filters.colors.forEach(cId => {
+      chips.push({
+        id: `color-${cId}`,
+        label: `Color: ${formatChipText(cId)}`,
+        onRemove: () => onRemoveFilter('colors', cId)
+      });
+    });
+  }
+
+  // Occasion Chips
+  if (Array.isArray(filters.occasions)) {
+    filters.occasions.forEach(oId => {
+      chips.push({
+        id: `occasion-${oId}`,
+        label: `Occasion: ${formatChipText(oId)}`,
+        onRemove: () => onRemoveFilter('occasions', oId)
+      });
+    });
+  }
+
+  // Pattern Chips
+  if (Array.isArray(filters.patterns)) {
+    filters.patterns.forEach(pId => {
+      chips.push({
+        id: `pattern-${pId}`,
+        label: `Pattern: ${formatChipText(pId)}`,
+        onRemove: () => onRemoveFilter('patterns', pId)
+      });
+    });
+  }
+
+  // Legacy Occasion Chip (if not in array)
+  if (filters.occasion && (!filters.occasions || filters.occasions.length === 0)) {
     chips.push({
-      id: 'occasion',
+      id: 'legacy-occasion',
       label: `Occasion: ${filters.occasion}`,
       onRemove: () => onRemoveFilter('occasion')
     });
   }
 
-  // Fabric Chip
-  if (filters.fabric) {
+  // Legacy Fabric Chip (if not in array)
+  if (filters.fabric && (!filters.fabrics || filters.fabrics.length === 0)) {
     chips.push({
-      id: 'fabric',
+      id: 'legacy-fabric',
       label: `Fabric: ${filters.fabric}`,
       onRemove: () => onRemoveFilter('fabric')
-    });
-  }
-
-  // Style Chip
-  if (filters.style) {
-    chips.push({
-      id: 'style',
-      label: `Style: ${filters.style}`,
-      onRemove: () => onRemoveFilter('style')
-    });
-  }
-
-  // Tag Chip
-  if (filters.tag) {
-    chips.push({
-      id: 'tag',
-      label: `Tag: ${filters.tag}`,
-      onRemove: () => onRemoveFilter('tag')
-    });
-  }
-
-  // Collection Chip
-  if (filters.collection) {
-    chips.push({
-      id: 'collection',
-      label: `Collection: ${filters.collection}`,
-      onRemove: () => onRemoveFilter('collection')
     });
   }
 
@@ -195,7 +220,9 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
           fontWeight: 700,
           cursor: 'pointer',
           padding: '4px 8px',
-          marginLeft: '4px'
+          marginLeft: '4px',
+          background: 'none',
+          border: 'none'
         }}
       >
         <RotateCcw size={11} />

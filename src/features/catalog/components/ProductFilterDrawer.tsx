@@ -192,6 +192,7 @@ export const ProductFilterDrawer: React.FC<ProductFilterDrawerProps> = ({
             categories={categories}
             categoryCounts={categoryCounts}
             priceBounds={priceBounds}
+            allProducts={allProducts}
             isMobileDrawer={true}
           />
         </div>

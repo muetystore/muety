@@ -3,6 +3,13 @@ import { UserProfile, AppRole } from '@/types';
 import { authService } from '@/features/auth/services/authService';
 import { hasRole, hasAnyRole, hasPermission, Permission, getUserRoles } from '@/shared/utils/permissions';
 
+export interface AuthModalConfig {
+  redirectPath?: string;
+  onSuccess?: () => void;
+  reason?: 'checkout' | 'buy_now' | 'general';
+  message?: string;
+}
+
 interface AuthContextType {
   user: UserProfile | null;
   roles: AppRole[];
@@ -10,6 +17,10 @@ interface AuthContextType {
   isAdmin: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isAuthModalOpen: boolean;
+  authModalConfig: AuthModalConfig | null;
+  openAuthModal: (config?: AuthModalConfig) => void;
+  closeAuthModal: () => void;
   login: (email: string, pass: string) => Promise<UserProfile>;
   register: (email: string, pass: string, name: string) => Promise<UserProfile>;
   loginWithGoogle: () => Promise<UserProfile>;
@@ -25,6 +36,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(authService.getCurrentUser());
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authModalConfig, setAuthModalConfig] = useState<AuthModalConfig | null>(null);
+
+  const openAuthModal = (config?: AuthModalConfig) => {
+    setAuthModalConfig(config || { redirectPath: '/checkout', reason: 'checkout' });
+    setIsAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
+    setAuthModalConfig(null);
+  };
 
   useEffect(() => {
     const unsubscribe = authService.subscribe((newUser) => {
@@ -97,6 +120,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isAdmin,
       isAuthenticated,
       isLoading,
+      isAuthModalOpen,
+      authModalConfig,
+      openAuthModal,
+      closeAuthModal,
       login,
       register,
       loginWithGoogle,
