@@ -84,10 +84,11 @@ export const ShippingPage: React.FC = () => {
 
           {/* Section 4 */}
           <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
-            4. Shipping Charges
+            4. Shipping Charges &amp; Payment Methods
           </h2>
-          <p style={{ marginBottom: '1.5rem' }}>
-            Applicable shipping charges and any COD-related charges will be displayed before the customer confirms the order. Please review the total payable amount at checkout.
+          <p style={{ marginBottom: '1.5rem', lineHeight: 1.7 }}>
+            <strong>Online Prepaid Payments:</strong> 100% FREE Pan-India insured courier delivery applies to all prepaid orders completed online via Razorpay (UPI, Credit/Debit Cards, Net Banking, Wallets). Delivery charges are ₹0.<br />
+            <strong>Cash on Delivery (COD):</strong> A flat ₹89.00 courier delivery fee is charged on COD orders. To confirm COD dispatch, this ₹89 delivery fee is collected online via Razorpay at checkout as an advance confirmation. The remaining balance (product subtotal and applicable tax) is collected in cash or UPI at your doorstep upon parcel delivery.
           </p>
 
           {/* Section 5 */}

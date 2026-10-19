@@ -18,18 +18,18 @@ export interface CampaignHeroProps {
 
 const DEFAULT_SLIDES: BannerSlide[] = [
   {
-    id: 'dasara-campaign',
-    image: '/dasara_campaign_banner_with_text.jpg',
-    alt: 'MUETY Dasara Festive Collection - Tradition Meets Elegance',
-    link: '/products',
-    objectPosition: 'center center'
-  },
-  {
     id: 'diwali-hero',
     image: '/diwali_hero_banner.jpg',
     alt: 'MUETY Pure Mulberry Silk & Certified Gold Zari Sarees',
     link: '/products',
     objectPosition: 'center 35%'
+  },
+  {
+    id: 'dasara-campaign',
+    image: '/dasara_campaign_banner_with_text.jpg',
+    alt: 'MUETY Dasara Festive Collection - Tradition Meets Elegance',
+    link: '/products',
+    objectPosition: 'center center'
   }
 ];
 
@@ -163,6 +163,7 @@ export const CampaignHero: React.FC<CampaignHeroProps> = ({
           {slides.map((slide, idx) => (
             <div 
               key={slide.id || idx}
+              className="hero-gradient-loading"
               style={{
                 flex: '0 0 100%',
                 width: '100%',
@@ -195,8 +196,9 @@ export const CampaignHero: React.FC<CampaignHeroProps> = ({
                   <img 
                     src={slide.image} 
                     alt={slide.alt}
-                    fetchPriority={idx === 0 ? 'high' : 'low'}
+                    fetchPriority={idx === currentIndex || idx === 0 ? 'high' : 'auto'}
                     loading={idx === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
                     className="campaign-hero-bg-img"
                     style={{
                       width: '100%',

@@ -208,7 +208,7 @@ export function calculatePriceHistogram(
   bounds: { min: number; max: number },
   currentMinPrice: number,
   currentMaxPrice: number,
-  binCount = 14
+  binCount = 6
 ): PriceHistogramBin[] {
   const { min, max } = bounds;
   const range = max - min;
@@ -217,7 +217,7 @@ export function calculatePriceHistogram(
       min,
       max,
       count: 0,
-      percentage: 20,
+      percentage: Math.max(25, 90 - i * 14),
       isInRange: true
     }));
   }
@@ -242,7 +242,10 @@ export function calculatePriceHistogram(
     const binMin = Math.round(min + i * step);
     const binMax = Math.round(min + (i + 1) * step);
     const count = counts[i];
-    const percentage = count === 0 ? 12 : Math.round(18 + (count / maxCount) * 82);
+    const normalized = count / maxCount;
+    const percentage = count === 0 
+      ? Math.max(22, Math.round(75 - i * 11)) 
+      : Math.round(26 + normalized * 74);
     const isInRange = binMax >= currentMinPrice && binMin <= currentMaxPrice;
 
     bins.push({

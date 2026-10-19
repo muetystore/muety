@@ -100,7 +100,9 @@ class StorageService {
       safeSetItem(KEYS.COUPONS, JSON.stringify(INITIAL_COUPONS));
       safeSetItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
       safeSetItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
-      safeSetItem(KEYS.ORDERS, JSON.stringify([]));
+      if (safeGetItem(KEYS.ORDERS) === null) {
+        safeSetItem(KEYS.ORDERS, JSON.stringify([]));
+      }
       safeSetItem(KEYS.REVIEWS, JSON.stringify(INITIAL_REVIEWS));
       safeSetItem(KEYS.INITIALIZED, 'v7_canonical_identities_sanitized');
     }
@@ -117,7 +119,7 @@ class StorageService {
       const items = data !== null ? JSON.parse(data) : INITIAL_PRODUCTS;
       const categories = this.getCategories();
 
-      return (items || []).map((p: any) => {
+      return (items || []).filter((p: any) => p && (p.title || p.name) && p.title !== 'Untitled Product' && p.name !== 'Untitled Product').map((p: any) => {
         const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : ['/saree_model_individual.jpg'];
         
         // Migration logic for multi-category:
@@ -415,7 +417,7 @@ class StorageService {
 
   updateOrderStatus(orderId: string, status: Order['orderStatus'], description?: string): Order | undefined {
     const orders = this.getOrders();
-    const index = orders.findIndex(o => o.id === orderId);
+    const index = orders.findIndex(o => o.id === orderId || o.orderNumber === orderId);
     if (index !== -1) {
       const order = orders[index];
       order.orderStatus = status;
@@ -428,7 +430,53 @@ class StorageService {
         description: description || `Order updated to ${status} by MUETY Concierge.`
       };
       
+      if (!order.timeline) {
+        order.timeline = [];
+      }
       order.timeline.push(newEvent);
+      orders[index] = order;
+      this.saveOrders(orders);
+      return order;
+    }
+    return undefined;
+  }
+
+  updateOrderTracking(
+    orderId: string, 
+    trackingData: { trackingNumber?: string; courier?: string; trackingCarrier?: string; description?: string }
+  ): Order | undefined {
+    const orders = this.getOrders();
+    const index = orders.findIndex(o => o.id === orderId || o.orderNumber === orderId);
+    if (index !== -1) {
+      const order = orders[index];
+      const now = new Date().toISOString();
+      if (trackingData.trackingNumber !== undefined && trackingData.trackingNumber.trim()) {
+        order.trackingNumber = trackingData.trackingNumber.trim();
+      }
+      if (trackingData.courier !== undefined && trackingData.courier.trim()) {
+        order.courier = trackingData.courier.trim();
+      }
+      if (trackingData.trackingCarrier !== undefined && trackingData.trackingCarrier.trim()) {
+        order.trackingCarrier = trackingData.trackingCarrier.trim();
+      } else if (order.courier) {
+        order.trackingCarrier = order.courier;
+      }
+      order.updatedAt = now;
+
+      const carrierName = order.courier || order.trackingCarrier || 'Courier Partner';
+      const trackingRef = order.trackingNumber || 'Assigned';
+      const eventDescription = trackingData.description || `Consignment dispatched via ${carrierName}. Waybill/Tracking Reference: #${trackingRef}.`;
+
+      if (!order.timeline) {
+        order.timeline = [];
+      }
+      order.timeline.push({
+        status: order.orderStatus,
+        label: `Dispatched via ${carrierName}`,
+        timestamp: new Date().toLocaleString(),
+        description: eventDescription
+      });
+
       orders[index] = order;
       this.saveOrders(orders);
       return order;

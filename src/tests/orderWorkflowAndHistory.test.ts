@@ -214,5 +214,92 @@ describe('MUETY Order Workflow, History & Storage Architecture', () => {
 
     unsub();
   });
+
+  it('5. updateOrderTracking updates trackingNumber, courier, trackingCarrier and adds dispatch timeline event', async () => {
+    const testOrder: Order = {
+      id: 'ord-track-test-01',
+      orderNumber: 'MT-950061',
+      customerId: 'uid-mohan-kalvi',
+      customerName: 'Mohan Kalvi',
+      customerEmail: 'kalvimohan8@gmail.com',
+      shippingAddress: { fullName: 'Mohan Kalvi', phone: '09385791540', streetAddress: 'Salem Main Rd', city: 'Salem', state: 'Tamil Nadu', postalCode: '636501', country: 'India' },
+      items: [],
+      subtotal: 5000,
+      discount: 0,
+      tax: 250,
+      shippingFee: 89,
+      total: 5339,
+      paymentMethod: 'razorpay',
+      paymentStatus: 'paid',
+      orderStatus: 'confirmed',
+      trackingNumber: 'MUET-EXP-93914477',
+      trackingCarrier: 'MUETY Global Express',
+      timeline: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    storageService.createOrder(testOrder);
+
+    const updated = await orderService.updateOrderTracking('ord-track-test-01', {
+      trackingNumber: 'BLUEDART-987654321',
+      courier: 'Bluedart Express',
+      trackingCarrier: 'Bluedart Express',
+      statusNote: 'Dispatched from Salem Atelier studio'
+    });
+
+    expect(updated).toBeDefined();
+    expect(updated?.trackingNumber).toBe('BLUEDART-987654321');
+    expect(updated?.courier).toBe('Bluedart Express');
+    expect(updated?.trackingCarrier).toBe('Bluedart Express');
+    expect(updated?.timeline.some(t => t.label.includes('Bluedart Express'))).toBe(true);
+
+    // Verify persisted in storageService
+    const inStorage = storageService.getOrderById('ord-track-test-01');
+    expect(inStorage?.trackingNumber).toBe('BLUEDART-987654321');
+    expect(inStorage?.courier).toBe('Bluedart Express');
+
+    // Also verify lookup by orderNumber succeeds
+    const byNumber = await orderService.updateOrderTracking('MT-950061', {
+      trackingNumber: 'DTDC-555444333',
+      courier: 'DTDC Courier',
+      trackingCarrier: 'DTDC Courier'
+    });
+    expect(byNumber?.trackingNumber).toBe('DTDC-555444333');
+    expect(byNumber?.courier).toBe('DTDC Courier');
+  });
+
+  it('6. updateOrderStatus updates status matching by orderNumber or id', async () => {
+    const testOrder: Order = {
+      id: 'ord-status-test-01',
+      orderNumber: 'MT-609661',
+      customerId: 'uid-vignesh',
+      customerName: 'vignesh',
+      customerEmail: 'vignesh.admin@muety.in',
+      shippingAddress: { fullName: 'vignesh', phone: '07603967190', streetAddress: 'Salem', city: 'Salem', state: 'Tamil Nadu', postalCode: '636501', country: 'India' },
+      items: [],
+      subtotal: 4500,
+      discount: 0,
+      tax: 225,
+      shippingFee: 89,
+      total: 4814,
+      paymentMethod: 'razorpay',
+      paymentStatus: 'paid',
+      orderStatus: 'pending',
+      timeline: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    storageService.createOrder(testOrder);
+
+    // Update using orderNumber
+    const updated = await orderService.updateOrderStatus('MT-609661', 'out_for_delivery');
+    expect(updated).toBeDefined();
+    expect(updated?.orderStatus).toBe('out_for_delivery');
+
+    const inStorage = storageService.getOrderById('ord-status-test-01');
+    expect(inStorage?.orderStatus).toBe('out_for_delivery');
+  });
 });
 

@@ -96,22 +96,26 @@ export const AdminOrders: React.FC = () => {
   };
 
   const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
-    const updated = await orderService.updateOrderStatus(orderId, newStatus, statusNote || undefined);
-    if (updated) {
-      setOrders(prev => prev.map(o => o.id === orderId ? updated : o));
+    try {
+      const updated = await orderService.updateOrderStatus(orderId, newStatus, statusNote || undefined);
+      if (updated) {
+        setOrders(prev => prev.map(o => (o.id === orderId || o.orderNumber === orderId) ? updated : o));
 
-      await auditService.logAction({
-        actorUid: user?.uid || 'system',
-        actorEmail: user?.email || 'order_manager',
-        actorRole: getUserRoles(user)[0] || 'order_manager',
-        action: 'ORDER_STATUS_CHANGED',
-        entityType: 'ORDER',
-        entityId: orderId,
-        reason: `Changed order #${updated.orderNumber} status to ${newStatus}`
-      });
+        await auditService.logAction({
+          actorUid: user?.uid || 'system',
+          actorEmail: user?.email || 'order_manager',
+          actorRole: getUserRoles(user)[0] || 'order_manager',
+          action: 'ORDER_STATUS_CHANGED',
+          entityType: 'ORDER',
+          entityId: orderId,
+          reason: `Changed order #${updated.orderNumber} status to ${newStatus}`
+        });
 
-      success(`Order #${updated.orderNumber} status updated to ${newStatus.toUpperCase()}`);
-      setStatusNote('');
+        success(`Order #${updated.orderNumber} status updated to ${newStatus.toUpperCase()}`);
+        setStatusNote('');
+      }
+    } catch (err: any) {
+      error(err?.message || 'Failed to update order status.');
     }
   };
 
@@ -121,28 +125,28 @@ export const AdminOrders: React.FC = () => {
 
     setIsUpdatingTracking(true);
     try {
-      const updated: Order = {
-        ...selectedOrder,
+      const updated = await orderService.updateOrderTracking(selectedOrder.id, {
         trackingNumber: trackingNumber.trim(),
         courier: courier.trim(),
         trackingCarrier: courier.trim(),
-        updatedAt: new Date().toISOString()
-      };
-
-      storageService.createOrder(updated);
-      setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
-
-      await auditService.logAction({
-        actorUid: user?.uid || 'system',
-        actorEmail: user?.email || 'order_manager',
-        actorRole: getUserRoles(user)[0] || 'order_manager',
-        action: 'ORDER_FULFILLMENT_UPDATED',
-        entityType: 'ORDER',
-        entityId: selectedOrder.id,
-        reason: `Updated shipping courier (${courier}) and tracking number (${trackingNumber})`
+        statusNote: statusNote.trim() || undefined
       });
 
-      success(`Updated shipping tracking details for Order #${selectedOrder.orderNumber}`);
+      if (updated) {
+        setOrders(prev => prev.map(o => (o.id === updated.id || o.orderNumber === updated.orderNumber) ? updated : o));
+
+        await auditService.logAction({
+          actorUid: user?.uid || 'system',
+          actorEmail: user?.email || 'order_manager',
+          actorRole: getUserRoles(user)[0] || 'order_manager',
+          action: 'ORDER_FULFILLMENT_UPDATED',
+          entityType: 'ORDER',
+          entityId: selectedOrder.id,
+          reason: `Updated shipping courier (${courier}) and tracking number (${trackingNumber})`
+        });
+
+        success(`Updated shipping tracking details for Order #${selectedOrder.orderNumber}`);
+      }
     } catch (err: any) {
       error(err?.message || 'Failed to update tracking info.');
     } finally {
@@ -664,7 +668,11 @@ export const AdminOrders: React.FC = () => {
                     ) : null}
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>Shipping (Pan-India Tracked Courier)</span>
-                      <span>₹{(selectedOrder.shippingFee !== undefined ? selectedOrder.shippingFee : 89).toLocaleString('en-IN')}</span>
+                      <span>
+                        {selectedOrder.shippingFee === 0 
+                          ? 'FREE (₹0.00)' 
+                          : `₹${(selectedOrder.shippingFee !== undefined ? selectedOrder.shippingFee : (selectedOrder.paymentMethod === 'cash_on_delivery' ? 89 : 0)).toLocaleString('en-IN')}`}
+                      </span>
                     </div>
                     {selectedOrder.tax ? (
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>

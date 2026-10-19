@@ -313,7 +313,11 @@ export const OrderConfirmationPage: React.FC = () => {
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
                 <span>Pan-India Courier & Delivery:</span>
-                <span>₹{(order.shippingFee || 89).toFixed(2)}</span>
+                {order.shippingFee === 0 ? (
+                  <span style={{ color: '#10b981', fontWeight: 700 }}>FREE (₹0.00)</span>
+                ) : (
+                  <span>₹{(order.shippingFee !== undefined ? order.shippingFee : (order.paymentMethod === 'cash_on_delivery' ? 89 : 0)).toFixed(2)}</span>
+                )}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
                 <span>Applicable Tax (GST):</span>

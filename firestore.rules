@@ -269,6 +269,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // --- HERO BANNERS COLLECTION ---
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin() || isCatalogManager();
+    }
 
     // --- NOTIFICATIONS ---
     match /notifications/{notificationId} {

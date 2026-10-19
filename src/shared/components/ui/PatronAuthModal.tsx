@@ -440,12 +440,13 @@ export const PatronAuthModal: React.FC = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
-                backgroundColor: '#f8fafc',
-                color: '#475569',
+                backgroundColor: '#ecfdf5',
+                color: '#065f46',
                 padding: '2px 7px',
-                borderRadius: '4px'
+                borderRadius: '4px',
+                fontWeight: 600
               }}>
-                <Truck size={11} /> Pan-India Courier (₹89 Flat)
+                <Truck size={11} /> FREE Pan-India Delivery (Online)
               </span>
             </div>
 

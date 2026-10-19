@@ -117,7 +117,7 @@ export const CartPage: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.92rem', fontWeight: 600, color: 'var(--brand-primary)' }}>
               <Truck size={20} color="var(--brand-accent)" />
-              <span>Pan-India Signature Courier Dispatch • <strong>₹89 Flat Delivery Charge</strong></span>
+              <span>Pan-India Insured Courier Dispatch • <strong style={{ color: '#059669' }}>FREE Delivery on Online Payments</strong> (₹89 on COD)</span>
             </div>
             <span style={{ fontSize: '0.82rem', color: '#10b981', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
               <ShieldCheck size={16} /> 100% Insured Atelier Handover
@@ -353,8 +353,8 @@ export const CartPage: React.FC = () => {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
                 <span>Shipping & Delivery Charge</span>
-                <span style={{ fontWeight: 600, color: 'var(--brand-primary)' }}>
-                  {shippingFee === 0 ? '₹0.00' : `₹${shippingFee.toFixed(2)}`}
+                <span style={{ fontWeight: 700, color: shippingFee === 0 ? '#10b981' : 'var(--brand-primary)' }}>
+                  {shippingFee === 0 ? 'FREE (Online Payment)' : `₹${shippingFee.toFixed(2)}`}
                 </span>
               </div>
 
@@ -385,8 +385,8 @@ export const CartPage: React.FC = () => {
                 lineHeight: 1.5,
                 border: '1px solid var(--brand-border)'
               }}>
-                <div><strong>Online Payment:</strong> Pay ₹{grandTotal.toFixed(2)} full total via Razorpay (UPI, Cards, NetBanking).</div>
-                <div style={{ marginTop: '4px' }}><strong>Cash on Delivery (COD):</strong> Pay ₹89 advance online to confirm; remaining balance of ₹{Math.max(0, grandTotal - 89).toFixed(2)} collected upon delivery.</div>
+                <div><strong>Online Payment:</strong> 100% FREE Delivery included! Pay ₹{grandTotal.toFixed(2)} via Razorpay (UPI, Cards, NetBanking).</div>
+                <div style={{ marginTop: '4px' }}><strong>Cash on Delivery (COD):</strong> ₹89 flat delivery fee applies. Pay ₹89 advance online to confirm; balance of ₹{grandTotal.toFixed(2)} collected upon doorstep delivery.</div>
               </div>
             </div>
 

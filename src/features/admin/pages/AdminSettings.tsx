@@ -108,7 +108,7 @@ export const AdminSettings: React.FC = () => {
       },
       announcementBanner: s.announcementBanner || {
         enabled: true,
-        text: 'Pan-India Insured Courier Delivery (₹89 Flat) | Silk Mark Certified Salem Handlooms'
+        text: 'FREE Delivery on Online Orders | Pan-India Insured Courier (₹89 on COD) | Silk Mark Certified Salem Handlooms'
       }
     });
   });

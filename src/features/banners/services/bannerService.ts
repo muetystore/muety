@@ -44,6 +44,24 @@ export const DEFAULT_BANNERS: HeroBanner[] = [
   }
 ];
 
+/**
+ * Recursively cleans an object for Firestore by omitting any keys with `undefined` values.
+ * Firestore setDoc throws an error if any field value is undefined.
+ */
+function cleanForFirestore<T extends Record<string, any>>(data: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) {
+      if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+        result[key] = cleanForFirestore(value);
+      } else {
+        result[key] = value;
+      }
+    }
+  }
+  return result;
+}
+
 class BannerService {
   private broadcastChannel: BroadcastChannel | null = null;
   private listeners: ((items: HeroBanner[]) => void)[] = [];
@@ -136,12 +154,15 @@ class BannerService {
         firestoreUnsub = onSnapshot(
           colRef,
           (snapshot) => {
-            if (!snapshot.empty) {
-              const cloudItems: HeroBanner[] = [];
-              snapshot.forEach((docSnap) => {
-                cloudItems.push(docSnap.data() as HeroBanner);
-              });
-              cloudItems.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+            const cloudItems: HeroBanner[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data() as HeroBanner;
+              if (data && data.id) {
+                cloudItems.push(data);
+              }
+            });
+            cloudItems.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+            if (cloudItems.length > 0) {
               this.setLocal(cloudItems, true);
             }
           },
@@ -181,9 +202,11 @@ class BannerService {
 
     if (db && isLiveFirebase) {
       try {
-        await setDoc(doc(db, 'banners', id), newBanner);
+        const firestorePayload = cleanForFirestore(newBanner);
+        await setDoc(doc(db, 'banners', id), firestorePayload);
       } catch (err) {
-        console.warn('Failed to save banner to Firestore:', err);
+        console.error('Failed to save banner to Firestore:', err);
+        throw new Error(`Cloud database sync failed: ${err instanceof Error ? err.message : 'Unknown Firestore error'}`);
       }
     }
 
@@ -210,9 +233,11 @@ class BannerService {
 
     if (db && isLiveFirebase) {
       try {
-        await setDoc(doc(db, 'banners', id), updatedBanner, { merge: true });
+        const firestorePayload = cleanForFirestore(updatedBanner);
+        await setDoc(doc(db, 'banners', id), firestorePayload, { merge: true });
       } catch (err) {
-        console.warn('Failed to update banner in Firestore:', err);
+        console.error('Failed to update banner in Firestore:', err);
+        throw new Error(`Cloud database sync failed: ${err instanceof Error ? err.message : 'Unknown Firestore error'}`);
       }
     }
 
@@ -228,7 +253,8 @@ class BannerService {
       try {
         await deleteDoc(doc(db, 'banners', id));
       } catch (err) {
-        console.warn('Failed to delete banner from Firestore:', err);
+        console.error('Failed to delete banner from Firestore:', err);
+        throw new Error(`Cloud database sync failed: ${err instanceof Error ? err.message : 'Unknown Firestore error'}`);
       }
     }
 
@@ -260,10 +286,12 @@ class BannerService {
     if (db && isLiveFirebase) {
       try {
         for (const item of sorted) {
-          await setDoc(doc(db, 'banners', item.id), item, { merge: true });
+          const firestorePayload = cleanForFirestore(item);
+          await setDoc(doc(db, 'banners', item.id), firestorePayload, { merge: true });
         }
       } catch (err) {
-        console.warn('Failed to reorder banners in Firestore:', err);
+        console.error('Failed to reorder banners in Firestore:', err);
+        throw new Error(`Cloud database sync failed: ${err instanceof Error ? err.message : 'Unknown Firestore error'}`);
       }
     }
 

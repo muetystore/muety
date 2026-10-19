@@ -148,12 +148,14 @@ export const orderService = {
 
     // Local fallback
     const isCod = params.paymentMethod === 'cash_on_delivery';
-    const canonicalShipping = params.shippingFee || 89;
+    const canonicalShipping = params.shippingFee !== undefined ? params.shippingFee : (isCod ? 89 : 0);
     const orderNumber = `MT-${Math.floor(100000 + Math.random() * 900000)}`;
     const now = new Date().toISOString();
-    const fallbackTotal = Number((params.subtotal - params.discount + params.tax + canonicalShipping).toFixed(2));
-    const codAdvanceAmount = isCod ? 89 : 0;
-    const codBalanceDue = isCod ? Number((fallbackTotal - 89).toFixed(2)) : 0;
+    const fallbackTotal = params.total !== undefined
+      ? params.total
+      : Number((params.subtotal - (params.discount || 0) + params.tax + canonicalShipping).toFixed(2));
+    const codAdvanceAmount = isCod ? Math.min(89, fallbackTotal) : 0;
+    const codBalanceDue = isCod ? Number(Math.max(0, fallbackTotal - codAdvanceAmount).toFixed(2)) : 0;
 
     // Enrich items with catalog SKU if available
     const enrichedItems = params.items.map(item => {
@@ -222,17 +224,108 @@ export const orderService = {
     return order;
   },
 
-  async updateOrderStatus(orderId: string, status: OrderStatus, customNote?: string): Promise<Order | undefined> {
-    const updated = storageService.updateOrderStatus(orderId, status, customNote);
-    if (!updated) return undefined;
+  async findFirestoreOrderRef(orderIdOrNumber: string): Promise<{ ref: any; docId: string; data: Order } | null> {
+    if (!db || isTestEnv()) return null;
+    try {
+      // 1. Direct doc lookup by ID
+      const directRef = doc(db, 'orders', orderIdOrNumber);
+      const snap = await getDoc(directRef);
+      if (snap.exists()) {
+        return { ref: directRef, docId: directRef.id, data: snap.data() as Order };
+      }
 
+      // 2. Query by orderNumber (e.g. MT-950061)
+      const col = collection(db, 'orders');
+      const qNum = query(col, where('orderNumber', '==', orderIdOrNumber));
+      const numSnap = await getDocs(qNum);
+      if (!numSnap.empty) {
+        const found = numSnap.docs[0];
+        return { ref: found.ref, docId: found.id, data: found.data() as Order };
+      }
+
+      // 3. Query by internal id field inside document
+      const qId = query(col, where('id', '==', orderIdOrNumber));
+      const idSnap = await getDocs(qId);
+      if (!idSnap.empty) {
+        const found = idSnap.docs[0];
+        return { ref: found.ref, docId: found.id, data: found.data() as Order };
+      }
+    } catch (e) {
+      console.warn('[orderService] findFirestoreOrderRef error:', e);
+    }
+    return null;
+  },
+
+  async updateOrderStatus(orderId: string, status: OrderStatus, customNote?: string): Promise<Order | undefined> {
+    // 1. First attempt local storage update
+    let updated = storageService.updateOrderStatus(orderId, status, customNote);
+
+    // 2. If not found in local storage, check Firestore
+    let firestoreTarget = await this.findFirestoreOrderRef(orderId);
+    if (!updated && firestoreTarget?.data) {
+      const fromCloud = { ...firestoreTarget.data, id: firestoreTarget.data.id || firestoreTarget.docId };
+      storageService.createOrder(fromCloud);
+      updated = storageService.updateOrderStatus(orderId, status, customNote);
+    }
+
+    if (!updated) {
+      console.warn(`[orderService] Order #${orderId} not found in local storage or Firestore.`);
+      return undefined;
+    }
+
+    // 3. Persist updated status and timeline directly to Firestore
     if (db && !isTestEnv()) {
       try {
-        const orderRef = doc(db, 'orders', orderId);
+        const orderRef = firestoreTarget?.ref || doc(db, 'orders', updated.id);
         const sanitized = JSON.parse(JSON.stringify(updated));
         await setDoc(orderRef, sanitized, { merge: true });
       } catch (err: any) {
-        console.warn('Firebase Firestore update error:', err?.message || err);
+        console.warn('[orderService] Firebase Firestore update error:', err?.message || err);
+      }
+    }
+
+    this.broadcastUpdate(updated);
+    return updated;
+  },
+
+  async updateOrderTracking(
+    orderId: string, 
+    tracking: { trackingNumber: string; courier?: string; trackingCarrier?: string; statusNote?: string }
+  ): Promise<Order | undefined> {
+    // 1. First attempt local storage tracking update
+    let updated = storageService.updateOrderTracking(orderId, {
+      trackingNumber: tracking.trackingNumber,
+      courier: tracking.courier,
+      trackingCarrier: tracking.trackingCarrier || tracking.courier,
+      description: tracking.statusNote
+    });
+
+    // 2. If not found in local storage, look up in Firestore first
+    let firestoreTarget = await this.findFirestoreOrderRef(orderId);
+    if (!updated && firestoreTarget?.data) {
+      const fromCloud = { ...firestoreTarget.data, id: firestoreTarget.data.id || firestoreTarget.docId };
+      storageService.createOrder(fromCloud);
+      updated = storageService.updateOrderTracking(orderId, {
+        trackingNumber: tracking.trackingNumber,
+        courier: tracking.courier,
+        trackingCarrier: tracking.trackingCarrier || tracking.courier,
+        description: tracking.statusNote
+      });
+    }
+
+    if (!updated) {
+      console.warn(`[orderService] Order #${orderId} not found to update tracking.`);
+      return undefined;
+    }
+
+    // 3. Authoritatively persist updated tracking fields to Firestore
+    if (db && !isTestEnv()) {
+      try {
+        const orderRef = firestoreTarget?.ref || doc(db, 'orders', updated.id);
+        const sanitized = JSON.parse(JSON.stringify(updated));
+        await setDoc(orderRef, sanitized, { merge: true });
+      } catch (err: any) {
+        console.warn('[orderService] Firebase Firestore updateOrderTracking error:', err?.message || err);
       }
     }
 
@@ -290,50 +383,50 @@ export const orderService = {
   },
 
   subscribeToOrder(orderId: string, callback: (order: Order | null) => void): () => void {
-    // 1. Immediately provide cached local order if present
+    // 1. Immediately provide cached local order if present (matches by id OR orderNumber)
     const cached = storageService.getOrderById(orderId);
     if (cached) {
       callback(cached);
     }
 
     let firestoreUnsub: Unsubscribe | null = null;
+    let isSubscribed = true;
 
     if (db) {
-      try {
-        const orderRef = doc(db, 'orders', orderId);
+      // Resolve actual Firestore document ref (matches docId or orderNumber)
+      this.findFirestoreOrderRef(orderId).then(target => {
+        if (!isSubscribed) return;
+        const targetRef = target?.ref || doc(db!, 'orders', orderId);
 
-        // Explicit getDoc for fast non-snapshot resolution
-        getDoc(orderRef).then(snap => {
-          if (snap.exists()) {
-            const data = snap.data() as Order;
-            const fullOrder = { ...data, id: data.id || snap.id };
-            storageService.createOrder(fullOrder);
-            callback(fullOrder);
-          } else {
+        if (target?.data) {
+          const fullOrder = { ...target.data, id: target.data.id || target.docId };
+          storageService.createOrder(fullOrder);
+          callback(fullOrder);
+        }
+
+        try {
+          firestoreUnsub = onSnapshot(targetRef, (snap: any) => {
+            if (snap.exists()) {
+              const data = snap.data() as Order;
+              const fullOrder = { ...data, id: data.id || snap.id };
+              storageService.createOrder(fullOrder);
+              callback(fullOrder);
+            } else {
+              const current = storageService.getOrderById(orderId);
+              callback(current || null);
+            }
+          }, (_err: any) => {
             const current = storageService.getOrderById(orderId);
-            callback(current || null);
-          }
-        }).catch(() => {
+            if (current) callback(current);
+          });
+        } catch {
           const current = storageService.getOrderById(orderId);
           callback(current || null);
-        });
-
-        // Realtime listener
-        firestoreUnsub = onSnapshot(orderRef, (snap) => {
-          if (snap.exists()) {
-            const data = snap.data() as Order;
-            const fullOrder = { ...data, id: data.id || snap.id };
-            storageService.createOrder(fullOrder);
-            callback(fullOrder);
-          }
-        }, (_err) => {
-          const current = storageService.getOrderById(orderId);
-          if (current) callback(current);
-        });
-      } catch {
+        }
+      }).catch(() => {
         const current = storageService.getOrderById(orderId);
         callback(current || null);
-      }
+      });
     } else {
       callback(cached || null);
     }
@@ -359,6 +452,7 @@ export const orderService = {
     }
 
     return () => {
+      isSubscribed = false;
       if (firestoreUnsub) firestoreUnsub();
       if (typeof window !== 'undefined') {
         window.removeEventListener('muety_orders_updated', handleLocalSync);
@@ -370,7 +464,7 @@ export const orderService = {
   },
 
   subscribeToAllOrders(callback: (orders: Order[]) => void, onError?: (err: Error) => void): () => void {
-    // 1. Immediately provide cached orders so UI never starts empty
+    // 1. Immediately provide cached orders so UI renders instantly without waiting for network
     callback(storageService.getOrders());
 
     let firestoreUnsub: Unsubscribe | null = null;
@@ -389,13 +483,40 @@ export const orderService = {
             });
           }
 
-          // Merge cloud orders with local storage orders by ID (never wipe local orders!)
+          // Merge cloud orders with local storage orders by ID or orderNumber
           const mergedMap = new Map<string, Order>();
-          cloudOrders.forEach(o => mergedMap.set(o.id, o));
           const localOrders = storageService.getOrders();
-          localOrders.forEach(o => {
-            if (!mergedMap.has(o.id)) {
-              mergedMap.set(o.id, o);
+
+          const findMatchingLocal = (cOrd: Order) => {
+            return localOrders.find(l => 
+              (l.id && l.id === cOrd.id) || 
+              (l.orderNumber && l.orderNumber === cOrd.orderNumber)
+            );
+          };
+
+          cloudOrders.forEach(c => {
+            const localMatch = findMatchingLocal(c);
+            if (localMatch) {
+              const localTime = new Date(localMatch.updatedAt || localMatch.createdAt || 0).getTime();
+              const cloudTime = new Date(c.updatedAt || c.createdAt || 0).getTime();
+              // If local has newer timestamp (e.g. recent admin tracking update), preserve local fields
+              if (localTime > cloudTime) {
+                mergedMap.set(c.id, { ...c, ...localMatch, id: c.id });
+              } else {
+                mergedMap.set(c.id, { ...localMatch, ...c, id: c.id });
+              }
+            } else {
+              mergedMap.set(c.id, c);
+            }
+          });
+
+          // Also preserve any locally created orders that haven't been synced or deleted
+          localOrders.forEach(l => {
+            const alreadyPresent = Array.from(mergedMap.values()).some(
+              m => (m.id && m.id === l.id) || (m.orderNumber && m.orderNumber === l.orderNumber)
+            );
+            if (!alreadyPresent) {
+              mergedMap.set(l.id, l);
             }
           });
 

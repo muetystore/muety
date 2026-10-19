@@ -67,14 +67,14 @@ export const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({
     return extractAvailableFacets(allProducts);
   }, [allProducts]);
 
-  // Compute price histogram density bars
+  // Compute price histogram density bars (6 bins for stepped silhouette)
   const histogramBins = useMemo(() => {
     return calculatePriceHistogram(
       allProducts,
       priceBounds,
       currentMinPrice,
       currentMaxPrice,
-      14
+      6
     );
   }, [allProducts, priceBounds, currentMinPrice, currentMaxPrice]);
 
@@ -113,23 +113,44 @@ export const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({
 
   // Preset options for Min and Max dropdowns matching reference design
   const minPricePresets = useMemo(() => {
-    const step = Math.max(500, Math.round((priceBounds.max - priceBounds.min) / 6 / 100) * 100);
-    const presets = [{ label: 'Min', value: priceBounds.min }];
-    for (let p = priceBounds.min + step; p < currentMaxPrice; p += step) {
+    const min = priceBounds.min;
+    const max = priceBounds.max;
+    const range = max - min;
+    const step = Math.max(500, Math.round(range / 6 / 100) * 100);
+    const presets: { label: string; value: number }[] = [{ label: 'Min', value: min }];
+    for (let p = min + step; p < currentMaxPrice; p += step) {
       presets.push({ label: `₹${p.toLocaleString('en-IN')}`, value: p });
     }
+    if (!presets.some(pr => pr.value === currentMinPrice)) {
+      presets.push({
+        label: currentMinPrice === min ? 'Min' : `₹${currentMinPrice.toLocaleString('en-IN')}`,
+        value: currentMinPrice
+      });
+      presets.sort((a, b) => a.value - b.value);
+    }
     return presets;
-  }, [priceBounds, currentMaxPrice]);
+  }, [priceBounds, currentMaxPrice, currentMinPrice]);
 
   const maxPricePresets = useMemo(() => {
-    const step = Math.max(500, Math.round((priceBounds.max - priceBounds.min) / 6 / 100) * 100);
-    const presets = [];
-    for (let p = currentMinPrice + step; p < priceBounds.max; p += step) {
-      presets.push({ label: `₹${p.toLocaleString('en-IN')}`, value: p });
+    const min = priceBounds.min;
+    const max = priceBounds.max;
+    const range = max - min;
+    const step = Math.max(500, Math.round(range / 6 / 100) * 100);
+    const presets: { label: string; value: number }[] = [];
+    for (let p = Math.max(min + step, Math.ceil(currentMinPrice / step) * step); p < max; p += step) {
+      presets.push({ label: `₹${p.toLocaleString('en-IN')}+`, value: p });
     }
-    presets.push({ label: `₹${priceBounds.max.toLocaleString('en-IN')}+`, value: priceBounds.max });
+    presets.push({ label: `₹${max.toLocaleString('en-IN')}+`, value: max });
+
+    if (!presets.some(pr => pr.value === currentMaxPrice)) {
+      presets.push({
+        label: `₹${currentMaxPrice.toLocaleString('en-IN')}+`,
+        value: currentMaxPrice
+      });
+      presets.sort((a, b) => a.value - b.value);
+    }
     return presets;
-  }, [priceBounds, currentMinPrice]);
+  }, [priceBounds, currentMinPrice, currentMaxPrice]);
 
   // Currently selected category object (if any)
   const selectedCategoryObj = useMemo(() => {
@@ -163,7 +184,7 @@ export const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({
       <div 
         key={sectionKey} 
         style={{ 
-          borderTop: '1px solid #f1ece4',
+          borderTop: '1px solid #f0f0f0',
           padding: '12px 0'
         }}
       >
@@ -382,11 +403,12 @@ export const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({
       style={{ 
         display: 'flex', 
         flexDirection: 'column',
-        backgroundColor: '#ffffff',
-        borderRadius: isMobileDrawer ? '0' : '12px',
-        padding: isMobileDrawer ? '0 0.5rem' : '1.25rem',
-        border: isMobileDrawer ? 'none' : '1px solid #e7e2dc',
-        boxShadow: isMobileDrawer ? 'none' : '0 2px 10px rgba(0,0,0,0.03)'
+        width: '100%',
+        backgroundColor: 'transparent',
+        borderRadius: 0,
+        padding: 0,
+        border: 'none',
+        boxShadow: 'none'
       }}
     >
       {/* 1. Header with Reset All */}
@@ -395,13 +417,13 @@ export const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center', 
-          paddingBottom: '0.85rem', 
-          borderBottom: '1.5px solid #10172a',
-          marginBottom: '1rem'
+          paddingBottom: '0.75rem', 
+          borderBottom: '1px solid #f0f0f0',
+          marginBottom: '0.85rem'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <SlidersHorizontal size={16} color="#c9a227" />
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#10172a', margin: 0, letterSpacing: '0.02em' }}>
+            <SlidersHorizontal size={15} color="#c9a227" />
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#10172a', margin: 0, letterSpacing: '0.04em' }}>
               FILTERS
             </h3>
           </div>
@@ -412,19 +434,19 @@ export const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
-              fontSize: '0.76rem',
+              fontSize: '0.75rem',
               fontWeight: 700,
               color: '#c9a227',
               cursor: 'pointer',
-              padding: '3px 8px',
-              borderRadius: '6px',
-              border: '1px solid rgba(201, 162, 39, 0.3)',
-              backgroundColor: 'rgba(201, 162, 39, 0.05)',
-              transition: 'all 0.15s ease'
+              padding: '2px 6px',
+              borderRadius: '4px',
+              border: 'none',
+              backgroundColor: 'transparent',
+              letterSpacing: '0.03em'
             }}
             title="Reset all filters"
           >
-            <RotateCcw size={12} />
+            <RotateCcw size={11} />
             <span>CLEAR ALL</span>
           </button>
         </div>
@@ -623,7 +645,7 @@ export const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({
       {renderAccordionSection('patterns', 'Pattern', 'patterns', availableFacets.patterns)}
 
       {/* 12. PRICE SECTION (Histogram + Dual Range Slider + Dropdowns) */}
-      <div style={{ borderTop: '1px solid #f1ece4', padding: '14px 0' }}>
+      <div style={{ borderTop: '1px solid #f0f0f0', padding: '12px 0' }}>
         <button
           type="button"
           onClick={() => toggleSection('price')}
@@ -634,35 +656,35 @@ export const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({
             width: '100%',
             background: 'none',
             border: 'none',
-            padding: '2px 0 8px 0',
+            padding: '2px 0 10px 0',
             cursor: 'pointer',
             textAlign: 'left'
           }}
           aria-expanded={openSections['price']}
         >
           <span style={{
-            fontSize: '0.82rem',
-            fontWeight: 800,
-            letterSpacing: '0.06em',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
             textTransform: 'uppercase',
-            color: '#10172a'
+            color: '#212121'
           }}>
             PRICE
           </span>
-          {openSections['price'] ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
+          {openSections['price'] ? <ChevronUp size={16} color="#878787" /> : <ChevronDown size={16} color="#878787" />}
         </button>
 
         {openSections['price'] && (
-          <div style={{ marginTop: '8px' }}>
-            {/* Visual Density Histogram Chart */}
+          <div style={{ marginTop: '4px' }}>
+            {/* Visual Density Stepped Histogram */}
             <div 
               style={{ 
-                height: '36px', 
+                height: '30px', 
                 display: 'flex', 
                 alignItems: 'flex-end', 
-                gap: '2px', 
-                marginBottom: '6px',
-                padding: '0 2px'
+                gap: '0', 
+                marginBottom: '0',
+                padding: '0 4px'
               }}
               title="Catalog price density distribution"
             >
@@ -672,35 +694,35 @@ export const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({
                   style={{
                     flex: 1,
                     height: `${bin.percentage}%`,
-                    backgroundColor: bin.isInRange ? '#10172a' : '#e2e8f0',
-                    borderRadius: '2px 2px 0 0',
-                    transition: 'all 0.2s ease'
+                    backgroundColor: '#dcdcdc',
+                    borderRight: i < histogramBins.length - 1 ? '1px solid #f5f5f5' : 'none',
+                    transition: 'height 0.2s ease'
                   }}
                   title={`₹${bin.min.toLocaleString('en-IN')} - ₹${bin.max.toLocaleString('en-IN')}: ${bin.count} items`}
                 />
               ))}
             </div>
 
-            {/* Dual Slider Bar with Active Segment Highlight */}
-            <div style={{ position: 'relative', height: '22px', display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-              {/* Background Track */}
+            {/* Dual Slider Bar with Active Blue Segment */}
+            <div style={{ position: 'relative', height: '18px', display: 'flex', alignItems: 'center' }}>
+              {/* Inactive Background Track */}
               <div 
                 style={{
                   position: 'absolute',
                   width: '100%',
                   height: '4px',
-                  backgroundColor: '#e2e8f0',
+                  backgroundColor: '#e0e0e0',
                   borderRadius: '2px'
                 }}
               />
-              {/* Highlight Active Segment */}
+              {/* Highlight Active Segment in Vibrant Blue */}
               <div 
                 style={{
                   position: 'absolute',
                   left: `${minPercent}%`,
                   width: `${Math.max(0, maxPercent - minPercent)}%`,
                   height: '4px',
-                  backgroundColor: '#10172a',
+                  backgroundColor: '#2874f0',
                   borderRadius: '2px'
                 }}
               />
@@ -748,91 +770,106 @@ export const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({
               />
             </div>
 
-            {/* Subtle Step Dots (matching reference) */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 4px', marginBottom: '12px' }}>
-              {Array.from({ length: 7 }).map((_, idx) => (
-                <div key={idx} style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#cbd5e1' }} />
+            {/* Step Dots (evenly spaced beneath the track matching reference) */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 6px', marginTop: '6px', marginBottom: '14px' }}>
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#c2c2c2' }} />
               ))}
             </div>
 
-            {/* Min to Max Dropdowns / Selectors (Matching Flipkart Reference: [Min v] to [Rs.1500+ v]) */}
+            {/* Min to Max Dropdowns / Selectors (Matching Reference: [Min v] to [₹1500+ v]) */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-              <select
-                value={currentMinPrice}
-                onChange={(e) => handleMinPriceChange(Number(e.target.value))}
-                style={{
-                  flex: 1,
-                  padding: '6px 8px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#ffffff',
-                  color: '#10172a',
-                  cursor: 'pointer'
-                }}
-                aria-label="Minimum price select"
-              >
-                {minPricePresets.map((opt, i) => (
-                  <option key={i} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <select
+                  value={currentMinPrice}
+                  onChange={(e) => handleMinPriceChange(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    height: '32px',
+                    padding: '2px 24px 2px 8px',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    borderRadius: '2px',
+                    border: '1px solid #e0e0e0',
+                    backgroundColor: '#ffffff',
+                    color: '#212121',
+                    cursor: 'pointer',
+                    appearance: 'none',
+                    WebkitAppearance: 'none'
+                  }}
+                  aria-label="Minimum price select"
+                >
+                  {minPricePresets.map((opt, i) => (
+                    <option key={i} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown 
+                  size={14} 
+                  color="#212121" 
+                  style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} 
+                />
+              </div>
 
-              <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>to</span>
+              <span style={{ fontSize: '13px', color: '#878787', fontWeight: 400 }}>to</span>
 
-              <select
-                value={currentMaxPrice}
-                onChange={(e) => handleMaxPriceChange(Number(e.target.value))}
-                style={{
-                  flex: 1,
-                  padding: '6px 8px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#ffffff',
-                  color: '#10172a',
-                  cursor: 'pointer'
-                }}
-                aria-label="Maximum price select"
-              >
-                {maxPricePresets.map((opt, i) => (
-                  <option key={i} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <select
+                  value={currentMaxPrice}
+                  onChange={(e) => handleMaxPriceChange(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    height: '32px',
+                    padding: '2px 24px 2px 8px',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    borderRadius: '2px',
+                    border: '1px solid #e0e0e0',
+                    backgroundColor: '#ffffff',
+                    color: '#212121',
+                    cursor: 'pointer',
+                    appearance: 'none',
+                    WebkitAppearance: 'none'
+                  }}
+                  aria-label="Maximum price select"
+                >
+                  {maxPricePresets.map((opt, i) => (
+                    <option key={i} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown 
+                  size={14} 
+                  color="#212121" 
+                  style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} 
+                />
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* 13. IN STOCK ONLY (Quick Toggle at Bottom) */}
-      <div style={{ borderTop: '1px solid #f1ece4', paddingTop: '14px', marginTop: '4px' }}>
+      {/* 13. IN STOCK ONLY (Clean toggle) */}
+      <div style={{ borderTop: '1px solid #f0f0f0', padding: '12px 0 4px 0' }}>
         <label
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '8px 10px',
-            backgroundColor: filters.inStockOnly ? 'rgba(201, 162, 39, 0.08)' : '#f8fafc',
-            border: filters.inStockOnly ? '1px solid #c9a227' : '1px solid #e2e8f0',
-            borderRadius: '8px',
             cursor: 'pointer',
-            userSelect: 'none',
-            transition: 'all 0.15s ease'
+            userSelect: 'none'
           }}
         >
-          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#10172a' }}>
+          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#212121' }}>
             In Stock Only
           </span>
           <input
             type="checkbox"
             checked={filters.inStockOnly}
             onChange={(e) => onChange({ inStockOnly: e.target.checked })}
-            style={{ width: '16px', height: '16px', accentColor: '#10172a', cursor: 'pointer' }}
+            style={{ width: '16px', height: '16px', accentColor: '#10172a', cursor: 'pointer', borderRadius: '3px' }}
           />
         </label>
       </div>

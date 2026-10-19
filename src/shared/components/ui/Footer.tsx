@@ -165,7 +165,7 @@ export const Footer: React.FC = () => {
               </div>
               <div>
                 <h6 style={{ color: '#ffffff', fontSize: '0.95rem', fontWeight: 600 }}>Insured Express Delivery</h6>
-                <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Flat-rate insured delivery across India (₹89)</p>
+                <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>FREE Delivery on Online Orders • ₹89 on COD</p>
               </div>
             </div>
 

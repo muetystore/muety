@@ -1091,7 +1091,12 @@ export const productService = {
             snapshot.forEach(docSnap => {
               const raw = docSnap.data() as any;
               if (raw && (raw.id || docSnap.id)) {
-                const title = raw.title || raw.name || 'Untitled Product';
+                // Ignore incomplete stub/ghost documents that lack title and name (e.g. accidental rating stubs)
+                const rawTitle = raw.title || raw.name;
+                if (!rawTitle || typeof rawTitle !== 'string' || !rawTitle.trim() || rawTitle.trim().toLowerCase() === 'untitled product') {
+                  return;
+                }
+                const title = rawTitle.trim();
                 const stock = raw.stock !== undefined ? Number(raw.stock) : (raw.inventory !== undefined ? Number(raw.inventory) : 10);
                 const isPub = raw.published !== undefined ? Boolean(raw.published) : (raw.status !== 'draft');
                 

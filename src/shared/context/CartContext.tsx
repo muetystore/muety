@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Product, CartItem, Coupon } from '@/types';
 import { couponService } from '@/features/coupons/services/couponService';
-import { storageService } from '@/lib/storage/storageService';
+import { storageService, subscribeLocalProducts } from '@/lib/storage/storageService';
 import { useNotification } from './NotificationContext';
 import { calculateOrderFinancials } from '@/shared/utils/pricingEngine';
 
@@ -21,6 +21,8 @@ interface CartContextType {
   taxAmount: number;
   grandTotal: number;
   wishlist: string[];
+  setWishlist: React.Dispatch<React.SetStateAction<string[]>>;
+  clearWishlist: () => void;
   toggleWishlist: (productId: string) => void;
   isInWishlist: (productId: string) => boolean;
   isDrawerOpen: boolean;
@@ -48,7 +50,18 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [wishlist, setWishlist] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(WISHLIST_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
+      const parsed: string[] = saved ? JSON.parse(saved) : [];
+      if (!Array.isArray(parsed) || parsed.length === 0) return [];
+      const currentProducts = storageService.getProducts();
+      if (currentProducts && currentProducts.length > 0) {
+        const validIds = new Set(currentProducts.map(p => p.id));
+        const filtered = parsed.filter(id => typeof id === 'string' && validIds.has(id));
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(filtered));
+        }
+        return filtered;
+      }
+      return parsed;
     } catch {
       return [];
     }
@@ -72,6 +85,39 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(wishlist));
   }, [wishlist]);
+
+  // Reconcile and prune orphaned or deleted products from wishlist
+  useEffect(() => {
+    const reconcileWishlist = () => {
+      try {
+        const currentProducts = storageService.getProducts();
+        if (!currentProducts || currentProducts.length === 0) return;
+        const validIds = new Set(currentProducts.map(p => p.id));
+        setWishlist(prev => {
+          const filtered = prev.filter(id => typeof id === 'string' && validIds.has(id));
+          if (filtered.length !== prev.length) {
+            localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(filtered));
+            return filtered;
+          }
+          return prev;
+        });
+      } catch {}
+    };
+
+    reconcileWishlist();
+    const unsubLocal = subscribeLocalProducts(() => reconcileWishlist());
+    const handleProductsUpdated = () => reconcileWishlist();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('muety_products_updated', handleProductsUpdated);
+    }
+
+    return () => {
+      unsubLocal();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('muety_products_updated', handleProductsUpdated);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (appliedCoupon) {
@@ -189,20 +235,37 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     info('Coupon code removed');
   };
 
+  const clearWishlist = () => {
+    setWishlist([]);
+    try {
+      localStorage.removeItem(WISHLIST_STORAGE_KEY);
+    } catch {}
+    info('Wishlist cleared');
+  };
+
   const toggleWishlist = (productId: string) => {
+    if (!productId) return;
     setWishlist(prev => {
       const exists = prev.includes(productId);
       if (exists) {
         info('Removed from your MUETY wishlist');
         return prev.filter(id => id !== productId);
       } else {
+        const prod = storageService.getProductById(productId);
+        if (!prod) {
+          warning('This item is no longer available in the catalog.', 'Item Unavailable');
+          return prev;
+        }
         success('Saved to your MUETY wishlist', 'Wishlist');
         return [...prev, productId];
       }
     });
   };
 
-  const isInWishlist = (productId: string) => wishlist.includes(productId);
+  const isInWishlist = (productId: string) => {
+    if (!productId) return false;
+    return wishlist.includes(productId) && !!storageService.getProductById(productId);
+  };
 
   return (
     <CartContext.Provider value={{
@@ -221,6 +284,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       taxAmount,
       grandTotal,
       wishlist,
+      setWishlist,
+      clearWishlist,
       toggleWishlist,
       isInWishlist,
       isDrawerOpen,

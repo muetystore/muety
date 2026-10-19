@@ -10,23 +10,24 @@ import { Heart, ShoppingBag, ArrowRight, Sparkles } from 'lucide-react';
 
 export const WishlistPage: React.FC = () => {
   useDocumentTitle('My Wishlist | MUETY Collection');
-  const { wishlist, addToCart, setIsDrawerOpen } = useCart();
+  const { wishlist, setWishlist, addToCart, setIsDrawerOpen } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const all = productService.getAllProducts();
-    if (all.length > 0) {
-      const saved = all.filter(p => wishlist.includes(p.id));
-      setProducts(saved);
-      setLoading(false);
-    } else {
-      // Fallback
-      const fromStorage = storageService.getProducts();
-      setProducts(fromStorage.filter(p => wishlist.includes(p.id)));
-      setLoading(false);
+    const sourceProducts = all.length > 0 ? all : storageService.getProducts();
+    const validIdSet = new Set(sourceProducts.map(p => p.id));
+    const saved = sourceProducts.filter(p => wishlist.includes(p.id));
+    setProducts(saved);
+    setLoading(false);
+
+    // If wishlist contains orphaned or deleted product IDs, immediately purge them so badge and page sync
+    const staleIds = wishlist.filter(id => !validIdSet.has(id));
+    if (staleIds.length > 0) {
+      setWishlist(prev => prev.filter(id => validIdSet.has(id)));
     }
-  }, [wishlist]);
+  }, [wishlist, setWishlist]);
 
   const handleAddAllToBag = () => {
     const available = products.filter(p => p.availability !== 'sold_out' && p.stock > 0);

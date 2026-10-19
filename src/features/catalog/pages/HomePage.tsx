@@ -17,7 +17,6 @@ import { PatronReview } from '@/features/reviews/types';
 import { 
   Sparkles, 
   ShieldCheck,
-  Award,
   Truck,
   MessageCircle, 
   Phone, 
@@ -39,18 +38,10 @@ export const HomePage: React.FC = () => {
   const { user, isAuthenticated, loginWithGoogle } = useAuth();
   const { success, error } = useNotification();
 
-  const trendingScrollRef = useRef<HTMLDivElement>(null);
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null);
   const topPicksScrollRef = useRef<HTMLDivElement>(null);
   const mostWantedScrollRef = useRef<HTMLDivElement>(null);
   const occasionScrollRef = useRef<HTMLDivElement>(null);
-
-  const scrollTrending = (direction: 'left' | 'right') => {
-    if (trendingScrollRef.current) {
-      const scrollAmount = direction === 'left' ? -300 : 300;
-      trendingScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-    }
-  };
 
   const scrollProductRow = (ref: React.RefObject<HTMLDivElement>, direction: 'left' | 'right') => {
     if (ref.current) {
@@ -248,14 +239,7 @@ export const HomePage: React.FC = () => {
     }
   }, [festiveOccasions, selectedOccasion]);
 
-  // Section 3: Trending Collections (Admin-selected categories showcase)
-  const trendingCategories = useMemo(() => {
-    const selected = categories.filter(c => c.active !== false && c.isTrending === true);
-    if (selected.length > 0) return selected;
-    const featured = categories.filter(c => c.active !== false && c.featured === true);
-    if (featured.length > 0) return featured;
-    return categories.filter(c => c.active !== false);
-  }, [categories]);
+
 
   // Section 5: New Arrivals (Admin-selected authority)
   const newArrivals = useMemo(() => {
@@ -452,156 +436,7 @@ export const HomePage: React.FC = () => {
           ========================================================================= */}
       <CampaignHero />
 
-      {/* =========================================================================
-          SECTION 3: CURATED CAPSULES (Category Profiles Showcase)
-          ========================================================================= */}
-      <section 
-        className="trending-showcase-section"
-        aria-label="Curated Capsules"
-        style={{ 
-          padding: 'clamp(1rem, 2vw, 1.5rem) 0 0.5rem',
-          background: 'radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.05) 0%, rgba(255, 255, 255, 0) 70%), var(--bg-main)', 
-          position: 'relative' 
-        }}
-      >
-        <div className="container">
-          <div 
-            className="curated-capsules-header"
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between', 
-              marginBottom: '0.6rem', 
-              flexWrap: 'wrap', 
-              gap: '0.5rem' 
-            }}
-          >
-            <span 
-              style={{
-                display: 'inline-block',
-                fontSize: '0.85rem',
-                fontWeight: 800,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color: '#991b1b',
-                fontFamily: 'var(--font-heading)'
-              }}
-            >
-              Curated Capsules
-            </span>
 
-            <Link
-              to="/categories"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '0.85rem',
-                fontWeight: 700,
-                color: 'var(--brand-primary, #0f172a)',
-                padding: '5px 12px',
-                borderRadius: 'var(--radius-sm, 6px)',
-                border: '1px solid var(--brand-border, #e2e8f0)',
-                backgroundColor: '#ffffff',
-                transition: 'all 0.2s ease',
-                textDecoration: 'none'
-              }}
-              className="curated-capsules-action"
-            >
-              <span>Explore All</span>
-              <ArrowRight size={14} />
-            </Link>
-          </div>
-
-          {isLoading ? (
-            <div style={{ display: 'flex', gap: '2rem', justifyContent: 'center', padding: '1rem 0' }}>
-              {[1, 2, 3, 4].map(n => (
-                <div 
-                  key={n} 
-                  style={{ 
-                    width: 'clamp(130px, 16vw, 210px)', 
-                    height: 'clamp(130px, 16vw, 210px)', 
-                    borderRadius: '50%', 
-                    backgroundColor: 'var(--brand-border)', 
-                    animation: 'pulse 1.5s infinite' 
-                  }} 
-                />
-              ))}
-            </div>
-          ) : trendingCategories.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '1rem 1rem' }}>
-              <p style={{ color: 'var(--brand-muted)', fontSize: '0.95rem' }}>Curated categories are arriving from the looms.</p>
-            </div>
-          ) : (
-            <div className="category-profiles-track-wrapper">
-              {/* Desktop Scroll Left Button */}
-              {trendingCategories.length > 4 && (
-                <button
-                  type="button"
-                  onClick={() => scrollTrending('left')}
-                  aria-label="Scroll left"
-                  className="trending-nav-arrow trending-nav-left"
-                >
-                  <ChevronLeft size={22} />
-                </button>
-              )}
-
-              {/* Single Row Horizontal Showcase Track */}
-              <div 
-                ref={trendingScrollRef}
-                className="circular-categories-carousel"
-                style={{
-                  justifyContent: trendingCategories.length <= 4 ? 'center' : 'flex-start'
-                }}
-              >
-                {trendingCategories.map((cat) => {
-                  const circleImg = cat.imageUrl || cat.image || (
-                    cat.slug === 'bridal' ? '/saree_model_drape.jpg' :
-                    cat.slug === 'handloom' ? '/saree_fabric_detail.jpg' :
-                    '/saree_model_individual.jpg'
-                  );
-                  return (
-                    <Link
-                      key={cat.id}
-                      to={`/category/${cat.slug || cat.id}`}
-                      className="trending-circle-card"
-                      title={cat.name}
-                      aria-label={`View ${cat.name} Category`}
-                    >
-                      {/* Sculpted Dual-Ring Gold Bezel Circular Category Frame */}
-                      <div className="category-circle-frame">
-                        <div className="circle-inner-bezel">
-                          <img 
-                            src={circleImg} 
-                            alt={cat.name} 
-                            className="circle-avatar-img"
-                            onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-                              const target = e.currentTarget;
-                              target.src = '/saree_model_individual.jpg';
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-
-              {/* Desktop Scroll Right Button */}
-              {trendingCategories.length > 4 && (
-                <button
-                  type="button"
-                  onClick={() => scrollTrending('right')}
-                  aria-label="Scroll right"
-                  className="trending-nav-arrow trending-nav-right"
-                >
-                  <ChevronRight size={22} />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </section>
 
       {/* =========================================================================
           SECTION 5: NEW ARRIVALS (Single-row scrolling display)
@@ -648,10 +483,11 @@ export const HomePage: React.FC = () => {
                 ref={newArrivalsScrollRef}
                 className="products-carousel-track"
               >
-                {newArrivals.map(p => (
+                {newArrivals.map((p, pIdx) => (
                   <div key={p.id} className="product-scroll-item">
                     <ProductCard 
                       product={p} 
+                      priority={pIdx < 4}
                       onQuickView={(prod) => setQuickViewProduct(prod)} 
                     />
                   </div>
@@ -718,10 +554,11 @@ export const HomePage: React.FC = () => {
                 ref={topPicksScrollRef}
                 className="products-carousel-track"
               >
-                {topPicks.map(p => (
+                {topPicks.map((p, pIdx) => (
                   <div key={p.id} className="product-scroll-item">
                     <ProductCard 
                       product={p} 
+                      priority={pIdx < 4}
                       onQuickView={(prod) => setQuickViewProduct(prod)} 
                     />
                   </div>
@@ -788,10 +625,11 @@ export const HomePage: React.FC = () => {
                 ref={mostWantedScrollRef}
                 className="products-carousel-track"
               >
-                {mostWanted.map(p => (
+                {mostWanted.map((p, pIdx) => (
                   <div key={p.id} className="product-scroll-item">
                     <ProductCard 
                       product={p} 
+                      priority={pIdx < 4}
                       onQuickView={(prod) => setQuickViewProduct(prod)} 
                     />
                   </div>
@@ -813,118 +651,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* =========================================================================
-          SECTION 8: MUETY ATELIER / OUR CRAFTSMANSHIP EDITORIAL FEATURE
-          ========================================================================= */}
-      <section 
-        className="editorial-craftsmanship-section section-padding"
-        aria-label="Muety Atelier Craftsmanship"
-        style={{
-          backgroundColor: '#070a12',
-          color: '#ffffff',
-          position: 'relative',
-          overflow: 'hidden'
-        }}
-      >
-        <div className="container" style={{ position: 'relative', zIndex: 2 }}>
-          <SectionHeader 
-            eyebrow="Salem Handloom Heritage"
-            title="The Art of Authenticity"
-            subtitle="Generational handloom techniques, Silk Mark certified mulberry silk, and fair wages for Salem weaving families."
-            theme="dark"
-            centered={true}
-          />
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: '1.5rem',
-            marginTop: '1rem'
-          }}>
-            <div style={{
-              backgroundColor: 'rgba(16, 23, 42, 0.75)',
-              border: '1px solid rgba(201, 162, 39, 0.25)',
-              borderRadius: 'var(--radius-md)',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.75rem'
-            }}>
-              <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'rgba(201, 162, 39, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ShieldCheck size={22} color="#facc15" />
-              </div>
-              <h3 style={{ color: '#ffffff', fontSize: '1.1rem', margin: 0 }}>100% Silk Mark India</h3>
-              <p style={{ color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.55, margin: 0 }}>
-                Every single saree thread is verified 100% natural Mulberry silk filaments under the statutory standards of the Silk Mark Organisation of India.
-              </p>
-            </div>
-
-            <div style={{
-              backgroundColor: 'rgba(16, 23, 42, 0.75)',
-              border: '1px solid rgba(201, 162, 39, 0.25)',
-              borderRadius: 'var(--radius-md)',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.75rem'
-            }}>
-              <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'rgba(201, 162, 39, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Award size={22} color="#facc15" />
-              </div>
-              <h3 style={{ color: '#ffffff', fontSize: '1.1rem', margin: 0 }}>Tested Gold &amp; Silver Zari</h3>
-              <p style={{ color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.55, margin: 0 }}>
-                Our intricate korvai borders and rich pallus feature certified electroplated metallic threads woven with traditional adai handloom cards.
-              </p>
-            </div>
-
-            <div style={{
-              backgroundColor: 'rgba(16, 23, 42, 0.75)',
-              border: '1px solid rgba(201, 162, 39, 0.25)',
-              borderRadius: 'var(--radius-md)',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.75rem'
-            }}>
-              <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'rgba(201, 162, 39, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Clock size={22} color="#facc15" />
-              </div>
-              <h3 style={{ color: '#ffffff', fontSize: '1.1rem', margin: 0 }}>Master Salem Artisans</h3>
-              <p style={{ color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.55, margin: 0 }}>
-                Each bridal masterpiece takes 3 to 4 weeks of uninterrupted hand-weaving, sustaining fair wages and generational handloom pride.
-              </p>
-            </div>
-
-            <div style={{
-              backgroundColor: 'rgba(16, 23, 42, 0.75)',
-              border: '1px solid rgba(201, 162, 39, 0.25)',
-              borderRadius: 'var(--radius-md)',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.75rem'
-            }}>
-              <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'rgba(201, 162, 39, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Truck size={22} color="#facc15" />
-              </div>
-              <h3 style={{ color: '#ffffff', fontSize: '1.1rem', margin: 0 }}>Direct From Atelier Pricing</h3>
-              <p style={{ color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.55, margin: 0 }}>
-                Straight from our Salem weaver clusters directly to your doorstep with flat ₹89 nationwide shipping and COD advance accounting.
-              </p>
-            </div>
-          </div>
-
-          <div style={{ textAlign: 'center', marginTop: '2.5rem' }}>
-            <Link 
-              to="/about"
-              className="btn btn-outline-gold"
-              style={{ padding: '0.75rem 1.75rem' }}
-            >
-              Read Our Muety Atelier Story &rarr;
-            </Link>
-          </div>
-        </div>
-      </section>
 
       {/* =========================================================================
           SECTION 9: FESTIVE EDITS AND OCCASION-BASED SHOPPING
@@ -1001,10 +728,11 @@ export const HomePage: React.FC = () => {
               ref={occasionScrollRef}
               className="products-carousel-track"
             >
-              {occasionProducts.map(p => (
+              {occasionProducts.map((p, pIdx) => (
                 <div key={p.id} className="product-scroll-item">
                   <ProductCard 
                     product={p} 
+                    priority={pIdx < 4}
                     onQuickView={(prod) => setQuickViewProduct(prod)} 
                   />
                 </div>
@@ -1063,10 +791,11 @@ export const HomePage: React.FC = () => {
             </div>
 
             <div className="products-grid">
-              {recentlyViewedProducts.map(p => (
+              {recentlyViewedProducts.map((p, pIdx) => (
                 <ProductCard 
                   key={p.id} 
                   product={p} 
+                  priority={pIdx < 4}
                   onQuickView={(prod) => setQuickViewProduct(prod)} 
                 />
               ))}
@@ -1101,10 +830,11 @@ export const HomePage: React.FC = () => {
             </div>
           ) : (
             <div className="products-grid">
-              {personalizedRecommendations.map(p => (
+              {personalizedRecommendations.map((p, pIdx) => (
                 <ProductCard 
                   key={p.id} 
                   product={p} 
+                  priority={pIdx < 4}
                   onQuickView={(prod) => setQuickViewProduct(prod)} 
                 />
               ))}
@@ -1231,14 +961,17 @@ export const HomePage: React.FC = () => {
                         transition: 'transform 0.25s ease'
                       }}
                     >
-                      <div style={{
-                        position: 'relative',
-                        width: '100%',
-                        height: '240px',
-                        borderRadius: '4px',
-                        overflow: 'hidden',
-                        backgroundColor: '#0f172a'
-                      }}>
+                      <div 
+                        className="hero-gradient-loading"
+                        style={{
+                          position: 'relative',
+                          width: '100%',
+                          height: '240px',
+                          borderRadius: '4px',
+                          overflow: 'hidden',
+                          backgroundColor: '#0f172a'
+                        }}
+                      >
                         <img 
                           src={getReviewPhoto(item, idx)}
                           alt={`Patron draped in ${item.productName || 'MUETY pure silk'}`}
@@ -1249,6 +982,7 @@ export const HomePage: React.FC = () => {
                             objectPosition: 'center top'
                           }}
                           loading="lazy"
+                          decoding="async"
                         />
                       </div>
 
@@ -1418,14 +1152,17 @@ export const HomePage: React.FC = () => {
                   boxSizing: 'border-box'
                 }}
               >
-                <div style={{
-                  position: 'relative',
-                  width: '100%',
-                  height: '280px',
-                  borderRadius: '4px',
-                  overflow: 'hidden',
-                  backgroundColor: '#0f172a'
-                }}>
+                <div 
+                  className="hero-gradient-loading"
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    height: '280px',
+                    borderRadius: '4px',
+                    overflow: 'hidden',
+                    backgroundColor: '#0f172a'
+                  }}
+                >
                   <img 
                     src={getReviewPhoto(displayReviews[activeReviewIdx], activeReviewIdx)}
                     alt={`Patron draped in ${displayReviews[activeReviewIdx]?.productName || 'MUETY pure silk'}`}
@@ -1435,6 +1172,7 @@ export const HomePage: React.FC = () => {
                       objectFit: 'cover',
                       objectPosition: 'center top'
                     }}
+                    decoding="async"
                   />
                 </div>
 
@@ -1773,7 +1511,7 @@ export const HomePage: React.FC = () => {
                   <Clock size={14} color="var(--brand-accent)" /> Mon – Sat: 10 AM – 8 PM IST
                 </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'rgba(255, 255, 255, 0.05)', padding: '5px 11px', borderRadius: '20px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                  <Truck size={14} color="var(--brand-accent)" /> ₹89 Flat Delivery
+                  <Truck size={14} color="var(--brand-accent)" /> FREE Delivery (Online) • ₹89 on COD
                 </span>
               </div>
             </div>
@@ -1887,138 +1625,7 @@ export const HomePage: React.FC = () => {
           }
         }
 
-        /* =========================================================================
-           Curated Capsules: Minimalist Gold Medallion Category Profile Showcase
-           ========================================================================= */
-        .category-profiles-track-wrapper {
-          position: relative;
-          width: 100%;
-          padding: 0.15rem 0 0.25rem;
-        }
 
-        .circular-categories-carousel {
-          display: flex;
-          gap: clamp(1.25rem, 3.5vw, 3rem);
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-          padding: 0.25rem 0.25rem 0.35rem;
-          scrollbar-width: none;
-          align-items: center;
-          flex-wrap: nowrap;
-          scroll-behavior: smooth;
-        }
-
-        .circular-categories-carousel::-webkit-scrollbar {
-          display: none;
-        }
-
-        .trending-circle-card {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          text-decoration: none;
-          flex-shrink: 0;
-          padding: 6px;
-          border-radius: 50%;
-          transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-          background: transparent;
-          cursor: pointer;
-        }
-
-        .trending-circle-card:hover {
-          transform: translateY(-6px);
-        }
-
-        /* Sculpted Dual-Ring Gold Bezel Medallion (Diameter reduced by 10px) */
-        .category-circle-frame {
-          width: clamp(130px, 16vw, 210px);
-          height: clamp(130px, 16vw, 210px);
-          border-radius: 50%;
-          padding: 4.5px;
-          background: linear-gradient(135deg, #f3d078 0%, #d4af37 40%, #a17724 75%, #f6e29d 100%);
-          box-shadow: 0 10px 24px rgba(212, 175, 55, 0.3), 0 3px 10px rgba(42, 8, 19, 0.06);
-          transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
-          position: relative;
-          box-sizing: border-box;
-          flex-shrink: 0;
-        }
-
-        .circle-inner-bezel {
-          width: 100%;
-          height: 100%;
-          border-radius: 50%;
-          overflow: hidden;
-          background: #ffffff;
-          border: 3.5px solid #ffffff;
-          box-sizing: border-box;
-        }
-
-        .circle-avatar-img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-          display: block;
-        }
-
-        .trending-circle-card:hover .category-circle-frame {
-          transform: scale(1.05);
-          box-shadow: 0 18px 40px rgba(212, 175, 55, 0.46), 0 0 0 4px rgba(212, 175, 55, 0.25);
-        }
-
-        .trending-circle-card:hover .circle-avatar-img {
-          transform: scale(1.1);
-        }
-
-        /* Desktop Nav Arrows */
-        .trending-nav-arrow {
-          position: absolute;
-          top: 50%;
-          transform: translateY(-50%);
-          z-index: 10;
-          width: 42px;
-          height: 42px;
-          border-radius: 50%;
-          background: #ffffff;
-          border: 1.5px solid rgba(212, 175, 55, 0.4);
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--brand-primary);
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .trending-nav-left {
-          left: -12px;
-        }
-
-        .trending-nav-right {
-          right: -12px;
-        }
-
-        .trending-nav-arrow:hover {
-          background: var(--brand-accent, #d4af37);
-          color: #ffffff;
-          border-color: var(--brand-accent, #d4af37);
-          transform: translateY(-50%) scale(1.08);
-        }
-
-        @media (max-width: 768px) {
-          .category-circle-frame {
-            width: clamp(108px, 28vw, 140px);
-            height: clamp(108px, 28vw, 140px);
-            padding: 3.5px;
-          }
-          .circular-categories-carousel {
-            gap: 1.25rem;
-            padding: 0.5rem 0.25rem;
-          }
-          .trending-nav-arrow {
-            display: none !important;
-          }
-        }
 
         /* =========================================================================
            Single-Row Product Scrolling Display Architecture (Admin Authority)

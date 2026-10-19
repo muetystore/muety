@@ -8,6 +8,7 @@ import { auditService } from '@/shared/services/auditService';
 import { getUserRoles } from '@/shared/utils/permissions';
 import { AdminModal } from '@/features/admin/components/AdminModal';
 import { uploadToCloudinary } from '@/lib/media/cloudinary';
+import { compressImageToDataUrl } from '@/lib/media/imageOptimizer';
 import { 
   Image as ImageIcon, 
   Plus, 
@@ -117,7 +118,7 @@ export const AdminBanners: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -127,8 +128,19 @@ export const AdminBanners: React.FC = () => {
     }
 
     setSelectedFile(file);
-    const localUrl = URL.createObjectURL(file);
-    setFilePreview(localUrl);
+    try {
+      const optimizedDataUrl = await compressImageToDataUrl(file, 1920, 800, 0.85);
+      setFilePreview(optimizedDataUrl);
+    } catch (optErr) {
+      console.warn('Canvas optimization note, using FileReader:', optErr);
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setFilePreview(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSaveBanner = async (e: React.FormEvent) => {
@@ -143,7 +155,12 @@ export const AdminBanners: React.FC = () => {
     const cleanAlt = altText.trim() || cleanTitle;
     const cleanLink = targetLink.trim() || '/products';
 
-    let finalImageUrl = filePreview || imageUrl.trim();
+    let finalImageUrl = (filePreview || imageUrl).trim();
+
+    if (finalImageUrl.startsWith('blob:')) {
+      warning('Temporary browser blob URLs cannot be persisted. Please re-select the image.', 'Invalid Image Reference');
+      return;
+    }
 
     if (!finalImageUrl && !selectedFile) {
       warning('Please upload an image or provide a valid image URL.', 'Missing Banner Image');
@@ -163,30 +180,33 @@ export const AdminBanners: React.FC = () => {
           if (res && res.url) {
             finalImageUrl = res.url;
           }
-        } catch (uploadErr) {
-          console.warn('Cloudinary upload fallback to local URL:', uploadErr);
-          if (filePreview) {
+        } catch (uploadErr: any) {
+          console.warn('Cloudinary upload fallback to optimized local DataURL:', uploadErr);
+          if (filePreview && !filePreview.startsWith('blob:')) {
             finalImageUrl = filePreview;
+            warning('Cloudinary service endpoint unavailable. Banner saved using optimized embedded image.', 'Cloud Upload Note');
+          } else {
+            throw new Error(`Banner image upload failed: ${uploadErr?.message || 'Cloud storage connection error'}. Please provide a hosted Image URL.`);
           }
         } finally {
           setIsUploading(false);
         }
       }
 
-      if (!finalImageUrl) {
-        throw new Error('Image URL could not be resolved.');
+      if (!finalImageUrl || finalImageUrl.startsWith('blob:')) {
+        throw new Error('Image URL could not be resolved to a persistent link.');
       }
 
       const bannerData: CreateBannerInput = {
         title: cleanTitle,
-        subtitle: subtitle.trim() || undefined,
+        subtitle: subtitle.trim(),
         image: finalImageUrl,
-        mobileImage: mobileImageUrl.trim() || undefined,
+        mobileImage: mobileImageUrl.trim(),
         alt: cleanAlt,
         link: cleanLink,
-        buttonText: buttonText.trim() || undefined,
-        badgeText: badgeText.trim() || undefined,
-        objectPosition,
+        buttonText: buttonText.trim(),
+        badgeText: badgeText.trim(),
+        objectPosition: objectPosition || 'center center',
         isActive,
         displayOrder: Number(displayOrder) || banners.length + 1
       };

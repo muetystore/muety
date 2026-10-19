@@ -569,8 +569,17 @@ export const CheckoutPage: React.FC = () => {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--brand-primary)' }}>₹89.00</span>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--brand-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Flat Rate</div>
+                    {paymentMethod === 'razorpay' ? (
+                      <>
+                        <span style={{ fontWeight: 800, fontSize: '1.15rem', color: '#10b981' }}>FREE</span>
+                        <div style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Prepaid Privilege</div>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--brand-primary)' }}>₹89.00</span>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--brand-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>COD Delivery Fee</div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -614,13 +623,13 @@ export const CheckoutPage: React.FC = () => {
                           <span style={{ fontWeight: 700, fontSize: '0.98rem', color: 'var(--brand-primary)' }}>
                             Online Payment (Razorpay)
                           </span>
-                          <span className="badge badge-green" style={{ fontSize: '0.7rem' }}>Recommended</span>
+                          <span className="badge badge-green" style={{ fontSize: '0.7rem' }}>Recommended • FREE Delivery</span>
                         </div>
                         <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: 1.4 }}>
-                          Instant confirmation via UPI (GPay, PhonePe, Paytm), Credit/Debit Cards, NetBanking, or Wallets.
+                          Instant confirmation via UPI (GPay, PhonePe, Paytm), Credit/Debit Cards, NetBanking, or Wallets. <strong>100% FREE Pan-India Delivery</strong> included!
                         </div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--brand-muted)', marginTop: '4px' }}>
-                          Pay full order total now: <strong>₹{financials.total.toFixed(2)}</strong> (Zero cash handover needed)
+                        <div style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 600, marginTop: '4px' }}>
+                          Pay full order total now: ₹{financials.total.toFixed(2)} (Delivery Fee: ₹0.00 FREE)
                         </div>
                       </div>
                     </div>
@@ -653,14 +662,14 @@ export const CheckoutPage: React.FC = () => {
                             Cash on Delivery (COD)
                           </span>
                           <span className="badge" style={{ fontSize: '0.7rem', backgroundColor: '#fef3c7', color: '#92400e' }}>
-                            ₹89 Advance Required
+                            ₹89 COD Delivery Fee
                           </span>
                         </div>
                         <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: 1.4 }}>
-                          Pay <strong>₹89.00</strong> online courier advance now via Razorpay. The advance is credited directly to your order total.
+                          A flat ₹89.00 delivery fee applies to COD orders, paid online as advance confirmation.
                         </div>
                         <div style={{ fontSize: '0.78rem', color: '#b45309', fontWeight: 600, marginTop: '4px' }}>
-                          Remaining balance of ₹{financials.remainingAmountDueAtDelivery.toFixed(2)} is collected upon doorstep delivery.
+                          Pay ₹89.00 online advance now. Doorstep balance due at delivery: ₹{financials.remainingAmountDueAtDelivery.toFixed(2)}.
                         </div>
                       </div>
                     </div>
@@ -795,7 +804,11 @@ export const CheckoutPage: React.FC = () => {
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
                   <span>Shipping & Delivery (Pan-India)</span>
-                  <span style={{ fontWeight: 600, color: 'var(--brand-primary)' }}>₹{financials.shippingFee.toFixed(2)}</span>
+                  {financials.shippingFee === 0 ? (
+                    <span style={{ fontWeight: 700, color: '#10b981' }}>FREE (Online)</span>
+                  ) : (
+                    <span style={{ fontWeight: 600, color: 'var(--brand-primary)' }}>₹{financials.shippingFee.toFixed(2)}</span>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
@@ -837,7 +850,7 @@ export const CheckoutPage: React.FC = () => {
                       <span>₹{financials.remainingAmountDueAtDelivery.toFixed(2)}</span>
                     </div>
                     <div style={{ fontSize: '0.74rem', color: '#b45309', marginTop: '2px', lineHeight: 1.4 }}>
-                      * The ₹89 advance confirms your COD order and is credited directly toward your order total.
+                      * Online payment gets 100% FREE delivery. COD incurs a ₹89 delivery fee paid upfront as an order confirmation advance.
                     </div>
                   </div>
                 )}

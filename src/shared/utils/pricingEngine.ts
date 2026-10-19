@@ -2,15 +2,15 @@
  * MUETY STORE — Canonical Order Pricing & Financial Engine
  * 
  * Rules:
- * 1. Total shipping/delivery charge is flat ₹89 per order.
- * 2. Order Total = Item Subtotal − Discount + Applicable Tax (5% GST) + ₹89 Shipping/Delivery Charge.
- * 3. Online payment (Razorpay) collects 100% of the Order Total online.
- * 4. Cash on Delivery (COD) collects ₹89 online as an advance payment credited toward the Order Total.
- * 5. Remaining balance at delivery for COD = Order Total − ₹89 (Subtotal − Discount + Tax).
- * 6. The ₹89 advance is NEVER added on top of the shipping charge; it is credited directly toward the existing Order Total.
+ * 1. Online payment (Razorpay / UPI / Cards / NetBanking) receives 100% FREE shipping (₹0 delivery fee).
+ * 2. Cash on Delivery (COD) orders incur a flat ₹89 delivery & handling fee.
+ * 3. COD collects the ₹89 delivery fee online as an advance payment authorization to confirm the order.
+ * 4. Remaining balance at delivery for COD = Order Total − ₹89 (which equals Item Subtotal − Discount + Applicable Tax).
  */
 
-export const CANONICAL_SHIPPING_FEE = 89;
+export const COD_SHIPPING_FEE = 89;
+export const ONLINE_SHIPPING_FEE = 0;
+export const CANONICAL_SHIPPING_FEE = 89; // Flat fee for COD
 export const COD_ADVANCE_AMOUNT = 89;
 export const DEFAULT_TAX_RATE = 5;
 
@@ -42,12 +42,14 @@ export function calculateOrderFinancials(input: FinancialBreakdownInput): OrderF
   
   const taxableAmount = Math.max(0, Number((subtotal - discount).toFixed(2)));
   const tax = subtotal === 0 ? 0 : Number(((taxableAmount * taxRate) / 100).toFixed(2));
-  const shippingFee = subtotal === 0 ? 0 : CANONICAL_SHIPPING_FEE;
   
-  const total = subtotal === 0 ? 0 : Number((taxableAmount + tax + shippingFee).toFixed(2));
-
   const isCod = input.paymentMethod === 'cash_on_delivery';
   const paymentMethod: 'razorpay' | 'cash_on_delivery' = isCod ? 'cash_on_delivery' : 'razorpay';
+
+  // Online payments enjoy 100% FREE delivery (₹0). Flat ₹89 is only charged for COD.
+  const shippingFee = (subtotal === 0 || !isCod) ? 0 : COD_SHIPPING_FEE;
+  
+  const total = subtotal === 0 ? 0 : Number((taxableAmount + tax + shippingFee).toFixed(2));
 
   let amountDueOnline = total;
   let remainingAmountDueAtDelivery = 0;

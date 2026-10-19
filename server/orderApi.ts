@@ -209,11 +209,12 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
       // 3. Financial calculations
       const taxableBase = Math.max(0, calculatedSubtotal - calculatedDiscount);
       const calculatedTax = Math.round(taxableBase * 0.05 * 100) / 100; // 5% GST
-      const canonicalShippingFee = 89; // Total flat ₹89 courier shipping fee
-      const calculatedGrandTotal = Number((taxableBase + calculatedTax + canonicalShippingFee).toFixed(2));
       const isCod = paymentMethod === 'cash_on_delivery';
-      const codAdvanceAmount = isCod ? 89 : 0;
-      const codBalanceDue = isCod ? Number((calculatedGrandTotal - 89).toFixed(2)) : 0;
+      // Online payment delivery is 100% FREE (0). COD delivery fee is flat 89.
+      const canonicalShippingFee = isCod ? 89 : 0;
+      const calculatedGrandTotal = Number((taxableBase + calculatedTax + canonicalShippingFee).toFixed(2));
+      const codAdvanceAmount = isCod ? Math.min(89, calculatedGrandTotal) : 0;
+      const codBalanceDue = isCod ? Number(Math.max(0, calculatedGrandTotal - codAdvanceAmount).toFixed(2)) : 0;
 
       // 4. Perform atomic stock deductions & inventory transactions
       for (let i = 0; i < productSnaps.length; i++) {
@@ -326,12 +327,13 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
     });
   }
 
-  const canonicalShippingFee = 89;
+  const isCod = paymentMethod === 'cash_on_delivery';
+  // Online payment delivery is 100% FREE (0). COD delivery fee is flat 89.
+  const canonicalShippingFee = isCod ? 89 : 0;
   const calculatedTax = Math.round(calculatedSubtotal * 0.05 * 100) / 100;
   const calculatedGrandTotal = Number((calculatedSubtotal + calculatedTax + canonicalShippingFee).toFixed(2));
-  const isCod = paymentMethod === 'cash_on_delivery';
-  const codAdvanceAmount = isCod ? 89 : 0;
-  const codBalanceDue = isCod ? Number((calculatedGrandTotal - 89).toFixed(2)) : 0;
+  const codAdvanceAmount = isCod ? Math.min(89, calculatedGrandTotal) : 0;
+  const codBalanceDue = isCod ? Number(Math.max(0, calculatedGrandTotal - codAdvanceAmount).toFixed(2)) : 0;
 
   const orderPayload = {
     id: orderId,

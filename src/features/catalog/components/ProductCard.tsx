@@ -8,14 +8,17 @@ import { Heart, ShoppingBag, Eye, Star, Zap, Check } from 'lucide-react';
 interface ProductCardProps {
   product: Product;
   onQuickView?: (product: Product) => void;
+  priority?: boolean;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView }) => {
+export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, priority = false }) => {
   const { addToCart, toggleWishlist, isInWishlist, setIsDrawerOpen } = useCart();
   const { isAuthenticated, openAuthModal } = useAuth();
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const isSaved = isInWishlist(product.id);
 
   const images = Array.isArray(product.images) && product.images.length > 0 
@@ -74,13 +77,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView }
       }}
     >
       {/* Compact Saree Portrait Image Container (Reduced height) */}
-      <div style={{
-        position: 'relative',
-        width: '100%',
-        paddingTop: '108%',
-        backgroundColor: 'var(--bg-alabaster, #f8f6f0)',
-        overflow: 'hidden'
-      }}>
+      <div 
+        className={!isLoaded && !hasError ? 'img-gradient-loading' : ''}
+        style={{
+          position: 'relative',
+          width: '100%',
+          paddingTop: '108%',
+          backgroundColor: 'var(--bg-alabaster, #f8f6f0)',
+          overflow: 'hidden'
+        }}
+      >
         <Link 
           to={`/products/${product.slug || product.id}`}
           style={{
@@ -93,15 +99,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView }
           aria-label={`View details for ${product.name}`}
         >
           <img 
-            src={displayImage} 
+            src={hasError ? '/saree_model_individual.jpg' : displayImage} 
             alt={product.name}
-            loading="lazy"
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
+            decoding="async"
+            onLoad={() => setIsLoaded(true)}
+            onError={() => {
+              setHasError(true);
+              setIsLoaded(true);
+            }}
             style={{
               width: '100%',
               height: '100%',
               objectFit: 'cover',
               objectPosition: 'center top',
-              transition: 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+              opacity: isLoaded ? 1 : 0,
+              transition: 'opacity 0.4s ease-in-out, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
             }}
             className="product-card-img"
           />
@@ -420,16 +434,17 @@ export const ProductCardSkeleton: React.FC = () => {
       border: '1px solid var(--brand-border)',
       overflow: 'hidden'
     }}>
-      <div style={{
-        width: '100%',
-        paddingTop: '108%',
-        backgroundColor: '#f1f5f9',
-        animation: 'pulse 1.5s infinite ease-in-out'
-      }} />
+      <div 
+        className="img-gradient-loading"
+        style={{
+          width: '100%',
+          paddingTop: '108%'
+        }} 
+      />
       <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <div style={{ width: '40%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px' }} />
-        <div style={{ width: '85%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px' }} />
-        <div style={{ width: '50%', height: '14px', backgroundColor: '#e2e8f0', borderRadius: '4px', marginTop: '4px' }} />
+        <div className="img-gradient-loading" style={{ width: '40%', height: '8px', borderRadius: '4px' }} />
+        <div className="img-gradient-loading" style={{ width: '85%', height: '12px', borderRadius: '4px' }} />
+        <div className="img-gradient-loading" style={{ width: '50%', height: '14px', borderRadius: '4px', marginTop: '4px' }} />
       </div>
     </div>
   );

@@ -118,9 +118,6 @@ class CollectionService {
     callback: (collections: SareeCollection[]) => void, 
     onError?: (err: Error) => void
   ): Unsubscribe {
-    // Attempt one-time seed check in dev/admin if firestore is empty
-    this.seedInitialCollectionsIfEmpty();
-
     if (db && !isTestEnv) {
       try {
         const unsubscribe = onSnapshot(collection(db, 'collections'), (snapshot) => {
@@ -147,10 +144,9 @@ class CollectionService {
             storageService.saveCollections(cloudCols);
             callback(cloudCols);
           } else {
-            // If firestore collection is currently empty, provide initial collections
-            const current = storageService.getCollections();
-            const toSend = current.length > 0 ? current : INITIAL_COLLECTIONS;
-            callback(toSend);
+            // When Firestore collections are empty (e.g. admin deleted them), respect deletion
+            storageService.saveCollections([]);
+            callback([]);
           }
         }, (err) => {
           console.error('[Firestore Collections] Live subscription read error:', err);

@@ -5,6 +5,8 @@ import {
   collection, 
   doc, 
   setDoc, 
+  getDoc,
+  updateDoc,
   deleteDoc, 
   onSnapshot, 
   Unsubscribe 
@@ -49,7 +51,13 @@ class ReviewService {
       }
 
       if (db) {
-        await setDoc(doc(db, 'products', productId), { reviewCount, rating }, { merge: true });
+        const prodRef = doc(db, 'products', productId);
+        const prodSnap = await getDoc(prodRef);
+        // Only update rating and reviewCount if the product document already exists in Firestore.
+        // Never call setDoc with merge:true on non-existent product IDs, which would create phantom "Untitled Product" stubs.
+        if (prodSnap.exists()) {
+          await updateDoc(prodRef, { reviewCount, rating });
+        }
       }
     } catch (err) {
       console.warn('Firestore product rating/count sync note:', err);
