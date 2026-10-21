@@ -23,7 +23,22 @@ interface AuthContextType {
   closeAuthModal: () => void;
   login: (email: string, pass: string) => Promise<UserProfile>;
   register: (email: string, pass: string, name: string) => Promise<UserProfile>;
-  loginWithGoogle: () => Promise<UserProfile>;
+  loginWithGoogle: (useRedirectOnMobile?: boolean) => Promise<UserProfile>;
+  sendPhoneOtp: (phoneNumber: string, appVerifier: any) => Promise<any>;
+  verifyPhoneOtp: (confirmationResult: any, code: string) => Promise<UserProfile>;
+  setupRecaptcha: (containerIdOrElement: string | HTMLElement, options?: any) => any;
+  recordPatronCircleConsent: (uid: string, optIn: boolean, email?: string, phone?: string) => Promise<void>;
+  updateCustomerProfile: (updates: { displayName?: string; phoneNumber?: string; photoURL?: string }) => Promise<UserProfile>;
+  linkGoogleAccount: (useRedirectOnMobile?: boolean) => Promise<UserProfile>;
+  sendPhoneLinkOtp: (phoneNumber: string, appVerifier: any) => Promise<any>;
+  verifyPhoneLinkOtp: (confirmationResult: any, code: string, phoneToSave?: string) => Promise<UserProfile>;
+  getConnectedStatus: (targetUser?: UserProfile | null) => {
+    isGoogleConnected: boolean;
+    googleEmail: string | null;
+    isPhoneConnected: boolean;
+    phoneNumber: string | null;
+    maskedPhone: string | null;
+  };
   logout: () => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
   hasRole: (role: AppRole) => boolean;
@@ -78,15 +93,89 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (useRedirectOnMobile: boolean = false) => {
     setIsLoading(true);
     try {
-      const u = await authService.loginWithGoogle();
+      const u = await authService.loginWithGoogle(useRedirectOnMobile);
       setUser(u);
       return u;
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const sendPhoneOtp = async (phoneNumber: string, appVerifier: any) => {
+    setIsLoading(true);
+    try {
+      return await authService.sendPhoneOtp(phoneNumber, appVerifier);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const verifyPhoneOtp = async (confirmationResult: any, code: string) => {
+    setIsLoading(true);
+    try {
+      const u = await authService.verifyPhoneOtp(confirmationResult, code);
+      setUser(u);
+      return u;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const setupRecaptcha = (containerIdOrElement: string | HTMLElement, options?: any) => {
+    return authService.setupRecaptcha(containerIdOrElement, options);
+  };
+
+  const recordPatronCircleConsent = async (uid: string, optIn: boolean, email?: string, phone?: string) => {
+    return authService.recordPatronCircleConsent(uid, optIn, email, phone);
+  };
+
+  const updateCustomerProfile = async (updates: { displayName?: string; phoneNumber?: string; photoURL?: string }) => {
+    setIsLoading(true);
+    try {
+      const u = await authService.updateCustomerProfile(updates);
+      setUser(u);
+      return u;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const linkGoogleAccount = async (useRedirectOnMobile: boolean = false) => {
+    setIsLoading(true);
+    try {
+      const u = await authService.linkGoogleAccount(useRedirectOnMobile);
+      setUser(u);
+      return u;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const sendPhoneLinkOtp = async (phoneNumber: string, appVerifier: any) => {
+    setIsLoading(true);
+    try {
+      return await authService.sendPhoneLinkOtp(phoneNumber, appVerifier);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const verifyPhoneLinkOtp = async (confirmationResult: any, code: string, phoneToSave?: string) => {
+    setIsLoading(true);
+    try {
+      const u = await authService.verifyPhoneLinkOtp(confirmationResult, code, phoneToSave);
+      setUser(u);
+      return u;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getConnectedStatus = (targetUser?: UserProfile | null) => {
+    return authService.getConnectedStatus(targetUser !== undefined ? targetUser : user);
   };
 
   const logout = async () => {
@@ -127,6 +216,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       login,
       register,
       loginWithGoogle,
+      sendPhoneOtp,
+      verifyPhoneOtp,
+      setupRecaptcha,
+      recordPatronCircleConsent,
+      updateCustomerProfile,
+      linkGoogleAccount,
+      sendPhoneLinkOtp,
+      verifyPhoneLinkOtp,
+      getConnectedStatus,
       logout,
       sendPasswordReset,
       hasRole: checkHasRole,

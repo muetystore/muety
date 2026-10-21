@@ -582,8 +582,8 @@ export const AdminCustomers: React.FC = () => {
                       {/* Contact Info */}
                       <td style={{ padding: '14px 18px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
-                            {customer.email}
+                          <span style={{ color: customer.email ? 'var(--text-primary)' : '#94a3b8', fontWeight: customer.email ? 500 : 400, fontStyle: customer.email ? 'normal' : 'italic' }}>
+                            {customer.email || 'Not connected'}
                           </span>
                           <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
                             {customer.phoneNumber || customer.phone || 'No phone registered'}
@@ -818,7 +818,9 @@ export const AdminCustomers: React.FC = () => {
                     </div>
                     <div>
                       <span style={{ color: '#64748b', display: 'block', fontSize: '0.78rem' }}>Storefront Email</span>
-                      <strong>{selectedCustomer.email}</strong>
+                      <strong style={{ color: selectedCustomer.email ? 'var(--brand-primary)' : '#94a3b8', fontStyle: selectedCustomer.email ? 'normal' : 'italic' }}>
+                        {selectedCustomer.email || 'Not connected'}
+                      </strong>
                     </div>
                     <div>
                       <span style={{ color: '#64748b', display: 'block', fontSize: '0.78rem' }}>Primary Phone</span>
@@ -898,11 +900,11 @@ export const AdminCustomers: React.FC = () => {
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" style={{ fontWeight: 700 }}>Storefront Authentication Email (Read-Only)</label>
                   <input
-                    type="email"
+                    type="text"
                     disabled
-                    value={selectedCustomer.email}
+                    value={selectedCustomer.email || 'Not connected'}
                     className="form-input"
-                    style={{ backgroundColor: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }}
+                    style={{ backgroundColor: '#f1f5f9', color: selectedCustomer.email ? '#334155' : '#94a3b8', cursor: 'not-allowed', fontStyle: selectedCustomer.email ? 'normal' : 'italic' }}
                   />
                   <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
                     Email modification requires a verified account credentials flow.
@@ -1163,7 +1165,9 @@ export const AdminCustomers: React.FC = () => {
                     </div>
                     <div>
                       <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>Storefront Registered Email</span>
-                      <strong>{selectedCustomer.email}</strong>
+                      <strong style={{ color: selectedCustomer.email ? 'var(--brand-primary)' : '#94a3b8', fontStyle: selectedCustomer.email ? 'normal' : 'italic' }}>
+                        {selectedCustomer.email || 'Not connected'}
+                      </strong>
                     </div>
                   </div>
                 </div>
@@ -1175,16 +1179,18 @@ export const AdminCustomers: React.FC = () => {
                       Send Password Recovery / Reset
                     </h5>
                     <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                      Dispatches an official Firebase Auth recovery link directly to {selectedCustomer.email}.
+                      {selectedCustomer.email 
+                        ? `Dispatches an official Firebase Auth recovery link directly to ${selectedCustomer.email}.`
+                        : 'Not available: This patron signed in via mobile OTP with no connected email.'}
                     </p>
                   </div>
 
                   <button
                     type="button"
-                    disabled={isSendingReset}
+                    disabled={isSendingReset || !selectedCustomer.email}
                     onClick={handleSendPasswordReset}
                     className="btn btn-outline-gold btn-sm"
-                    style={{ backgroundColor: '#ffffff', fontWeight: 700 }}
+                    style={{ backgroundColor: '#ffffff', fontWeight: 700, opacity: selectedCustomer.email ? 1 : 0.6 }}
                   >
                     <Send size={14} /> {isSendingReset ? 'Sending Instructions...' : 'Dispatch Password Reset'}
                   </button>

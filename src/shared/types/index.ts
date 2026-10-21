@@ -82,6 +82,7 @@ export interface UserProfile {
   defaultAddress?: Address;
   defaultShippingAddressId?: string;
   defaultBillingAddressId?: string;
+  connectedProviders?: string[];
   createdAt: string;
   updatedAt?: string;
   lastLoginAt?: string;
@@ -89,6 +90,11 @@ export interface UserProfile {
   ordersCount?: number;
   totalSpent?: number;
   customerStatus?: CustomerStatus;
+  marketingConsent?: boolean;
+  patronCircleMember?: boolean;
+  patronCircleJoinedAt?: string;
+  patronCircleConsentText?: string;
+  patronCircleConsentVersion?: string;
 }
 
 export type AdminUser = UserProfile;

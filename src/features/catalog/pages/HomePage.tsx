@@ -5,8 +5,6 @@ import { productService } from '@/features/catalog/services/productService';
 import { reviewService } from '@/features/reviews/services/reviewService';
 import { storageService } from '@/lib/storage/storageService';
 import { useCart } from '@/shared/context/CartContext';
-import { useAuth } from '@/shared/context/AuthContext';
-import { useNotification } from '@/shared/context/NotificationContext';
 import { ProductCard, ProductCardSkeleton } from '@/features/catalog/components/ProductCard';
 import { QuickViewModal } from '@/features/catalog/components/QuickViewModal';
 import { SectionHeader } from '@/features/catalog/components/SectionHeader';
@@ -26,7 +24,6 @@ import {
   Clock,
   CheckCircle2,
   Trash2,
-  Send,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -35,8 +32,6 @@ export const HomePage: React.FC = () => {
   useDocumentTitle('Home');
 
   const { wishlist } = useCart();
-  const { user, isAuthenticated, loginWithGoogle } = useAuth();
-  const { success, error } = useNotification();
 
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null);
   const topPicksScrollRef = useRef<HTMLDivElement>(null);
@@ -58,10 +53,6 @@ export const HomePage: React.FC = () => {
   const [activeReviewIdx, setActiveReviewIdx] = useState<number>(0);
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(() => storageService.getRecentlyViewed());
   const [selectedOccasion, setSelectedOccasion] = useState<string>('bridal');
-  const [newsletterEmail, setNewsletterEmail] = useState<string>('');
-  const [newsletterConsent, setNewsletterConsent] = useState<boolean>(false);
-  const [isAuthSubmitting, setIsAuthSubmitting] = useState<boolean>(false);
-  const [newsletterSubscribed, setNewsletterSubscribed] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(() => storageService.getProducts().length === 0);
 
   const displayReviews: PatronReview[] = useMemo(() => {
@@ -381,51 +372,6 @@ export const HomePage: React.FC = () => {
     } catch {}
     setRecentlyViewedIds([]);
     window.dispatchEvent(new CustomEvent('muety_recently_viewed_updated', { detail: [] }));
-  };
-
-  const saveNewsletterSubscription = (emailToSave: string) => {
-    try {
-      const clean = emailToSave.trim().toLowerCase();
-      const existing = JSON.parse(localStorage.getItem('muety_newsletter_subs') || '[]');
-      if (!existing.includes(clean)) {
-        existing.push(clean);
-        localStorage.setItem('muety_newsletter_subs', JSON.stringify(existing));
-      }
-    } catch {}
-    setNewsletterSubscribed(true);
-  };
-
-  const handleGoogleJoin = async () => {
-    if (!newsletterConsent) {
-      error('Please accept the Terms & Conditions and Privacy Policy before joining the Patron Circle.');
-      return;
-    }
-    setIsAuthSubmitting(true);
-    try {
-      const u = await loginWithGoogle();
-      if (u?.email) {
-        saveNewsletterSubscription(u.email);
-      }
-      success(`Welcome to the MUETY Patron Circle, ${u.displayName || 'Patron'}!`);
-    } catch (err: any) {
-      error(err?.message || 'Google Authentication encountered an error.');
-    } finally {
-      setIsAuthSubmitting(false);
-    }
-  };
-
-  const handleNewsletterSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newsletterConsent) {
-      error('Please accept the Terms & Conditions and Privacy Policy before proceeding.');
-      return;
-    }
-    if (!newsletterEmail || !newsletterEmail.includes('@')) {
-      error('Please enter a valid email address.');
-      return;
-    }
-    saveNewsletterSubscription(newsletterEmail);
-    success('Welcome to the MUETY Patron Circle. You will receive private loom release invitations.');
   };
 
   return (
@@ -1271,214 +1217,6 @@ export const HomePage: React.FC = () => {
             box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.18);
           }
         `}</style>
-      </section>
-
-      {/* =========================================================================
-          SECTION 13: NEWSLETTER OR CUSTOMER ENGAGEMENT SECTION
-          ========================================================================= */}
-      <section 
-        className="section-padding newsletter-section"
-        aria-label="Patron Circle Newsletter"
-        style={{
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid var(--brand-border)'
-        }}
-      >
-        <div className="container">
-          <div 
-            className="join-circle-card"
-            style={{
-              backgroundColor: 'var(--bg-main)',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid var(--brand-border)',
-              padding: 'clamp(2rem, 5vw, 3.5rem) 1.5rem',
-              textAlign: 'center',
-              maxWidth: '820px',
-              margin: '0 auto'
-            }}
-          >
-            <span style={{ fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.12em', color: 'var(--brand-accent)', textTransform: 'uppercase' }}>
-              BESPOKE COMMUNICATIONS
-            </span>
-            <h2 style={{ fontSize: 'clamp(1.6rem, 3.5vw, 2.3rem)', color: 'var(--brand-primary)', margin: '6px 0 0.5rem', fontWeight: 800 }}>
-              Join the MUETY Patron Circle
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 'clamp(0.88rem, 1.8vw, 1rem)', maxWidth: '560px', margin: '0 auto 1.75rem', lineHeight: 1.6 }}>
-              Receive privileged previews of limited pit-loom releases, private bridal drape consultations, and invitations to our Salem handloom exhibitions.
-            </p>
-
-            {isAuthenticated ? (
-              <div 
-                className="patron-member-card"
-                style={{
-                backgroundColor: '#ffffff',
-                borderRadius: 'var(--radius-lg)',
-                padding: '1.75rem 2rem',
-                border: '1px solid var(--brand-border)',
-                maxWidth: '520px',
-                margin: '0 auto',
-                boxShadow: 'var(--shadow-sm)',
-                textAlign: 'center'
-              }}>
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  color: '#15803d',
-                  backgroundColor: '#f0fdf4',
-                  border: '1px solid #bbf7d0',
-                  padding: '6px 14px',
-                  borderRadius: 'var(--radius-full)',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  marginBottom: '10px'
-                }}>
-                  <CheckCircle2 size={18} color="#16a34a" />
-                  <span>Verified Patron Circle Member</span>
-                </div>
-                <h3 style={{ color: 'var(--brand-primary)', fontSize: '1.15rem', margin: '4px 0 6px', fontWeight: 700 }}>
-                  Welcome back, {user?.displayName || 'Patron'}
-                </h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', margin: 0 }}>
-                  {user?.email} • Client Tier: <strong style={{ color: 'var(--brand-accent)' }}>MUETY Atelier Club</strong>
-                </p>
-                <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'center', gap: '10px' }}>
-                  <Link to="/account" className="btn btn-primary btn-sm">
-                    Access Patron Portal
-                  </Link>
-                  <Link to="/products" className="btn btn-outline btn-sm">
-                    Explore Sarees
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div style={{ maxWidth: '520px', margin: '0 auto' }}>
-                {/* 1. Google Sign-In Primary Action */}
-                <button 
-                  type="button"
-                  onClick={handleGoogleJoin}
-                  disabled={isAuthSubmitting}
-                  className="btn btn-outline"
-                  style={{
-                    width: '100%',
-                    height: '48px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '12px',
-                    backgroundColor: '#ffffff',
-                    border: '1px solid var(--brand-border)',
-                    borderRadius: 'var(--radius-md)',
-                    fontWeight: 700,
-                    fontSize: '0.94rem',
-                    color: 'var(--brand-primary)',
-                    cursor: 'pointer',
-                    boxShadow: 'var(--shadow-sm)',
-                    marginBottom: '1.25rem',
-                    transition: 'all var(--transition-fast)'
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                  </svg>
-                  <span>{isAuthSubmitting ? 'Connecting with Google...' : 'Join Circle with Google'}</span>
-                </button>
-
-                {/* Divider */}
-                <div style={{ display: 'flex', alignItems: 'center', margin: '1.25rem 0', color: 'var(--brand-muted)' }}>
-                  <div style={{ flex: 1, borderBottom: '1px solid var(--brand-border)' }} />
-                  <span style={{ fontSize: '0.78rem', padding: '0 12px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-                    or join via email invitation
-                  </span>
-                  <div style={{ flex: 1, borderBottom: '1px solid var(--brand-border)' }} />
-                </div>
-
-                {/* 2. Email Form */}
-                <form 
-                  onSubmit={handleNewsletterSubmit}
-                  style={{
-                    display: 'flex',
-                    gap: '8px',
-                    width: '100%',
-                    flexWrap: 'wrap',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <input 
-                    type="email" 
-                    value={newsletterEmail} 
-                    onChange={(e) => setNewsletterEmail(e.target.value)} 
-                    placeholder="Enter your email address..." 
-                    required 
-                    style={{
-                      flex: '1 1 260px',
-                      padding: '11px 16px',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--brand-border)',
-                      fontSize: '0.92rem',
-                      backgroundColor: '#ffffff',
-                      outline: 'none',
-                      minWidth: '220px'
-                    }}
-                    aria-label="Email address for Patron Circle"
-                  />
-                  <button 
-                    type="submit" 
-                    className="btn btn-primary"
-                    style={{ flexShrink: 0, padding: '11px 22px', fontWeight: 700 }}
-                  >
-                    <Send size={15} />
-                    <span>Join Circle</span>
-                  </button>
-                </form>
-
-                {/* 3. Mandatory Initially Unchecked Terms & Conditions and Privacy Policy Consent */}
-                <div style={{
-                  marginTop: '1.1rem',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  textAlign: 'left'
-                }}>
-                  <input 
-                    type="checkbox"
-                    id="patron-circle-consent"
-                    checked={newsletterConsent}
-                    onChange={(e) => setNewsletterConsent(e.target.checked)}
-                    style={{ marginTop: '3px', cursor: 'pointer', accentColor: 'var(--brand-accent)' }}
-                  />
-                  <label htmlFor="patron-circle-consent" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45, cursor: 'pointer' }}>
-                    I have read and accept MUETY's{' '}
-                    <Link to="/terms-conditions" target="_blank" style={{ color: 'var(--brand-accent)', textDecoration: 'underline', fontWeight: 600 }}>
-                      Terms & Conditions
-                    </Link>{' '}
-                    and{' '}
-                    <Link to="/privacy-policy" target="_blank" style={{ color: 'var(--brand-accent)', textDecoration: 'underline', fontWeight: 600 }}>
-                      Privacy Policy
-                    </Link>.
-                  </label>
-                </div>
-
-                {/* 4. Link to existing sign-in for returning patrons */}
-                <div style={{ marginTop: '1.25rem', textAlign: 'center' }}>
-                  <p style={{ fontSize: '0.84rem', color: 'var(--brand-muted)', margin: 0 }}>
-                    Already have a MUETY account?{' '}
-                    <Link to="/login" style={{ color: 'var(--brand-accent)', fontWeight: 700, textDecoration: 'none' }}>
-                      Sign In Here
-                    </Link>
-                  </p>
-                </div>
-              </div>
-            )}
-            <p style={{ fontSize: '0.74rem', color: 'var(--brand-muted)', marginTop: '1rem', marginBottom: 0 }}>
-              We value your discretion. Unsubscribe at any time with one click.
-            </p>
-          </div>
-        </div>
       </section>
 
       {/* =========================================================================

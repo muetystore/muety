@@ -1,52 +1,78 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/shared/context/AuthContext';
 import { useCart } from '@/shared/context/CartContext';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { Logo } from '@/shared/components/ui/Logo';
 import { 
   X, 
-  Lock, 
-  Mail, 
-  User, 
+  Smartphone, 
   ArrowRight, 
-  Eye, 
-  EyeOff, 
-  KeyRound, 
+  ArrowLeft,
   ShoppingBag, 
   Heart, 
   ShieldCheck, 
   Sparkles, 
   CheckCircle2, 
   Tag, 
-  Truck 
+  Truck,
+  Edit3,
+  RotateCcw
 } from 'lucide-react';
+
+interface CountryCode {
+  code: string;
+  country: string;
+  flag: string;
+}
+
+const COUNTRY_CODES: CountryCode[] = [
+  { code: '+91', country: 'India', flag: '🇮🇳' },
+  { code: '+1', country: 'United States / Canada', flag: '🇺🇸' },
+  { code: '+44', country: 'United Kingdom', flag: '🇬🇧' },
+  { code: '+971', country: 'UAE', flag: '🇦🇪' },
+  { code: '+65', country: 'Singapore', flag: '🇸🇬' },
+  { code: '+60', country: 'Malaysia', flag: '🇲🇾' },
+  { code: '+61', country: 'Australia', flag: '🇦🇺' },
+  { code: '+94', country: 'Sri Lanka', flag: '🇱🇰' },
+  { code: '+49', country: 'Germany', flag: '🇩🇪' },
+  { code: '+33', country: 'France', flag: '🇫🇷' }
+];
 
 export const PatronAuthModal: React.FC = () => {
   const { 
     isAuthModalOpen, 
     closeAuthModal, 
     authModalConfig, 
-    login, 
-    register, 
-    loginWithGoogle, 
-    sendPasswordReset 
+    loginWithGoogle,
+    sendPhoneOtp,
+    verifyPhoneOtp,
+    setupRecaptcha,
+    recordPatronCircleConsent
   } = useAuth();
 
   const { items, subtotal, appliedCoupon, wishlist } = useCart();
   const { success, error, info } = useNotification();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'signin' | 'register'>('signin');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
+  // Mode: 'choices' | 'phone_step1' | 'phone_step2'
+  const [authMode, setAuthMode] = useState<'choices' | 'phone_step1' | 'phone_step2'>('choices');
+
+  // Phone Auth State
+  const [countryCode, setCountryCode] = useState('+91');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState<any>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Patron Circle Consent (Unchecked by default)
+  const [patronCircleOptIn, setPatronCircleOptIn] = useState(false);
+
+  // Loading & Error States
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const recaptchaVerifierRef = useRef<any>(null);
 
   // Lock body scroll and handle Escape key
   useEffect(() => {
@@ -65,21 +91,37 @@ export const PatronAuthModal: React.FC = () => {
     return () => {
       document.body.style.overflow = originalOverflow;
       window.removeEventListener('keydown', handleKeyDown);
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {}
+        recaptchaVerifierRef.current = null;
+      }
     };
   }, [isAuthModalOpen, closeAuthModal]);
+
+  // Resend OTP countdown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   if (!isAuthModalOpen) return null;
 
   const targetPath = authModalConfig?.redirectPath || '/checkout';
 
-  const handleAuthSuccess = (u: any, mode: 'login' | 'register' | 'google') => {
+  const handleAuthSuccess = async (u: any) => {
+    // Record Patron Circle opt-in if selected
+    if (patronCircleOptIn && u?.uid) {
+      await recordPatronCircleConsent(u.uid, true, u.email, u.phoneNumber);
+    }
+
     closeAuthModal();
     const name = u.displayName ? u.displayName.split(' ')[0] : 'Patron';
-    if (mode === 'register') {
-      success(`Welcome to the MUETY Atelier, ${name}. Your session has been bound to your account.`, 'Account Created');
-    } else {
-      success(`Welcome back, ${name}. Moving to secure checkout.`, 'Signed In');
-    }
+    success(`Welcome back, ${name}. Moving to secure checkout.`, 'Signed In');
 
     if (authModalConfig?.onSuccess) {
       authModalConfig.onSuccess();
@@ -88,90 +130,115 @@ export const PatronAuthModal: React.FC = () => {
     }
   };
 
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      error('Please enter your email and password.');
-      return;
-    }
-
-    setLoading(true);
+  const initRecaptcha = () => {
     try {
-      const u = await login(email.trim(), password);
-      handleAuthSuccess(u, 'login');
+      if (recaptchaVerifierRef.current) {
+        return recaptchaVerifierRef.current;
+      }
+      const verifier = setupRecaptcha('modal-recaptcha-container', {
+        size: 'invisible'
+      });
+      recaptchaVerifierRef.current = verifier;
+      return verifier;
     } catch (err: any) {
-      error(err.message || 'Authentication failed. Please verify your credentials.');
-    } finally {
-      setLoading(false);
+      console.warn('[PatronAuthModal] Recaptcha note:', err);
+      return null;
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!acceptedTerms) {
-      error('Please accept the Terms & Conditions and Privacy Policy.');
-      return;
-    }
-    if (!fullName.trim() || !email.trim() || !password.trim()) {
-      error('Please complete all required fields.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      error('Passwords do not match.');
-      return;
-    }
-    if (password.length < 6) {
-      error('Password must be at least 6 characters long.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const u = await register(email.trim(), password, fullName.trim());
-      handleAuthSuccess(u, 'register');
-    } catch (err: any) {
-      error(err.message || 'Registration failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // 1. Google Sign-In
   const handleGoogleSignIn = async () => {
-    if (activeTab === 'register' && !acceptedTerms) {
-      error('Please accept the Terms & Conditions and Privacy Policy.');
-      return;
-    }
     setLoading(true);
+    setFormError(null);
     try {
-      const u = await loginWithGoogle();
-      handleAuthSuccess(u, 'google');
+      const u = await loginWithGoogle(false);
+      await handleAuthSuccess(u);
     } catch (err: any) {
-      error(err.message || 'Google sign-in was cancelled or encountered an error.');
+      const msg = err?.message || 'Google Authentication was cancelled or encountered an error.';
+      setFormError(msg);
+      error(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
+  // 2. Mobile Number Step 1: Send OTP
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setFormError(null);
+
+    const cleanDigits = phoneNumber.replace(/\D/g, '');
+    if (!cleanDigits) {
+      setFormError('Please enter your mobile phone number.');
+      return;
+    }
+    if (countryCode === '+91' && cleanDigits.length !== 10) {
+      setFormError('Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    if (cleanDigits.length < 7 || cleanDigits.length > 15) {
+      setFormError('Please enter a valid mobile number.');
+      return;
+    }
+
+    const fullPhoneNumber = `${countryCode}${cleanDigits}`;
+
+    setLoading(true);
+    try {
+      const appVerifier = initRecaptcha();
+      const result = await sendPhoneOtp(fullPhoneNumber, appVerifier);
+      setConfirmationResult(result);
+      setAuthMode('phone_step2');
+      setResendCooldown(30);
+      setOtpCode('');
+      info(`Verification code sent to ${fullPhoneNumber}.`, 'SMS Dispatched');
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to send verification SMS. Please check your mobile number.';
+      setFormError(msg);
+      error(msg);
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {}
+        recaptchaVerifierRef.current = null;
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. Mobile Number Step 2: Verify OTP
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetEmail.trim()) {
-      error('Please enter your email address for password reset.');
+    setFormError(null);
+
+    const cleanCode = otpCode.trim();
+    if (!cleanCode || cleanCode.length < 6) {
+      setFormError('Please enter the full 6-digit OTP code.');
+      return;
+    }
+
+    if (!confirmationResult) {
+      setFormError('Session expired. Please request a new verification code.');
+      setAuthMode('phone_step1');
       return;
     }
 
     setLoading(true);
     try {
-      await sendPasswordReset(resetEmail.trim());
-      info('Password reset instructions have been sent to your email address.', 'Reset Email Sent');
-      setForgotPasswordOpen(false);
+      const user = await verifyPhoneOtp(confirmationResult, cleanCode);
+      await handleAuthSuccess(user);
     } catch (err: any) {
-      error(err.message || 'Could not send password reset email.');
+      const msg = err?.message || 'Incorrect verification code. Please check your SMS and try again.';
+      setFormError(msg);
+      error(msg);
     } finally {
       setLoading(false);
     }
   };
 
   const hasSessionActivity = items.length > 0 || (wishlist && wishlist.length > 0);
+  const fullDisplayPhone = `${countryCode} ${phoneNumber.replace(/\D/g, '')}`;
 
   return (
     <div
@@ -181,55 +248,52 @@ export const PatronAuthModal: React.FC = () => {
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 1050,
         backgroundColor: 'rgba(15, 23, 42, 0.72)',
         backdropFilter: 'blur(5px)',
+        WebkitBackdropFilter: 'blur(5px)',
+        zIndex: 2000,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '1.25rem',
-        overflowY: 'auto'
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) closeAuthModal();
+        padding: '1rem',
+        animation: 'fadeIn 0.2s ease-out'
       }}
     >
       <div
+        className="card auth-modal-card"
         style={{
+          maxWidth: '480px',
           width: '100%',
-          maxWidth: '540px',
-          maxHeight: '92vh',
           backgroundColor: '#ffffff',
-          borderRadius: '18px',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.35)',
-          border: '1.5px solid rgba(201, 162, 39, 0.45)',
-          overflowY: 'auto',
+          borderRadius: '16px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          overflow: 'hidden',
           position: 'relative',
+          maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          animation: 'scaleUpFade 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+          border: '1px solid rgba(201, 162, 39, 0.25)'
         }}
-        onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Close Button */}
+        {/* Close Button */}
         <button
-          type="button"
           onClick={closeAuthModal}
+          type="button"
           aria-label="Close authentication modal"
           style={{
             position: 'absolute',
             top: '16px',
             right: '16px',
-            width: '34px',
-            height: '34px',
+            width: '36px',
+            height: '36px',
             borderRadius: '50%',
-            backgroundColor: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            color: '#64748b',
+            backgroundColor: '#f1f5f9',
+            border: 'none',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
+            color: '#64748b',
             zIndex: 10,
             transition: 'all 0.15s ease'
           }}
@@ -239,12 +303,11 @@ export const PatronAuthModal: React.FC = () => {
 
         {/* Modal Header */}
         <div style={{
-          padding: '2rem 2rem 1.25rem',
+          padding: '1.75rem 1.75rem 0',
           textAlign: 'center',
-          backgroundColor: '#faf8f5',
-          borderBottom: '1px solid #f1ece4'
+          backgroundColor: '#ffffff'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
             <Logo size="md" />
           </div>
 
@@ -260,63 +323,63 @@ export const PatronAuthModal: React.FC = () => {
             fontWeight: 800,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
-            marginBottom: '0.5rem'
+            marginBottom: '0.4rem'
           }}>
             <Sparkles size={12} />
             <span>Patron Privilege Checkout</span>
           </div>
 
           <h2 style={{
-            fontSize: '1.45rem',
+            fontSize: '1.35rem',
             fontFamily: 'var(--font-heading)',
-            color: '#0f172a',
-            margin: '0 0 0.4rem 0',
+            color: 'var(--brand-primary, #10182d)',
+            margin: '0 0 0.35rem 0',
             fontWeight: 800
           }}>
-            Sign In to Complete Your Order
+            Sign in to MUETY
           </h2>
 
           <p style={{
             fontSize: '0.86rem',
             color: '#64748b',
             margin: 0,
-            lineHeight: 1.5
+            lineHeight: 1.45
           }}>
-            {authModalConfig?.message || 'Please sign in or register to secure your handloom reservation and proceed to checkout.'}
+            {authModalConfig?.message || 'Access your orders, wishlist and account.'}
           </p>
         </div>
 
-        {/* BEFORE-LOGIN ACTIVITIES OF THE MUETY SESSION */}
+        {/* Active Session Mini Preview */}
         {hasSessionActivity && (
           <div style={{
-            margin: '1.25rem 1.75rem 0',
-            padding: '1rem 1.15rem',
-            borderRadius: '12px',
+            margin: '1rem 1.75rem 0',
+            padding: '0.85rem 1rem',
+            borderRadius: '10px',
             backgroundColor: '#fffdf7',
             border: '1.5px solid rgba(201, 162, 39, 0.35)',
-            boxShadow: '0 2px 8px rgba(201, 162, 39, 0.06)'
+            boxShadow: '0 2px 6px rgba(201, 162, 39, 0.06)'
           }}>
             <div style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: '0.65rem'
+              marginBottom: '0.4rem'
             }}>
               <span style={{
-                fontSize: '0.78rem',
+                fontSize: '0.74rem',
                 fontWeight: 800,
                 textTransform: 'uppercase',
-                letterSpacing: '0.07em',
+                letterSpacing: '0.06em',
                 color: '#b38a1b',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                gap: '5px'
               }}>
-                <ShoppingBag size={14} />
-                Your Active Atelier Session
+                <ShoppingBag size={13} />
+                Active Atelier Reservation
               </span>
               <span style={{
-                fontSize: '0.88rem',
+                fontSize: '0.86rem',
                 fontWeight: 800,
                 color: '#0f172a'
               }}>
@@ -324,467 +387,368 @@ export const PatronAuthModal: React.FC = () => {
               </span>
             </div>
 
-            {/* Mini preview of cart items */}
             {items.length > 0 && (
-              <div style={{
-                display: 'flex',
-                gap: '8px',
-                overflowX: 'auto',
-                paddingBottom: '6px',
-                marginBottom: '6px'
-              }}>
-                {items.slice(0, 3).map((item, idx) => {
-                  const img = (item.product?.images && item.product.images[0]) || '/saree_model_individual.jpg';
-                  return (
-                    <div
-                      key={item.product?.id || idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        backgroundColor: '#ffffff',
-                        border: '1px solid #e7e2dc',
-                        borderRadius: '8px',
-                        padding: '4px 8px 4px 4px',
-                        minWidth: '170px',
-                        flexShrink: 0
-                      }}
-                    >
-                      <img
-                        src={img}
-                        alt={item.product?.name || 'Saree'}
-                        style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '6px',
-                          objectFit: 'cover'
-                        }}
-                      />
-                      <div style={{ overflow: 'hidden' }}>
-                        <div style={{
-                          fontSize: '0.78rem',
-                          fontWeight: 700,
-                          color: '#1e293b',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          maxWidth: '120px'
-                        }}>
-                          {item.product?.name}
-                        </div>
-                        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                          Qty: {item.quantity} • {item.selectedColor || 'Classic'}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {items.length > 3 && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 8px',
-                    fontSize: '0.74rem',
-                    fontWeight: 700,
-                    color: '#64748b',
-                    backgroundColor: '#f1f5f9',
-                    borderRadius: '8px'
-                  }}>
-                    +{items.length - 3} more
-                  </div>
-                )}
+              <div style={{ fontSize: '0.78rem', color: '#475569' }}>
+                {items.length} handloom{items.length > 1 ? 's' : ''} reserved in your bag.
               </div>
             )}
-
-            {/* Badges: Applied Promo, Wishlist, Insured Courier */}
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '6px',
-              fontSize: '0.72rem',
-              color: '#475569',
-              marginTop: '4px'
-            }}>
-              {appliedCoupon && (
-                <span style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  backgroundColor: '#ecfdf5',
-                  color: '#065f46',
-                  padding: '2px 7px',
-                  borderRadius: '4px',
-                  fontWeight: 700
-                }}>
-                  <Tag size={11} /> Promo "{appliedCoupon.code}" Active
-                </span>
-              )}
-
-              {wishlist && wishlist.length > 0 && (
-                <span style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  backgroundColor: '#fdf2f8',
-                  color: '#9d174d',
-                  padding: '2px 7px',
-                  borderRadius: '4px',
-                  fontWeight: 600
-                }}>
-                  <Heart size={11} /> {wishlist.length} in Wishlist
-                </span>
-              )}
-
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                backgroundColor: '#ecfdf5',
-                color: '#065f46',
-                padding: '2px 7px',
-                borderRadius: '4px',
-                fontWeight: 600
-              }}>
-                <Truck size={11} /> FREE Pan-India Delivery (Online)
-              </span>
-            </div>
-
-            <p style={{
-              fontSize: '0.72rem',
-              color: '#64748b',
-              margin: '6px 0 0',
-              fontStyle: 'italic'
-            }}>
-              ✨ All active bag items, discounts, and preferences will be seamlessly bound to your account upon signing in.
-            </p>
           </div>
         )}
 
-        {/* Modal Body / Tab Switcher */}
-        <div style={{ padding: '1.25rem 1.75rem 2rem' }}>
-          {!forgotPasswordOpen ? (
-            <>
-              {/* Tab Selector */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                backgroundColor: '#f1f5f9',
-                borderRadius: '10px',
-                padding: '4px',
-                marginBottom: '1.25rem'
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('signin')}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontWeight: 700,
-                    fontSize: '0.86rem',
-                    cursor: 'pointer',
-                    backgroundColor: activeTab === 'signin' ? '#ffffff' : 'transparent',
-                    color: activeTab === 'signin' ? '#0f172a' : '#64748b',
-                    boxShadow: activeTab === 'signin' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  Sign In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('register')}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontWeight: 700,
-                    fontSize: '0.86rem',
-                    cursor: 'pointer',
-                    backgroundColor: activeTab === 'register' ? '#ffffff' : 'transparent',
-                    color: activeTab === 'register' ? '#0f172a' : '#64748b',
-                    boxShadow: activeTab === 'register' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  Create Account
-                </button>
-              </div>
+        {/* Modal Form Body */}
+        <div style={{ padding: '1.25rem 1.75rem 1.75rem', overflowY: 'auto' }}>
+          {formError && (
+            <div 
+              style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: '#fef2f2',
+                color: '#b91c1c',
+                border: '1px solid #fecaca',
+                borderRadius: '8px',
+                fontSize: '0.84rem',
+                marginBottom: '1rem',
+                lineHeight: 1.4
+              }}
+              role="alert"
+            >
+              {formError}
+            </div>
+          )}
 
-              {/* Form 1: Sign In */}
-              {activeTab === 'signin' ? (
-                <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: '5px' }}>
-                      Email Address
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="patron@example.com"
-                        className="form-input"
-                        style={{ paddingLeft: '2.5rem', height: '44px', fontSize: '0.9rem' }}
-                      />
-                      <Mail size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                    </div>
-                  </div>
-
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                      <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>
-                        Password
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setForgotPasswordOpen(true)}
-                        style={{ background: 'none', border: 'none', color: '#c9a227', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', padding: 0 }}
-                      >
-                        Forgot?
-                      </button>
-                    </div>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="form-input"
-                        style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem', height: '44px', fontSize: '0.9rem' }}
-                      />
-                      <Lock size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
-                      >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="btn btn-primary"
-                    style={{
-                      width: '100%',
-                      height: '46px',
-                      fontWeight: 700,
-                      fontSize: '0.92rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      marginTop: '0.25rem'
-                    }}
-                  >
-                    <span>{loading ? 'Authenticating...' : 'Sign In & Proceed to Checkout'}</span>
-                    <ArrowRight size={16} />
-                  </button>
-                </form>
-              ) : (
-                /* Form 2: New Patron Registration */
-                <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: '4px' }}>
-                      Full Name
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type="text"
-                        required
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="e.g. Priyadharshini"
-                        className="form-input"
-                        style={{ paddingLeft: '2.5rem', height: '42px', fontSize: '0.9rem' }}
-                      />
-                      <User size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                    </div>
-                  </div>
-
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: '4px' }}>
-                      Email Address
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="patron@example.com"
-                        className="form-input"
-                        style={{ paddingLeft: '2.5rem', height: '42px', fontSize: '0.9rem' }}
-                      />
-                      <Mail size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: '4px' }}>
-                        Password
-                      </label>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••"
-                        className="form-input"
-                        style={{ height: '42px', fontSize: '0.9rem' }}
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: '4px' }}>
-                        Confirm
-                      </label>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="••••••"
-                        className="form-input"
-                        style={{ height: '42px', fontSize: '0.9rem' }}
-                      />
-                    </div>
-                  </div>
-
-                  <label style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '8px',
-                    fontSize: '0.78rem',
-                    color: '#64748b',
-                    cursor: 'pointer',
-                    marginTop: '2px'
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={acceptedTerms}
-                      onChange={(e) => setAcceptedTerms(e.target.checked)}
-                      style={{ marginTop: '3px' }}
-                    />
-                    <span>
-                      I accept the MUETY Terms & Conditions and Privacy Policy.
-                    </span>
-                  </label>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="btn btn-accent"
-                    style={{
-                      width: '100%',
-                      height: '46px',
-                      fontWeight: 700,
-                      fontSize: '0.92rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      marginTop: '0.25rem'
-                    }}
-                  >
-                    <span>{loading ? 'Creating Account...' : 'Create Account & Proceed'}</span>
-                    <ArrowRight size={16} />
-                  </button>
-                </form>
-              )}
-
-              {/* Google Sign In Divider */}
-              <div style={{ display: 'flex', alignItems: 'center', margin: '1.15rem 0', color: '#94a3b8' }}>
-                <div style={{ flex: 1, borderBottom: '1px solid #e2e8f0' }} />
-                <span style={{ fontSize: '0.74rem', padding: '0 10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>or</span>
-                <div style={{ flex: 1, borderBottom: '1px solid #e2e8f0' }} />
-              </div>
-
-              <button
-                type="button"
+          {/* STATE 1: PRIMARY OPTIONS */}
+          {authMode === 'choices' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <button 
                 onClick={handleGoogleSignIn}
                 disabled={loading}
-                className="btn btn-outline"
-                style={{
-                  width: '100%',
-                  height: '44px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  fontSize: '0.88rem'
+                type="button"
+                className="btn btn-primary"
+                style={{ 
+                  width: '100%', 
+                  height: '48px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '12px',
+                  backgroundColor: 'var(--brand-primary, #10182d)',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.94rem',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
                 }}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24">
+                <svg width="20" height="20" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
                 </svg>
-                <span>Continue with Google</span>
+                <span>{loading ? 'Connecting with Google...' : 'Continue with Google'}</span>
               </button>
-            </>
-          ) : (
-            /* Forgot Password Sub-View */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}>
-                <KeyRound size={20} color="#c9a227" />
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0 }}>Reset Password</h3>
+
+              <div style={{ display: 'flex', alignItems: 'center', margin: '0.4rem 0', color: '#94a3b8' }}>
+                <div style={{ flex: 1, borderBottom: '1px solid #e2e8f0' }} />
+                <span style={{ fontSize: '0.74rem', padding: '0 10px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>OR</span>
+                <div style={{ flex: 1, borderBottom: '1px solid #e2e8f0' }} />
               </div>
-              <p style={{ fontSize: '0.84rem', color: '#64748b', margin: 0 }}>
-                Enter your registered email address and we will dispatch password reset instructions.
-              </p>
-              <form onSubmit={handleForgotPassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <input
-                  type="email"
-                  required
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="your.email@example.com"
-                  className="form-input"
-                  style={{ height: '44px' }}
-                />
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                  <button
-                    type="button"
-                    onClick={() => setForgotPasswordOpen(false)}
-                    className="btn btn-outline btn-sm"
-                  >
-                    Back to Sign In
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="btn btn-primary btn-sm"
-                  >
-                    Send Reset Link
-                  </button>
-                </div>
-              </form>
+
+              <button 
+                onClick={() => {
+                  setAuthMode('phone_step1');
+                  setFormError(null);
+                }}
+                disabled={loading}
+                type="button"
+                className="btn btn-outline"
+                style={{ 
+                  width: '100%', 
+                  height: '48px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '10px',
+                  backgroundColor: '#ffffff',
+                  border: '1.5px solid #cbd5e1',
+                  color: 'var(--brand-primary, #10182d)',
+                  fontWeight: 700,
+                  fontSize: '0.94rem',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                <Smartphone size={18} color="var(--brand-accent, #c9a227)" />
+                <span>Continue with mobile number</span>
+              </button>
             </div>
           )}
 
-          {/* Secure Patron Trust Footer */}
+          {/* STATE 2: ENTER MOBILE NUMBER */}
+          {authMode === 'phone_step1' && (
+            <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--brand-primary, #10182d)', display: 'block', marginBottom: '6px' }}>
+                  Mobile Phone Number
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <select
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                    style={{
+                      width: '115px',
+                      height: '46px',
+                      borderRadius: '8px',
+                      border: '1.5px solid #cbd5e1',
+                      backgroundColor: '#f8fafc',
+                      padding: '0 6px',
+                      fontSize: '0.88rem',
+                      fontWeight: 700,
+                      color: 'var(--brand-primary, #10182d)'
+                    }}
+                  >
+                    {COUNTRY_CODES.map((c) => (
+                      <option key={c.code + c.country} value={c.code}>
+                        {c.flag} {c.code}
+                      </option>
+                    ))}
+                  </select>
+
+                  <input
+                    type="tel"
+                    required
+                    autoFocus
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value.replace(/[^\d\s-]/g, ''))}
+                    placeholder={countryCode === '+91' ? '98765 43210' : 'Mobile number'}
+                    style={{
+                      flex: 1,
+                      height: '46px',
+                      borderRadius: '8px',
+                      border: '1.5px solid #cbd5e1',
+                      padding: '0 12px',
+                      fontSize: '0.96rem',
+                      fontWeight: 600,
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={loading || !phoneNumber.trim()}
+                className="btn btn-primary"
+                style={{ 
+                  width: '100%', 
+                  height: '46px', 
+                  backgroundColor: 'var(--brand-primary, #10182d)', 
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.94rem',
+                  borderRadius: '8px'
+                }}
+              >
+                {loading ? 'Sending Verification Code...' : 'Send Verification Code'} <ArrowRight size={15} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('choices');
+                  setFormError(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#64748b',
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  padding: '2px'
+                }}
+              >
+                <ArrowLeft size={13} /> Back to Google Sign-In
+              </button>
+            </form>
+          )}
+
+          {/* STATE 3: ENTER OTP */}
+          {authMode === 'phone_step2' && (
+            <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ backgroundColor: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block' }}>Code Sent To</span>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a' }}>{fullDisplayPhone}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('phone_step1');
+                    setOtpCode('');
+                    setFormError(null);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#c9a227',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Edit3 size={13} /> Edit
+                </button>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--brand-primary, #10182d)', display: 'block', marginBottom: '6px' }}>
+                  Enter 6-Digit OTP Code
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="• • • • • •"
+                  style={{
+                    width: '100%',
+                    height: '48px',
+                    borderRadius: '8px',
+                    border: '2px solid var(--brand-accent, #c9a227)',
+                    padding: '0 12px',
+                    fontSize: '1.3rem',
+                    fontWeight: 800,
+                    letterSpacing: '0.4em',
+                    textAlign: 'center',
+                    color: '#0f172a',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={loading || otpCode.length !== 6}
+                className="btn btn-primary"
+                style={{ 
+                  width: '100%', 
+                  height: '46px', 
+                  backgroundColor: 'var(--brand-primary, #10182d)', 
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.94rem',
+                  borderRadius: '8px'
+                }}
+              >
+                {loading ? 'Verifying Code...' : 'Verify & Proceed'} <CheckCircle2 size={15} />
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                <span style={{ color: '#64748b' }}>Didn't receive code?</span>
+                {resendCooldown > 0 ? (
+                  <span style={{ color: '#64748b', fontWeight: 600 }}>Resend in {resendCooldown}s</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSendOtp()}
+                    disabled={loading}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#c9a227',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: 0
+                    }}
+                  >
+                    <RotateCcw size={12} /> Resend OTP
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+
+          {/* TASK 3: OPTIONAL PATRON CIRCLE OPT-IN CHECKBOX */}
+          <div 
+            style={{
+              marginTop: '1.25rem',
+              paddingTop: '1rem',
+              borderTop: '1px solid #f1f5f9',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px'
+            }}
+          >
+            <input 
+              type="checkbox"
+              id="modal-patron-circle-opt-in"
+              checked={patronCircleOptIn}
+              onChange={(e) => setPatronCircleOptIn(e.target.checked)}
+              style={{ 
+                marginTop: '3px', 
+                cursor: 'pointer', 
+                accentColor: 'var(--brand-accent, #c9a227)',
+                width: '15px',
+                height: '15px'
+              }}
+            />
+            <label 
+              htmlFor="modal-patron-circle-opt-in"
+              style={{ 
+                fontSize: '0.8rem', 
+                color: 'var(--brand-primary, #10182d)', 
+                lineHeight: 1.45, 
+                cursor: 'pointer' 
+              }}
+            >
+              Yes, I'd like to join the MUETY Patron Circle and receive exclusive collection previews, bridal updates and invitations.
+            </label>
+          </div>
+
+          {/* Terms & Privacy */}
+          <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+            <p style={{ fontSize: '0.74rem', color: '#64748b', margin: 0 }}>
+              By continuing, you acknowledge MUETY's{' '}
+              <Link to="/terms-conditions" target="_blank" style={{ color: '#c9a227', textDecoration: 'underline', fontWeight: 600 }}>
+                Terms & Conditions
+              </Link>{' '}
+              and{' '}
+              <Link to="/privacy-policy" target="_blank" style={{ color: '#c9a227', textDecoration: 'underline', fontWeight: 600 }}>
+                Privacy Policy
+              </Link>.
+            </p>
+          </div>
+
+          {/* Security badge */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '8px',
-            marginTop: '1.25rem',
-            paddingTop: '1rem',
+            gap: '6px',
+            marginTop: '1rem',
+            paddingTop: '0.75rem',
             borderTop: '1px solid #f1f5f9',
-            fontSize: '0.78rem',
+            fontSize: '0.74rem',
             color: '#64748b'
           }}>
-            <ShieldCheck size={15} color="#10b981" />
+            <ShieldCheck size={14} color="#10b981" />
             <span>256-Bit Encrypted Patron Session Vault</span>
           </div>
+
+          <div id="modal-recaptcha-container" style={{ display: 'none' }} />
         </div>
       </div>
     </div>

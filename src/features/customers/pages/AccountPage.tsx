@@ -14,19 +14,26 @@ import {
   MapPin, 
   User, 
   LogOut, 
-  ExternalLink,
-  ShieldCheck,
-  Star,
-  X,
-  Camera,
-  Upload,
-  Image as ImageIcon,
-  Plus,
-  Edit2,
-  Trash2,
-  CheckCircle2,
-  Home,
-  Briefcase
+  ExternalLink, 
+  ShieldCheck, 
+  Star, 
+  X, 
+  Camera, 
+  Upload, 
+  Image as ImageIcon, 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  CheckCircle2, 
+  Home, 
+  Briefcase,
+  Settings,
+  Link2,
+  ChevronRight,
+  AlertCircle,
+  Phone,
+  Sparkles,
+  Lock
 } from 'lucide-react';
 import { uploadToCloudinary } from '@/lib/media/cloudinary';
 import { Order, Product } from '@/types';
@@ -37,13 +44,30 @@ import {
   isValidPhone 
 } from '@/features/customers/services/customerAddressService';
 import { Address } from '@/shared/types';
+import { isGeneratedPatronName } from '@/features/auth/services/authService';
 
 export const AccountPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentTab = searchParams.get('tab') || 'orders';
+  const currentTab = searchParams.get('tab') || 'overview';
 
-  useDocumentTitle(currentTab === 'orders' ? 'My Orders' : 'Customer Account');
-  const { user, isAuthenticated, logout } = useAuth();
+  useDocumentTitle(
+    currentTab === 'orders' ? 'My Orders — MUETY' :
+    currentTab === 'address' ? 'Delivery Addresses — MUETY' :
+    currentTab === 'profile' ? 'Profile Settings — MUETY' :
+    currentTab === 'connected' ? 'Connected Accounts — MUETY' :
+    'Account Dashboard — MUETY'
+  );
+  const { 
+    user, 
+    isAuthenticated, 
+    logout, 
+    updateCustomerProfile, 
+    linkGoogleAccount, 
+    sendPhoneLinkOtp, 
+    verifyPhoneLinkOtp, 
+    setupRecaptcha, 
+    getConnectedStatus 
+  } = useAuth();
   const { wishlist } = useCart();
   const { success, warning } = useNotification();
   const navigate = useNavigate();
@@ -76,9 +100,48 @@ export const AccountPage: React.FC = () => {
   const [addrIsDefault, setAddrIsDefault] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
 
-  // Profile edit state
-  const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const hasGenuineName = Boolean(user?.displayName && !isGeneratedPatronName(user.displayName));
+
+  // Profile edit state - If user has a generated fallback name like "Patron (1540)", initialize with empty string
+  const [displayName, setDisplayName] = useState(() => 
+    user?.displayName && !isGeneratedPatronName(user.displayName) ? user.displayName : ''
+  );
   const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      if (user.displayName && !isGeneratedPatronName(user.displayName)) {
+        setDisplayName(user.displayName);
+      } else {
+        setDisplayName('');
+      }
+      if (user.phoneNumber) setPhoneNumber(user.phoneNumber);
+    }
+  }, [user?.displayName, user?.phoneNumber]);
+
+  // Connected accounts state
+  const connectedStatus = getConnectedStatus(user);
+  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
+  const [linkPhoneCode, setLinkPhoneCode] = useState('+91');
+  const [linkPhoneNumber, setLinkPhoneNumber] = useState('');
+  const [linkPhoneOtp, setLinkPhoneOtp] = useState('');
+  const [phoneConfirmationResult, setPhoneConfirmationResult] = useState<any>(null);
+  const [isSendingPhoneOtp, setIsSendingPhoneOtp] = useState(false);
+  const [isVerifyingPhoneOtp, setIsVerifyingPhoneOtp] = useState(false);
+  const [phoneLinkStep, setPhoneLinkStep] = useState<'phone' | 'otp'>('phone');
+  const [phoneLinkCooldown, setPhoneLinkCooldown] = useState(0);
+  const [phoneLinkError, setPhoneLinkError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (phoneLinkCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setPhoneLinkCooldown(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [phoneLinkCooldown]);
 
   // Review submission modal state
   const [reviewModalItem, setReviewModalItem] = useState<{
@@ -97,7 +160,7 @@ export const AccountPage: React.FC = () => {
 
   const handleOpenReviewModal = (ord: Order, prod: Product) => {
     setReviewModalItem({
-      orderId: ord.id,
+      orderId: ord.orderNumber || ord.id,
       product: prod,
       city: ord.shippingAddress?.city || 'Salem',
       country: ord.shippingAddress?.country || 'India'
@@ -200,7 +263,15 @@ export const AccountPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!user) return;
+    // Fetch wishlist products (available for both guest and authenticated customers)
+    const allProds = productService.getAllProducts();
+    const savedProds = allProds.filter(p => wishlist.includes(p.id));
+    setWishlistProducts(savedProds);
+
+    if (!user) {
+      setOrders([]);
+      return;
+    }
 
     // Real-time subscription to customer orders (matches both user.uid and user.email)
     const unsubscribe = orderService.subscribeToCustomerOrders(
@@ -211,11 +282,6 @@ export const AccountPage: React.FC = () => {
       undefined,
       user.email || undefined
     );
-
-    // Fetch wishlist products
-    const allProds = productService.getAllProducts();
-    const savedProds = allProds.filter(p => wishlist.includes(p.id));
-    setWishlistProducts(savedProds);
 
     return () => {
       unsubscribe();
@@ -332,78 +398,658 @@ export const AccountPage: React.FC = () => {
     setSearchParams({ tab });
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
-    success('MUETY profile details updated successfully.', 'Profile Updated');
+    if (!user) {
+      navigate('/login?redirect=/account?tab=profile');
+      return;
+    }
+    setProfileError(null);
+
+    const trimmedName = displayName.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      const err = 'Please enter a valid full name (minimum 2 characters).';
+      setProfileError(err);
+      warning(err, 'Invalid Name');
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      await updateCustomerProfile({
+        displayName: trimmedName,
+        phoneNumber: phoneNumber.trim() || undefined
+      });
+      success('MUETY profile details updated successfully.', 'Profile Updated');
+    } catch (err: any) {
+      console.error('Failed to update profile:', err);
+      const msg = err?.message || 'Failed to update profile. Please try again.';
+      setProfileError(msg);
+      warning(msg, 'Update Failed');
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
-  if (!isAuthenticated || !user) {
-    return (
-      <div className="account-unauth-view container" style={{ padding: 'clamp(2.5rem, 6vw, 5rem) 1rem', textAlign: 'center', boxSizing: 'border-box' }}>
-        <div className="card account-unauth-card" style={{ maxWidth: '440px', width: '100%', margin: '0 auto', padding: 'clamp(2rem, 5vw, 3rem) clamp(1.25rem, 4vw, 2rem)', boxSizing: 'border-box' }}>
-          <User size={48} color="var(--brand-accent)" style={{ margin: '0 auto 1rem' }} />
-          <h2 style={{ fontSize: 'clamp(1.35rem, 4vw, 1.6rem)', marginBottom: '0.75rem', wordBreak: 'break-word' }}>Sign In to Your MUETY Account</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '2rem' }}>
-            Access your order history, live tracking, and personalized wishlist.
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-            <Link to="/login" className="btn btn-primary" style={{ width: '100%', boxSizing: 'border-box' }}>Sign In</Link>
-            <Link to="/register" className="btn btn-secondary" style={{ width: '100%', boxSizing: 'border-box' }}>Create Account</Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleConnectGoogle = async () => {
+    if (!user) return;
+    setIsLinkingGoogle(true);
+    try {
+      await linkGoogleAccount(false);
+      success('Google account connected successfully to your MUETY profile.', 'Google Linked');
+    } catch (err: any) {
+      console.warn('Google link note:', err);
+      warning(err.message || 'Failed to connect Google account.', 'Linking Failed');
+    } finally {
+      setIsLinkingGoogle(false);
+    }
+  };
+
+  const handleOpenPhoneLinkModal = () => {
+    setLinkPhoneCode('+91');
+    setLinkPhoneNumber('');
+    setLinkPhoneOtp('');
+    setPhoneConfirmationResult(null);
+    setPhoneLinkStep('phone');
+    setPhoneLinkCooldown(0);
+    setPhoneLinkError(null);
+    setIsPhoneModalOpen(true);
+  };
+
+  const handleSendPhoneLinkOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPhoneLinkError(null);
+
+    const cleanNumber = linkPhoneNumber.replace(/\D/g, '');
+    if (!cleanNumber || cleanNumber.length < 10) {
+      setPhoneLinkError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    const fullPhone = `${linkPhoneCode}${cleanNumber}`;
+    setIsSendingPhoneOtp(true);
+
+    try {
+      const verifier = setupRecaptcha('phone-link-recaptcha', { size: 'invisible' });
+      const confirmationResult = await sendPhoneLinkOtp(fullPhone, verifier);
+      setPhoneConfirmationResult(confirmationResult);
+      setPhoneLinkStep('otp');
+      setPhoneLinkCooldown(30);
+      success(`Verification OTP dispatched to ${fullPhone}`, 'OTP Sent');
+    } catch (err: any) {
+      console.warn('Phone link OTP error:', err);
+      setPhoneLinkError(err.message || 'Failed to send OTP code. Please try again.');
+    } finally {
+      setIsSendingPhoneOtp(false);
+    }
+  };
+
+  const handleVerifyPhoneLinkOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneConfirmationResult) {
+      setPhoneLinkError('Session expired. Please request a new verification code.');
+      return;
+    }
+
+    const cleanOtp = linkPhoneOtp.trim();
+    if (!cleanOtp || cleanOtp.length < 6) {
+      setPhoneLinkError('Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    setIsVerifyingPhoneOtp(true);
+    setPhoneLinkError(null);
+
+    try {
+      const cleanNumber = linkPhoneNumber.replace(/\D/g, '');
+      const fullPhone = `${linkPhoneCode}${cleanNumber}`;
+      await verifyPhoneLinkOtp(phoneConfirmationResult, cleanOtp, fullPhone);
+      success('Mobile phone number verified and linked securely.', 'Phone Linked');
+      setIsPhoneModalOpen(false);
+    } catch (err: any) {
+      console.warn('Verify phone link error:', err);
+      setPhoneLinkError(err.message || 'Invalid or expired OTP code.');
+    } finally {
+      setIsVerifyingPhoneOtp(false);
+    }
+  };
 
   return (
     <div className="account-page animate-fade-in" style={{ paddingBottom: 'calc(var(--bottom-safe-clearance, 78px) + 2rem)', minHeight: '80vh', width: '100%', boxSizing: 'border-box' }}>
-      {/* Account Hero Banner */}
-      <div className="account-hero-banner">
+      {/* 1. Compact Clean Account Page Header (No oversized welcome banner) */}
+      <div className="account-page-header">
         <div className="container">
-          <div className="account-hero-content">
-            <div style={{ minWidth: 0, flex: '1 1 280px' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.12em', color: '#d4af37', textTransform: 'uppercase' }}>
-                MUETY PATRON PORTAL
+          <div className="account-header-inner">
+            <div className="account-header-title-group">
+              <span style={{ fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.12em', color: '#c9a227', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
+                MUETY PATRON SERVICES
               </span>
-              <h1 style={{ color: '#ffffff', fontSize: 'clamp(1.5rem, 4vw, 2.2rem)', marginTop: '4px', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                Welcome back, {user.displayName}
-              </h1>
-              <p style={{ color: '#94a3b8', fontSize: '0.92rem', wordBreak: 'break-word', overflowWrap: 'break-word', marginTop: '4px' }}>
-                {user.email} • Client Tier: <strong>MUETY Atelier Club</strong>
-              </p>
+              <h1>My Account</h1>
+            </div>
+
+            <div className="account-header-meta-pill">
+              {isAuthenticated && user ? (
+                <>
+                  <User size={14} color="#c9a227" />
+                  <span>{hasGenuineName ? user.displayName : (connectedStatus.maskedPhone || user.phoneNumber || user.email || 'Patron Account')}</span>
+                </>
+              ) : (
+                <>
+                  <User size={14} color="#94a3b8" />
+                  <span>Guest Patron</span>
+                  <span style={{ color: '#cbd5e1' }}>•</span>
+                  <Link to="/login?redirect=/account" style={{ color: '#c9a227', fontWeight: 700, textDecoration: 'none' }}>
+                    Sign In
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="container" style={{ marginTop: '1.5rem', width: '100%', boxSizing: 'border-box' }}>
-        {/* Account Nav Tabs */}
-        <div className="account-tabs-wrapper">
-          {[
-            { id: 'orders', label: `My Orders (${orders.length})`, icon: Package },
-            { id: 'address', label: 'Delivery Addresses', icon: MapPin },
-            { id: 'profile', label: 'Profile Settings', icon: User }
-          ].map(tab => {
-            const IconComp = tab.icon;
-            const isActive = currentTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`account-tab-btn ${isActive ? 'active' : ''}`}
-              >
-                <IconComp size={18} color={isActive ? 'var(--brand-accent)' : 'currentColor'} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+      <div className="container">
+        {/* Tablet & Mobile Horizontal Navigation Bar (Visible only on < 992px) */}
+        <div className="account-mobile-tabs">
+          <button
+            type="button"
+            onClick={() => handleTabChange('profile')}
+            className={`account-mobile-tab-btn ${currentTab === 'profile' ? 'active' : ''}`}
+          >
+            <User size={15} />
+            <span>Profile</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange('orders')}
+            className={`account-mobile-tab-btn ${currentTab === 'orders' ? 'active' : ''}`}
+          >
+            <Package size={15} />
+            <span>My Orders {isAuthenticated ? `(${orders.length})` : ''}</span>
+            {!isAuthenticated && <Lock size={12} color="#94a3b8" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange('address')}
+            className={`account-mobile-tab-btn ${currentTab === 'address' ? 'active' : ''}`}
+          >
+            <MapPin size={15} />
+            <span>Saved Addresses {isAuthenticated ? `(${addresses.length})` : ''}</span>
+            {!isAuthenticated && <Lock size={12} color="#94a3b8" />}
+          </button>
+
+          <Link
+            to="/wishlist"
+            className="account-mobile-tab-btn"
+          >
+            <Heart size={15} />
+            <span>My Wishlist ({wishlist.length})</span>
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange('connected')}
+            className={`account-mobile-tab-btn ${currentTab === 'connected' ? 'active' : ''}`}
+          >
+            <Link2 size={15} />
+            <span>Connected Accounts</span>
+            {!isAuthenticated && <Lock size={12} color="#94a3b8" />}
+          </button>
+
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={() => logout()}
+              className="account-mobile-tab-btn"
+              style={{ color: '#b91c1c', borderColor: '#fecaca' }}
+            >
+              <LogOut size={15} />
+              <span>Sign Out</span>
+            </button>
+          ) : (
+            <Link
+              to="/login?redirect=/account"
+              className="account-mobile-tab-btn"
+              style={{ backgroundColor: '#faf5ea', color: '#92400e', borderColor: '#fde68a' }}
+            >
+              <User size={15} />
+              <span>Sign In</span>
+            </Link>
+          )}
         </div>
+
+        {/* Two-Column Desktop Layout */}
+        <div className="account-layout-grid">
+          {/* Left Column: Dedicated Account Navigation Sidebar (~260px) */}
+          <aside className="account-sidebar" aria-label="Account Navigation Sidebar">
+            {/* User Mini Card */}
+            <div className="account-sidebar-user">
+              <div className="account-sidebar-avatar">
+                {isAuthenticated && hasGenuineName && user?.displayName ? (
+                  user.displayName.charAt(0).toUpperCase()
+                ) : (
+                  <User size={20} color="var(--brand-accent)" />
+                )}
+              </div>
+              <div className="account-sidebar-user-info">
+                <h4 className="account-sidebar-user-name" title={isAuthenticated && hasGenuineName && user?.displayName ? user.displayName : (isAuthenticated ? 'Patron Account' : 'Guest')}>
+                  {isAuthenticated && hasGenuineName && user?.displayName ? user.displayName : (isAuthenticated ? 'Patron Account' : 'Guest')}
+                </h4>
+                <p className="account-sidebar-user-sub">
+                  {isAuthenticated ? (
+                    connectedStatus.maskedPhone || user?.phoneNumber || user?.email || 'Valued Patron'
+                  ) : (
+                    'Guest Patron'
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {!isAuthenticated && (
+              <div style={{ marginBottom: '1rem', padding: '0 4px' }}>
+                <Link
+                  to="/login?redirect=/account"
+                  className="btn btn-primary btn-sm"
+                  style={{ width: '100%', justifyContent: 'center', fontWeight: 700, fontSize: '0.82rem' }}
+                >
+                  Sign In / Register
+                </Link>
+              </div>
+            )}
+
+            {/* Sidebar Navigation Items in exact specified order:
+                1. Profile
+                2. My Orders
+                3. Saved Addresses
+                4. My Wishlist
+                5. Connected Accounts
+                6. Sign Out
+            */}
+            <nav className="account-sidebar-nav" aria-label="Account Navigation">
+              {/* 1. Profile */}
+              <button
+                type="button"
+                onClick={() => handleTabChange('profile')}
+                className={`account-sidebar-item ${currentTab === 'profile' ? 'active' : ''}`}
+              >
+                <div className="account-sidebar-item-left">
+                  <User size={18} />
+                  <span>Profile</span>
+                </div>
+                <ChevronRight size={14} color="var(--brand-muted)" />
+              </button>
+
+              {/* 2. My Orders */}
+              <button
+                type="button"
+                onClick={() => handleTabChange('orders')}
+                className={`account-sidebar-item ${currentTab === 'orders' ? 'active' : ''}`}
+              >
+                <div className="account-sidebar-item-left">
+                  <Package size={18} />
+                  <span>My Orders</span>
+                </div>
+                {isAuthenticated ? (
+                  <span className="account-sidebar-badge">{orders.length}</span>
+                ) : (
+                  <Lock size={13} color="#94a3b8" />
+                )}
+              </button>
+
+              {/* 3. Saved Addresses */}
+              <button
+                type="button"
+                onClick={() => handleTabChange('address')}
+                className={`account-sidebar-item ${currentTab === 'address' ? 'active' : ''}`}
+              >
+                <div className="account-sidebar-item-left">
+                  <MapPin size={18} />
+                  <span>Saved Addresses</span>
+                </div>
+                {isAuthenticated ? (
+                  <span className="account-sidebar-badge">{addresses.length}</span>
+                ) : (
+                  <Lock size={13} color="#94a3b8" />
+                )}
+              </button>
+
+              {/* 4. My Wishlist */}
+              <Link
+                to="/wishlist"
+                className="account-sidebar-item"
+              >
+                <div className="account-sidebar-item-left">
+                  <Heart size={18} />
+                  <span>My Wishlist</span>
+                </div>
+                {wishlist.length > 0 && (
+                  <span className="account-sidebar-badge">{wishlist.length}</span>
+                )}
+              </Link>
+
+              {/* 5. Connected Accounts */}
+              <button
+                type="button"
+                onClick={() => handleTabChange('connected')}
+                className={`account-sidebar-item ${currentTab === 'connected' ? 'active' : ''}`}
+              >
+                <div className="account-sidebar-item-left">
+                  <Link2 size={18} />
+                  <span>Connected Accounts</span>
+                </div>
+                {!isAuthenticated && (
+                  <Lock size={13} color="#94a3b8" />
+                )}
+              </button>
+
+              {/* 6. Sign Out (for Authenticated) */}
+              {isAuthenticated && (
+                <button
+                  type="button"
+                  onClick={() => logout()}
+                  className="account-sidebar-item logout"
+                >
+                  <div className="account-sidebar-item-left">
+                    <LogOut size={18} />
+                    <span>Sign Out</span>
+                  </div>
+                </button>
+              )}
+            </nav>
+          </aside>
+
+          {/* Right Column: Main Content Area */}
+          <main className="account-main-content">
+            {/* Tab: Overview (Account Dashboard) */}
+            {currentTab === 'overview' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                {!isAuthenticated && (
+                  <div className="card account-card-fluid" style={{ background: '#faf5ea', border: '1px solid #fde68a' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.1em', color: '#b45309', textTransform: 'uppercase' }}>
+                          GUEST PATRON
+                        </span>
+                        <h3 style={{ margin: '4px 0 2px', fontSize: '1.2rem', color: 'var(--brand-primary)' }}>
+                          Welcome to MUETY
+                        </h3>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          Sign in with your phone OTP or Google account to track orders and save addresses.
+                        </p>
+                      </div>
+                      <Link to="/login?redirect=/account" className="btn btn-primary btn-sm" style={{ padding: '8px 18px', fontWeight: 700 }}>
+                        Sign In / Register
+                      </Link>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Action Navigation Grid */}
+                <div className="account-overview-grid">
+                  {isAuthenticated ? (
+                    <div 
+                      className="account-nav-card"
+                      onClick={() => handleTabChange('orders')}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('orders'); }}
+                    >
+                      <div className="account-nav-card-left">
+                        <div className="account-nav-card-icon">
+                          <Package size={20} />
+                        </div>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 700 }}>My Orders</h4>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                            {orders.length} order{orders.length === 1 ? '' : 's'} recorded
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight size={18} color="var(--brand-muted)" />
+                    </div>
+                  ) : (
+                    <Link 
+                      to="/login?redirect=/account?tab=orders"
+                      className="account-nav-card"
+                    >
+                      <div className="account-nav-card-left">
+                        <div className="account-nav-card-icon">
+                          <Package size={20} />
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 700 }}>My Orders</h4>
+                            <Lock size={12} color="#94a3b8" />
+                          </div>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                            Sign in to track orders
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight size={18} color="var(--brand-muted)" />
+                    </Link>
+                  )}
+
+                  {isAuthenticated ? (
+                    <div 
+                      className="account-nav-card"
+                      onClick={() => handleTabChange('address')}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('address'); }}
+                    >
+                      <div className="account-nav-card-left">
+                        <div className="account-nav-card-icon">
+                          <MapPin size={20} />
+                        </div>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 700 }}>Delivery Addresses</h4>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                            {addresses.length} saved location{addresses.length === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight size={18} color="var(--brand-muted)" />
+                    </div>
+                  ) : (
+                    <Link 
+                      to="/login?redirect=/account?tab=address"
+                      className="account-nav-card"
+                    >
+                      <div className="account-nav-card-left">
+                        <div className="account-nav-card-icon">
+                          <MapPin size={20} />
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 700 }}>Delivery Addresses</h4>
+                            <Lock size={12} color="#94a3b8" />
+                          </div>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                            Sign in to manage addresses
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight size={18} color="var(--brand-muted)" />
+                    </Link>
+                  )}
+
+                  <Link 
+                    to="/wishlist" 
+                    className="account-nav-card"
+                  >
+                    <div className="account-nav-card-left">
+                      <div className="account-nav-card-icon">
+                        <Heart size={20} />
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 700 }}>My Wishlist</h4>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                          {wishlist.length} saree{wishlist.length === 1 ? '' : 's'} saved
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight size={18} color="var(--brand-muted)" />
+                  </Link>
+
+                  <div 
+                    className="account-nav-card"
+                    onClick={() => handleTabChange('profile')}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('profile'); }}
+                  >
+                    <div className="account-nav-card-left">
+                      <div className="account-nav-card-icon">
+                        <User size={20} />
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 700 }}>Profile Settings</h4>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                          {hasGenuineName ? 'Personal details & name' : (isAuthenticated ? 'Add your full name' : 'Explore profile details')}
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight size={18} color="var(--brand-muted)" />
+                  </div>
+
+                  {isAuthenticated ? (
+                    <div 
+                      className="account-nav-card"
+                      onClick={() => handleTabChange('connected')}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('connected'); }}
+                    >
+                      <div className="account-nav-card-left">
+                        <div className="account-nav-card-icon">
+                          <Link2 size={20} />
+                        </div>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 700 }}>Connected Accounts</h4>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                            {connectedStatus.isGoogleConnected && connectedStatus.isPhoneConnected 
+                              ? 'Google & Phone linked' 
+                              : connectedStatus.isGoogleConnected 
+                                ? 'Google linked' 
+                                : connectedStatus.isPhoneConnected 
+                                  ? 'Phone verified' 
+                                  : 'Google & Phone OTP'}
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight size={18} color="var(--brand-muted)" />
+                    </div>
+                  ) : (
+                    <Link 
+                      to="/login?redirect=/account?tab=connected"
+                      className="account-nav-card"
+                    >
+                      <div className="account-nav-card-left">
+                        <div className="account-nav-card-icon">
+                          <Link2 size={20} />
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 700 }}>Connected Accounts</h4>
+                            <Lock size={12} color="#94a3b8" />
+                          </div>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                            Google & Phone OTP
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight size={18} color="var(--brand-muted)" />
+                    </Link>
+                  )}
+                </div>
+
+                {/* Profile Summary Card */}
+                <div className="card account-card-fluid">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--brand-border)', paddingBottom: '0.85rem', flexWrap: 'wrap', gap: '10px' }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--brand-primary)' }}>Account Summary</h3>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                        Your authoritative patron profile details
+                      </span>
+                    </div>
+                    {isAuthenticated ? (
+                      <button 
+                        onClick={() => handleTabChange('profile')}
+                        className="btn btn-secondary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <Edit2 size={13} /> Edit Profile
+                      </button>
+                    ) : (
+                      <Link 
+                        to="/login?redirect=/account"
+                        className="btn btn-primary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}
+                      >
+                        Sign In / Register
+                      </Link>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                    <div style={{ padding: '12px 14px', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--brand-border)' }}>
+                      <div style={{ fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--brand-muted)', fontWeight: 700 }}>
+                        Full Name
+                      </div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--brand-primary)', marginTop: '4px' }}>
+                        {hasGenuineName && user?.displayName ? user.displayName : (isAuthenticated ? 'Not set (Add Name)' : 'Guest')}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '12px 14px', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--brand-border)' }}>
+                      <div style={{ fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--brand-muted)', fontWeight: 700 }}>
+                        Email Address
+                      </div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--brand-primary)', marginTop: '4px' }}>
+                        {user?.email || 'Not connected'}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '12px 14px', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--brand-border)' }}>
+                      <div style={{ fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--brand-muted)', fontWeight: 700 }}>
+                        Mobile Phone
+                      </div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--brand-primary)', marginTop: '4px' }}>
+                        {connectedStatus.maskedPhone || user?.phoneNumber || 'Not connected'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
         {/* Tab 1: Orders History */}
         {currentTab === 'orders' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-            {orders.length === 0 ? (
+            {!isAuthenticated || !user ? (
+              <div className="account-guest-cta-card">
+                <div className="account-guest-cta-icon-wrap">
+                  <Package size={26} />
+                </div>
+                <h3 style={{ fontSize: '1.25rem', color: 'var(--brand-primary)', marginBottom: '0.5rem', fontWeight: 700 }}>
+                  Sign In to Access Your Orders
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.6, maxWidth: '440px', margin: '0 auto 1.5rem' }}>
+                  View your pure silk handloom orders, live delivery tracking, invoices, and verified patron impressions.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+                  <Link to="/login?redirect=/account?tab=orders" className="btn btn-primary btn-sm" style={{ padding: '8px 24px', fontWeight: 700 }}>
+                    Sign In / Register
+                  </Link>
+                  <span style={{ fontSize: '0.76rem', color: 'var(--brand-muted)' }}>
+                    Continue with Phone Number (OTP) or Google
+                  </span>
+                </div>
+              </div>
+            ) : orders.length === 0 ? (
               <div className="card account-card-fluid" style={{ textAlign: 'center', padding: 'clamp(2.5rem, 6vw, 4rem) 1.5rem' }}>
                 <Package size={48} color="var(--brand-muted)" style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
                 <h3 style={{ marginBottom: '0.5rem' }}>No Order History Yet</h3>
@@ -532,33 +1178,55 @@ export const AccountPage: React.FC = () => {
         {/* Tab 3: Delivery Addresses (Multi-Address Management) */}
         {currentTab === 'address' && (
           <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '1.5rem',
-              flexWrap: 'wrap',
-              gap: '12px'
-            }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.3rem', color: 'var(--brand-primary)' }}>
-                  Delivery Addresses ({addresses.length})
+            {!isAuthenticated || !user ? (
+              <div className="account-guest-cta-card">
+                <div className="account-guest-cta-icon-wrap">
+                  <MapPin size={26} />
+                </div>
+                <h3 style={{ fontSize: '1.25rem', color: 'var(--brand-primary)', marginBottom: '0.5rem', fontWeight: 700 }}>
+                  Sign In to Manage Delivery Addresses
                 </h3>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Manage multiple residences, atelier studios, and gifting destinations.
-                </span>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.6, maxWidth: '440px', margin: '0 auto 1.5rem' }}>
+                  Save your residence, atelier, and gifting destinations for rapid, one-click checkout.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+                  <Link to="/login?redirect=/account?tab=address" className="btn btn-primary btn-sm" style={{ padding: '8px 24px', fontWeight: 700 }}>
+                    Sign In / Register
+                  </Link>
+                  <span style={{ fontSize: '0.76rem', color: 'var(--brand-muted)' }}>
+                    Continue with Phone Number (OTP) or Google
+                  </span>
+                </div>
               </div>
+            ) : (
+              <>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '1.5rem',
+                  flexWrap: 'wrap',
+                  gap: '12px'
+                }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.3rem', color: 'var(--brand-primary)' }}>
+                      Delivery Addresses ({addresses.length})
+                    </h3>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      Manage multiple residences, atelier studios, and gifting destinations.
+                    </span>
+                  </div>
 
-              <button
-                type="button"
-                onClick={handleOpenAddAddress}
-                className="btn btn-primary btn-sm"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              >
-                <Plus size={16} />
-                <span>Add New Address</span>
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenAddAddress}
+                    className="btn btn-primary btn-sm"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Plus size={16} />
+                    <span>Add New Address</span>
+                  </button>
+                </div>
 
             {addresses.length === 0 ? (
               <div className="card account-card-fluid" style={{ textAlign: 'center', padding: 'clamp(3rem, 6vw, 4.5rem) 1.5rem' }}>
@@ -703,93 +1371,350 @@ export const AccountPage: React.FC = () => {
                 })}
               </div>
             )}
-          </div>
-        )}
-
-        {/* Tab 4: Profile Settings */}
-        {currentTab === 'profile' && (
-          <div className="account-form-wrapper">
-            <form onSubmit={handleSaveProfile} className="card account-card-fluid">
-              <h3 style={{ fontSize: '1.2rem', marginBottom: '1.25rem' }}>Patron Profile Information</h3>
-              
-              <div className="form-group">
-                <label className="form-label">Full Name</label>
-                <input 
-                  type="text" 
-                  value={displayName} 
-                  onChange={e => setDisplayName(e.target.value)} 
-                  className="form-input" 
-                  style={{ boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Email Address (Read-only)</label>
-                <input 
-                  type="email" 
-                  disabled 
-                  value={user.email} 
-                  className="form-input" 
-                  style={{ backgroundColor: 'var(--bg-main)', opacity: 0.8, boxSizing: 'border-box' }} 
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Phone Number</label>
-                <input 
-                  type="tel" 
-                  value={phoneNumber} 
-                  onChange={e => setPhoneNumber(e.target.value)} 
-                  placeholder="+91 93857 91540" 
-                  className="form-input" 
-                  style={{ boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <button type="submit" className="btn btn-primary account-save-btn">
-                Save Profile Changes
-              </button>
-
-              <div style={{
-                marginTop: '2rem',
-                paddingTop: '1.5rem',
-                borderTop: '1px solid var(--brand-border)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '1rem'
-              }}>
-                <div>
-                  <h4 style={{ fontSize: '0.95rem', margin: 0, color: 'var(--brand-primary)', fontWeight: 600 }}>
-                    Patron Session
-                  </h4>
-                  <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: 'var(--brand-muted)' }}>
-                    Securely sign out of your account on this device.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { logout(); navigate('/'); }}
-                  className="btn btn-outline"
-                  style={{
-                    color: '#b91c1c',
-                    borderColor: '#fca5a5',
-                    padding: '0.5rem 1rem',
-                    fontSize: '0.84rem',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <LogOut size={15} />
-                  <span>Sign Out</span>
-                </button>
-              </div>
-            </form>
-          </div>
+          </>
         )}
       </div>
+        )}
+
+        {/* Tab 4: Profile Settings (Focused Single Card) */}
+        {currentTab === 'profile' && (
+          <div className="account-form-wrapper" style={{ maxWidth: '720px' }}>
+            {!isAuthenticated && (
+              <div style={{
+                backgroundColor: '#faf5ea',
+                border: '1px solid #fde68a',
+                borderRadius: 'var(--radius-md)',
+                padding: '12px 14px',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '10px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                  <AlertCircle size={16} color="#b45309" />
+                  <span style={{ fontSize: '0.84rem', color: '#92400e' }}>
+                    You are exploring as a Guest. Sign in with Phone or Google to save changes to your profile.
+                  </span>
+                </div>
+                <Link to="/login?redirect=/account?tab=profile" className="btn btn-primary btn-sm" style={{ padding: '4px 12px', fontSize: '0.78rem', fontWeight: 700 }}>
+                  Sign In / Register
+                </Link>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfile} className="card account-card-fluid">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--brand-border)', paddingBottom: '0.85rem' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--brand-primary)' }}>Profile Settings</h3>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                    Personal contact details and patron recipient name
+                  </span>
+                </div>
+              </div>
+
+              {profileError && (
+                <div style={{
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#991b1b',
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.86rem',
+                  marginBottom: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <AlertCircle size={16} />
+                  <span>{profileError}</span>
+                </div>
+              )}
+              
+              <div className="form-group">
+                <label className="form-label" htmlFor="profile-fullname">Full Name *</label>
+                <input 
+                  id="profile-fullname"
+                  type="text" 
+                  required
+                  value={displayName} 
+                  onChange={e => setDisplayName(e.target.value)} 
+                  placeholder="Enter your full name (e.g. Mohan Kumar)"
+                  className="form-input" 
+                  style={{ boxSizing: 'border-box' }}
+                />
+                <span style={{ fontSize: '0.76rem', color: 'var(--brand-muted)', marginTop: '4px', display: 'block' }}>
+                  Used across your orders, dashboard greeting, delivery receipts, and invoices.
+                </span>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Email Address</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input 
+                    type="email" 
+                    disabled 
+                    value={user?.email || 'No email connected'} 
+                    className="form-input" 
+                    style={{ backgroundColor: 'var(--bg-main)', opacity: 0.9, boxSizing: 'border-box', flex: 1 }} 
+                  />
+                  {connectedStatus.isGoogleConnected && (
+                    <span className="badge-status-connected" title="Verified via Google OAuth">
+                      <CheckCircle2 size={13} /> Verified Google
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Mobile Phone Number</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input 
+                    type="tel" 
+                    value={phoneNumber} 
+                    onChange={e => setPhoneNumber(e.target.value)} 
+                    placeholder="+91 93857 91540" 
+                    className="form-input" 
+                    style={{ boxSizing: 'border-box', flex: 1 }}
+                  />
+                  {connectedStatus.isPhoneConnected && (
+                    <span className="badge-status-connected" title="Verified via Phone OTP">
+                      <CheckCircle2 size={13} /> Verified
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                className="btn btn-primary account-save-btn"
+                disabled={isSavingProfile}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                {isSavingProfile ? (
+                  <>
+                    <div className="spinner" style={{ width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    <span>Saving Changes...</span>
+                  </>
+                ) : (
+                  <span>Save Profile Changes</span>
+                )}
+              </button>
+            </form>
+
+            {/* Quick Link Card to Dedicated Connected Accounts */}
+            <div className="card account-card-fluid" style={{ marginTop: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                <div className="account-nav-card-icon" style={{ width: '40px', height: '40px' }}>
+                  <Link2 size={18} color="#c9a227" />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 700 }}>Connected Accounts</h4>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--brand-muted)' }}>
+                    Manage linked Google and mobile phone OTP authentication methods.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleTabChange('connected')}
+                className="btn btn-outline btn-sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <span>Manage Connected Accounts</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 5: Dedicated Connected Accounts Page */}
+        {currentTab === 'connected' && (
+          <div className="account-form-wrapper" style={{ maxWidth: '720px' }}>
+            {!isAuthenticated || !user ? (
+              <div className="card account-card-fluid account-guest-cta-card">
+                <div className="account-guest-cta-icon">
+                  <Link2 size={28} />
+                </div>
+                <h3 style={{ fontSize: '1.25rem', color: 'var(--brand-primary)', marginBottom: '0.5rem', fontWeight: 700 }}>
+                  Sign In to Manage Connected Accounts
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.6, maxWidth: '440px', margin: '0 auto 1.5rem' }}>
+                  Connect your Google account and mobile phone number for fast 1-tap OTP authentication and order tracking.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+                  <Link to="/login?redirect=/account?tab=connected" className="btn btn-primary btn-sm" style={{ padding: '8px 24px', fontWeight: 700 }}>
+                    Sign In / Register
+                  </Link>
+                  <span style={{ fontSize: '0.76rem', color: 'var(--brand-muted)' }}>
+                    Continue with Phone Number (OTP) or Google
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div id="connected-accounts-section" className="account-connected-section">
+                  <div style={{ marginBottom: '1.25rem', borderBottom: '1px solid var(--brand-border)', paddingBottom: '0.85rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Link2 size={18} color="#c9a227" />
+                      <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--brand-primary)' }}>Connected Accounts</h3>
+                    </div>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--brand-muted)' }}>
+                      Connect both Google and mobile number to sign in effortlessly using either method.
+                    </p>
+                  </div>
+
+                  {/* Row 1: Google Account */}
+                  <div className="connected-row">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                      <div style={{ 
+                        width: '40px', 
+                        height: '40px', 
+                        borderRadius: '50%', 
+                        backgroundColor: '#ffffff', 
+                        border: '1px solid #e2e8f0', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                        </svg>
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--brand-primary)' }}>Google Account</span>
+                          {connectedStatus.isGoogleConnected ? (
+                            <span className="badge-status-connected">
+                              <CheckCircle2 size={12} /> Connected
+                            </span>
+                          ) : (
+                            <span className="badge-status-disconnected">Not connected</span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {connectedStatus.googleEmail || user?.email || 'Link Google for instant 1-tap sign-in'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {!connectedStatus.isGoogleConnected && (
+                      <button
+                        type="button"
+                        onClick={handleConnectGoogle}
+                        disabled={isLinkingGoogle}
+                        className="btn btn-secondary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        {isLinkingGoogle ? (
+                          <>
+                            <div className="spinner" style={{ width: '12px', height: '12px', border: '2px solid rgba(0,0,0,0.2)', borderTopColor: '#000', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                            <span>Connecting...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Link2 size={14} /> Connect Google Account
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Row 2: Phone Number */}
+                  <div className="connected-row">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                      <div style={{ 
+                        width: '40px', 
+                        height: '40px', 
+                        borderRadius: '50%', 
+                        backgroundColor: '#faf8f3', 
+                        border: '1px solid #f1ece1', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: 'var(--brand-primary)'
+                      }}>
+                        <Phone size={18} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--brand-primary)' }}>Mobile Phone</span>
+                          {connectedStatus.isPhoneConnected ? (
+                            <span className="badge-status-connected">
+                              <CheckCircle2 size={12} /> Verified
+                            </span>
+                          ) : (
+                            <span className="badge-status-disconnected">Not connected</span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)', display: 'block' }}>
+                          {connectedStatus.maskedPhone || user?.phoneNumber || 'Add mobile number for SMS OTP sign-in & live updates'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {!connectedStatus.isPhoneConnected && (
+                      <button
+                        type="button"
+                        onClick={handleOpenPhoneLinkModal}
+                        className="btn btn-secondary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <Plus size={14} /> Add and verify phone number
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Session Management */}
+                <div className="card account-card-fluid" style={{ marginTop: '1.5rem' }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
+                  }}>
+                    <div>
+                      <h4 style={{ fontSize: '0.95rem', margin: 0, color: 'var(--brand-primary)', fontWeight: 600 }}>
+                        Patron Session
+                      </h4>
+                      <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: 'var(--brand-muted)' }}>
+                        Securely sign out of your account on this device.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { logout(); navigate('/'); }}
+                      className="btn btn-outline"
+                      style={{
+                        color: '#b91c1c',
+                        borderColor: '#fca5a5',
+                        padding: '0.5rem 1rem',
+                        fontSize: '0.84rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <LogOut size={15} />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  </div>
 
       {/* Verified Patron Impression Modal */}
       {reviewModalItem && (
@@ -806,7 +1731,7 @@ export const AccountPage: React.FC = () => {
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--brand-primary)' }}>Share Patron Impressions</h3>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  Verified Purchase for Order #{reviewModalItem.orderId.slice(-6)}
+                  Verified Purchase for Order #{reviewModalItem.orderId}
                 </span>
               </div>
               <button onClick={() => setReviewModalItem(null)} style={{ padding: '6px', color: 'var(--brand-muted)' }} aria-label="Close Modal">
@@ -1235,6 +2160,205 @@ export const AccountPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Phone Number Verification & Linking Modal */}
+      {isPhoneModalOpen && (
+        <div className="admin-modal-overlay">
+          <div className="card account-card-fluid" style={{
+            maxWidth: '460px',
+            width: '100%',
+            maxHeight: 'calc(100dvh - 32px)',
+            overflowY: 'auto',
+            boxShadow: 'var(--shadow-xl)',
+            boxSizing: 'border-box'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1.25rem',
+              borderBottom: '1px solid var(--brand-border)',
+              paddingBottom: '0.85rem'
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--brand-primary)' }}>
+                  {phoneLinkStep === 'phone' ? 'Verify Mobile Number' : 'Enter Verification Code'}
+                </h3>
+                <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                  {phoneLinkStep === 'phone' 
+                    ? 'Connect your phone number for secure OTP login' 
+                    : `Enter the 6-digit code sent to ${linkPhoneCode} ${linkPhoneNumber}`}
+                </span>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsPhoneModalOpen(false)} 
+                style={{ padding: '6px', color: 'var(--brand-muted)', background: 'none', border: 'none', cursor: 'pointer' }} 
+                aria-label="Close Phone Verification"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {phoneLinkError && (
+              <div style={{
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#991b1b',
+                padding: '10px 14px',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.86rem',
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <AlertCircle size={16} />
+                <span>{phoneLinkError}</span>
+              </div>
+            )}
+
+            {phoneLinkStep === 'phone' ? (
+              <form onSubmit={handleSendPhoneLinkOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Mobile Phone Number *</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <select
+                      value={linkPhoneCode}
+                      onChange={e => setLinkPhoneCode(e.target.value)}
+                      className="form-input"
+                      style={{ width: '90px', flexShrink: 0, paddingRight: '4px' }}
+                    >
+                      <option value="+91">+91 (IN)</option>
+                      <option value="+1">+1 (US)</option>
+                      <option value="+44">+44 (UK)</option>
+                      <option value="+971">+971 (AE)</option>
+                      <option value="+65">+65 (SG)</option>
+                      <option value="+61">+61 (AU)</option>
+                      <option value="+60">+60 (MY)</option>
+                      <option value="+94">+94 (LK)</option>
+                    </select>
+                    <input 
+                      type="tel" 
+                      required
+                      placeholder="98765 43210"
+                      value={linkPhoneNumber}
+                      onChange={e => setLinkPhoneNumber(e.target.value)}
+                      className="form-input"
+                      style={{ flex: 1, boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--brand-muted)', marginTop: '4px', display: 'block' }}>
+                    Standard SMS rates may apply. A 6-digit verification code will be sent.
+                  </span>
+                </div>
+
+                {/* Container for invisible reCAPTCHA */}
+                <div id="phone-link-recaptcha" style={{ margin: '4px 0' }} />
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '0.5rem' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsPhoneModalOpen(false)}
+                    className="btn btn-outline"
+                    disabled={isSendingPhoneOtp}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary"
+                    disabled={isSendingPhoneOtp || !linkPhoneNumber.trim()}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    {isSendingPhoneOtp ? (
+                      <>
+                        <div className="spinner" style={{ width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                        <span>Sending Code...</span>
+                      </>
+                    ) : (
+                      <span>Send Verification Code</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyPhoneLinkOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="form-label" style={{ margin: 0 }}>6-Digit Verification Code *</label>
+                    <button
+                      type="button"
+                      onClick={() => setPhoneLinkStep('phone')}
+                      style={{ background: 'none', border: 'none', color: '#c9a227', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                    >
+                      Change Number
+                    </button>
+                  </div>
+                  <input 
+                    type="text" 
+                    required
+                    maxLength={6}
+                    placeholder="123456"
+                    value={linkPhoneOtp}
+                    onChange={e => setLinkPhoneOtp(e.target.value.replace(/\D/g, ''))}
+                    className="form-input"
+                    style={{ fontSize: '1.25rem', letterSpacing: '0.25em', textAlign: 'center', fontWeight: 700, boxSizing: 'border-box' }}
+                    autoFocus
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--brand-muted)' }}>
+                      Did not receive code?
+                    </span>
+                    <button
+                      type="button"
+                      disabled={phoneLinkCooldown > 0 || isSendingPhoneOtp}
+                      onClick={handleSendPhoneLinkOtp}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: phoneLinkCooldown > 0 ? 'var(--brand-muted)' : '#c9a227',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: phoneLinkCooldown > 0 ? 'not-allowed' : 'pointer',
+                        padding: 0
+                      }}
+                    >
+                      {phoneLinkCooldown > 0 ? `Resend Code in ${phoneLinkCooldown}s` : 'Resend Code'}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '0.5rem' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setPhoneLinkStep('phone')}
+                    className="btn btn-outline"
+                    disabled={isVerifyingPhoneOtp}
+                  >
+                    Back
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary"
+                    disabled={isVerifyingPhoneOtp || linkPhoneOtp.trim().length < 6}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    {isVerifyingPhoneOtp ? (
+                      <>
+                        <div className="spinner" style={{ width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                        <span>Verifying...</span>
+                      </>
+                    ) : (
+                      <span>Verify & Link Phone</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

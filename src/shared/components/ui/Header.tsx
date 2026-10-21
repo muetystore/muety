@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Logo } from './Logo';
 import { useCart } from '@/shared/context/CartContext';
@@ -16,10 +16,15 @@ import {
   LayoutDashboard,
   Sparkles,
   Layers,
-  ChevronRight
+  ChevronRight,
+  MapPin,
+  Settings,
+  Link2,
+  Lock
 } from 'lucide-react';
 import { productService } from '@/features/catalog/services/productService';
 import { collectionService } from '@/features/catalog/services/collectionService';
+import { isGeneratedPatronName } from '@/features/auth/services/authService';
 import { Category, SareeCollection } from '@/types';
 import { SearchOverlay } from './SearchOverlay';
 
@@ -29,10 +34,13 @@ export const Header: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const hasGenuineName = Boolean(user?.displayName && !isGeneratedPatronName(user.displayName));
+
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
+  const [accountDrawerOpen, setAccountDrawerOpen] = useState(false);
   const [collectionsMenuOpen, setCollectionsMenuOpen] = useState(false);
   const [shopByMenuOpen, setShopByMenuOpen] = useState(false);
   const [mobileShopByOpen, setMobileShopByOpen] = useState(false);
@@ -57,6 +65,18 @@ export const Header: React.FC = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Prevent background scrolling while mobile account drawer is open
+  useEffect(() => {
+    if (accountDrawerOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [accountDrawerOpen]);
 
   // Header scroll appearance
   useEffect(() => {
@@ -100,6 +120,7 @@ export const Header: React.FC = () => {
     setMobileMenuOpen(false);
     setSearchOpen(false);
     setAccountDropdownOpen(false);
+    setAccountDrawerOpen(false);
     setCollectionsMenuOpen(false);
     setShopByMenuOpen(false);
   }, [location]);
@@ -111,6 +132,7 @@ export const Header: React.FC = () => {
         setCollectionsMenuOpen(false);
         setShopByMenuOpen(false);
         setAccountDropdownOpen(false);
+        setAccountDrawerOpen(false);
         setMobileMenuOpen(false);
       }
     };
@@ -521,86 +543,222 @@ export const Header: React.FC = () => {
               <span className="header-bag-mobile-badge">{cartCount}</span>
             </button>
 
-            {/* 8. Desktop Account Profile / Dropdown */}
+            {/* 8. Account Profile / Dropdown / Drawer Trigger */}
             <div ref={accountRef} className="header-user-wrapper">
               {isAuthenticated ? (
                 <button
-                  onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
+                  type="button"
+                  onClick={() => {
+                    if (isMobileViewport) {
+                      setAccountDrawerOpen(true);
+                    } else {
+                      setAccountDropdownOpen(!accountDropdownOpen);
+                    }
+                  }}
                   aria-expanded={accountDropdownOpen}
                   aria-haspopup="true"
                   className="header-account-btn"
+                  title="Patron Account"
+                  aria-label="Patron Account"
                 >
                   <User size={17} color="var(--brand-accent-hover)" />
                   <span className="account-user-name">
-                    {user?.displayName ? user.displayName.split(' ')[0] : 'Account'}
+                    {hasGenuineName && user?.displayName ? user.displayName.split(' ')[0] : 'Account'}
                   </span>
                   <ChevronDown size={14} className={`nav-chevron ${accountDropdownOpen ? 'rotated' : ''}`} />
                 </button>
               ) : (
-                <Link 
-                  to="/account" 
-                  className="header-icon-btn"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isMobileViewport) {
+                      setAccountDrawerOpen(true);
+                    } else {
+                      setAccountDropdownOpen(!accountDropdownOpen);
+                    }
+                  }}
+                  aria-expanded={accountDropdownOpen}
+                  aria-haspopup="true"
+                  className="header-guest-signin-btn"
                   title="Sign In / Patron Account"
                   aria-label="Sign In or Patron Account"
                 >
-                  <User size={21} />
-                </Link>
+                  <User size={16} color="var(--brand-accent-hover)" />
+                  <span className="guest-signin-label">Sign In</span>
+                  <ChevronDown size={13} className={`nav-chevron ${accountDropdownOpen ? 'rotated' : ''}`} />
+                </button>
               )}
 
-              {accountDropdownOpen && isAuthenticated && (
-                <div className="account-dropdown-menu animate-fade-in">
-                  <div className="account-dropdown-header">
-                    <div className="account-dropdown-name">
-                      {user?.displayName || 'Valued Client'}
-                    </div>
-                    <div className="account-dropdown-email">
-                      {user?.email}
-                    </div>
-                  </div>
+              {/* Desktop Account Dropdown (Authenticated and Guest) */}
+              {accountDropdownOpen && !isMobileViewport && (
+                <div 
+                  className="account-dropdown-menu animate-fade-in"
+                  role="menu"
+                  aria-label="Patron Account Menu"
+                >
+                  {isAuthenticated ? (
+                    <>
+                      <div className="account-dropdown-header">
+                        <div className="account-dropdown-name" title={hasGenuineName && user?.displayName ? user.displayName : 'Valued Patron'}>
+                          {hasGenuineName && user?.displayName ? user.displayName : 'Valued Patron'}
+                        </div>
+                        <div className="account-dropdown-email">
+                          {user?.email || user?.phoneNumber || ''}
+                        </div>
+                      </div>
 
-                  {user?.role === 'admin' && (
-                    <Link
-                      to="/admin/dashboard"
-                      onClick={() => setAccountDropdownOpen(false)}
-                      className="account-menu-item gold"
-                    >
-                      <LayoutDashboard size={16} /> Executive Admin
-                    </Link>
+                      {user?.role === 'admin' && (
+                        <Link
+                          to="/admin/dashboard"
+                          onClick={() => setAccountDropdownOpen(false)}
+                          className="account-menu-item gold"
+                          role="menuitem"
+                        >
+                          <LayoutDashboard size={15} /> Executive Admin
+                        </Link>
+                      )}
+
+                      <Link
+                        to="/account?tab=overview"
+                        onClick={() => setAccountDropdownOpen(false)}
+                        className="account-menu-item"
+                        role="menuitem"
+                      >
+                        <User size={15} /> Account Dashboard
+                      </Link>
+
+                      <Link
+                        to="/account?tab=profile"
+                        onClick={() => setAccountDropdownOpen(false)}
+                        className="account-menu-item"
+                        role="menuitem"
+                      >
+                        <Settings size={15} /> Profile Settings
+                      </Link>
+
+                      <Link
+                        to="/account?tab=orders"
+                        onClick={() => setAccountDropdownOpen(false)}
+                        className="account-menu-item"
+                        role="menuitem"
+                      >
+                        <Package size={15} /> My Orders
+                      </Link>
+
+                      <Link
+                        to="/account?tab=address"
+                        onClick={() => setAccountDropdownOpen(false)}
+                        className="account-menu-item"
+                        role="menuitem"
+                      >
+                        <MapPin size={15} /> Delivery Addresses
+                      </Link>
+
+                      <Link
+                        to="/wishlist"
+                        onClick={() => setAccountDropdownOpen(false)}
+                        className="account-menu-item"
+                        role="menuitem"
+                      >
+                        <Heart size={15} /> My Wishlist ({wishlist.length})
+                      </Link>
+
+                      <Link
+                        to="/account?tab=connected"
+                        onClick={() => setAccountDropdownOpen(false)}
+                        className="account-menu-item"
+                        role="menuitem"
+                      >
+                        <Link2 size={15} /> Connected Accounts
+                      </Link>
+
+                      <button
+                        onClick={() => {
+                          logout();
+                          setAccountDropdownOpen(false);
+                        }}
+                        className="account-menu-item logout"
+                        role="menuitem"
+                      >
+                        <LogOut size={15} /> Sign Out
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="account-dropdown-guest-header">
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff', marginBottom: '2px' }}>
+                          Hey, Guest!
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: '#cbd5e1', marginBottom: '12px', lineHeight: 1.4 }}>
+                          Sign in to access your account and orders.
+                        </div>
+                        <Link
+                          to="/login"
+                          onClick={() => setAccountDropdownOpen(false)}
+                          className="btn btn-primary btn-sm"
+                          style={{ width: '100%', justifyContent: 'center', fontWeight: 700, fontSize: '0.82rem' }}
+                        >
+                          Sign In / Register
+                        </Link>
+                      </div>
+
+                      <div style={{ padding: '6px 0' }}>
+                        <Link
+                          to="/account?tab=profile"
+                          onClick={() => setAccountDropdownOpen(false)}
+                          className="account-menu-item"
+                          role="menuitem"
+                        >
+                          <Settings size={15} />
+                          <span style={{ flex: 1 }}>Profile</span>
+                        </Link>
+
+                        <Link
+                          to="/login?redirect=/account?tab=orders"
+                          onClick={() => setAccountDropdownOpen(false)}
+                          className="account-menu-item"
+                          role="menuitem"
+                        >
+                          <Package size={15} />
+                          <span style={{ flex: 1 }}>My Orders</span>
+                          <Lock size={12} color="#94a3b8" />
+                        </Link>
+
+                        <Link
+                          to="/login?redirect=/account?tab=address"
+                          onClick={() => setAccountDropdownOpen(false)}
+                          className="account-menu-item"
+                          role="menuitem"
+                        >
+                          <MapPin size={15} />
+                          <span style={{ flex: 1 }}>Saved Addresses</span>
+                          <Lock size={12} color="#94a3b8" />
+                        </Link>
+
+                        <Link
+                          to="/wishlist"
+                          onClick={() => setAccountDropdownOpen(false)}
+                          className="account-menu-item"
+                          role="menuitem"
+                        >
+                          <Heart size={15} />
+                          <span style={{ flex: 1 }}>My Wishlist</span>
+                          {wishlist.length > 0 && <span className="header-badge-count-static">{wishlist.length}</span>}
+                        </Link>
+
+                        <Link
+                          to="/login?redirect=/account?tab=connected"
+                          onClick={() => setAccountDropdownOpen(false)}
+                          className="account-menu-item"
+                          role="menuitem"
+                        >
+                          <Link2 size={15} />
+                          <span style={{ flex: 1 }}>Connected Accounts</span>
+                          <Lock size={12} color="#94a3b8" />
+                        </Link>
+                      </div>
+                    </>
                   )}
-
-                  <Link
-                    to="/account?tab=orders"
-                    onClick={() => setAccountDropdownOpen(false)}
-                    className="account-menu-item"
-                  >
-                    <Package size={16} /> My Orders
-                  </Link>
-
-                  <Link
-                    to="/wishlist"
-                    onClick={() => setAccountDropdownOpen(false)}
-                    className="account-menu-item"
-                  >
-                    <Heart size={16} /> My Wishlist ({wishlist.length})
-                  </Link>
-
-                  <Link
-                    to="/account"
-                    onClick={() => setAccountDropdownOpen(false)}
-                    className="account-menu-item"
-                  >
-                    <User size={16} /> Account Dashboard
-                  </Link>
-
-                  <button
-                    onClick={() => {
-                      logout();
-                      setAccountDropdownOpen(false);
-                    }}
-                    className="account-menu-item logout"
-                  >
-                    <LogOut size={16} /> Sign Out
-                  </button>
                 </div>
               )}
             </div>
@@ -616,6 +774,189 @@ export const Header: React.FC = () => {
         onClose={() => setSearchOpen(false)} 
         isMobile={isMobileViewport}
       />
+
+      {/* =========================================================
+          BOOKMYSHOW-INSPIRED MOBILE ACCOUNT SLIDE-OVER DRAWER
+         ========================================================= */}
+      {accountDrawerOpen && (
+        <div 
+          className="account-drawer-backdrop"
+          onClick={() => setAccountDrawerOpen(false)}
+        >
+          <div 
+            className="account-drawer"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Account Menu"
+          >
+            {/* Drawer Header */}
+            <div className="account-drawer-header">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+                {isAuthenticated ? (
+                  <div>
+                    <span style={{ fontSize: '0.72rem', letterSpacing: '0.1em', color: '#c9a227', textTransform: 'uppercase', fontWeight: 700 }}>
+                      PATRON ACCOUNT
+                    </span>
+                    <h3 style={{ margin: '4px 0 2px', fontSize: '1.15rem', color: '#ffffff', fontWeight: 700 }}>
+                      {hasGenuineName && user?.displayName ? user.displayName : 'Valued Patron'}
+                    </h3>
+                    <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                      {user?.email || user?.phoneNumber || ''}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <span style={{ fontSize: '0.72rem', letterSpacing: '0.1em', color: '#c9a227', textTransform: 'uppercase', fontWeight: 700 }}>
+                      WELCOME TO MUETY
+                    </span>
+                    <h3 style={{ margin: '4px 0 2px', fontSize: '1.2rem', color: '#ffffff', fontWeight: 700 }}>
+                      Hey, Guest!
+                    </h3>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                      Sign in to access your account and orders.
+                    </p>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setAccountDrawerOpen(false)}
+                  className="account-drawer-close-btn"
+                  aria-label="Close Account Menu"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {!isAuthenticated && (
+                <div style={{ marginTop: '1rem', width: '100%' }}>
+                  <Link
+                    to="/login"
+                    onClick={() => setAccountDrawerOpen(false)}
+                    className="btn btn-primary btn-sm"
+                    style={{ width: '100%', justifyContent: 'center', fontWeight: 700 }}
+                  >
+                    Sign In / Register
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {/* Drawer Body - Independently Scrollable */}
+            <div className="account-drawer-body">
+              {user?.role === 'admin' && (
+                <Link
+                  to="/admin/dashboard"
+                  onClick={() => setAccountDrawerOpen(false)}
+                  className="account-drawer-item gold"
+                >
+                  <LayoutDashboard size={18} />
+                  <span>Executive Admin Dashboard</span>
+                </Link>
+              )}
+
+              <Link
+                to="/account?tab=profile"
+                onClick={() => setAccountDrawerOpen(false)}
+                className="account-drawer-item"
+              >
+                <Settings size={18} />
+                <span style={{ flex: 1 }}>Profile</span>
+              </Link>
+
+              {isAuthenticated ? (
+                <Link
+                  to="/account?tab=orders"
+                  onClick={() => setAccountDrawerOpen(false)}
+                  className="account-drawer-item"
+                >
+                  <Package size={18} />
+                  <span style={{ flex: 1 }}>My Orders</span>
+                </Link>
+              ) : (
+                <Link
+                  to="/login?redirect=/account?tab=orders"
+                  onClick={() => setAccountDrawerOpen(false)}
+                  className="account-drawer-item"
+                >
+                  <Package size={18} />
+                  <span style={{ flex: 1 }}>My Orders</span>
+                  <Lock size={14} color="#94a3b8" />
+                </Link>
+              )}
+
+              {isAuthenticated ? (
+                <Link
+                  to="/account?tab=address"
+                  onClick={() => setAccountDrawerOpen(false)}
+                  className="account-drawer-item"
+                >
+                  <MapPin size={18} />
+                  <span style={{ flex: 1 }}>Saved Addresses</span>
+                </Link>
+              ) : (
+                <Link
+                  to="/login?redirect=/account?tab=address"
+                  onClick={() => setAccountDrawerOpen(false)}
+                  className="account-drawer-item"
+                >
+                  <MapPin size={18} />
+                  <span style={{ flex: 1 }}>Saved Addresses</span>
+                  <Lock size={14} color="#94a3b8" />
+                </Link>
+              )}
+
+              <Link
+                to="/wishlist"
+                onClick={() => setAccountDrawerOpen(false)}
+                className="account-drawer-item"
+              >
+                <Heart size={18} />
+                <span style={{ flex: 1 }}>My Wishlist</span>
+                {wishlist.length > 0 && <span className="header-badge-count-static">{wishlist.length}</span>}
+              </Link>
+
+              {isAuthenticated ? (
+                <Link
+                  to="/account?tab=connected"
+                  onClick={() => setAccountDrawerOpen(false)}
+                  className="account-drawer-item"
+                >
+                  <Link2 size={18} />
+                  <span style={{ flex: 1 }}>Connected Accounts</span>
+                </Link>
+              ) : (
+                <Link
+                  to="/login?redirect=/account?tab=connected"
+                  onClick={() => setAccountDrawerOpen(false)}
+                  className="account-drawer-item"
+                >
+                  <Link2 size={18} />
+                  <span style={{ flex: 1 }}>Connected Accounts</span>
+                  <Lock size={14} color="#94a3b8" />
+                </Link>
+              )}
+            </div>
+
+            {/* Drawer Footer */}
+            {isAuthenticated && (
+              <div className="account-drawer-footer">
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    setAccountDrawerOpen(false);
+                  }}
+                  className="account-drawer-logout-btn"
+                >
+                  <LogOut size={16} />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* =========================================================
           MOBILE NAVIGATION DRAWER
@@ -812,19 +1153,31 @@ export const Header: React.FC = () => {
             {isAuthenticated ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#10182d', marginBottom: '2px' }}>
-                  {user?.displayName || 'Valued Patron'}
-                  <span style={{ display: 'block', fontSize: '0.78rem', color: '#64748b', fontWeight: 400 }}>{user?.email}</span>
+                  {hasGenuineName && user?.displayName ? user.displayName : 'Valued Patron'}
+                  <span style={{ display: 'block', fontSize: '0.78rem', color: '#64748b', fontWeight: 400 }}>{user?.email || user?.phoneNumber}</span>
                 </div>
                 {user?.role === 'admin' && (
                   <Link to="/admin/dashboard" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start', color: '#854d0e', fontWeight: 700 }}>
-                    <LayoutDashboard size={16} /> Executive Admin Dashboard
+                    <LayoutDashboard size={15} /> Executive Admin Dashboard
                   </Link>
                 )}
+                <Link to="/account" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start' }}>
+                  <User size={15} /> Account Dashboard
+                </Link>
                 <Link to="/account?tab=orders" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start' }}>
-                  <Package size={16} /> My Orders & Invoices
+                  <Package size={15} /> My Orders
+                </Link>
+                <Link to="/account?tab=address" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start' }}>
+                  <MapPin size={15} /> Delivery Addresses
+                </Link>
+                <Link to="/account?tab=profile" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start' }}>
+                  <Settings size={15} /> Profile Settings
+                </Link>
+                <Link to="/account?tab=connected" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start' }}>
+                  <Link2 size={15} /> Connected Accounts
                 </Link>
                 <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="btn btn-outline btn-sm" style={{ width: '100%', justifyContent: 'flex-start', color: '#b91c1c', borderColor: '#fca5a5', marginTop: '4px' }}>
-                  <LogOut size={16} /> Sign Out
+                  <LogOut size={15} /> Sign Out
                 </button>
               </div>
             ) : (

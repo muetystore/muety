@@ -52,3 +52,5 @@ scratch_*
 # Tests
 *.test.ts
 *.test.js
+!src/tests/
+!src/tests/**

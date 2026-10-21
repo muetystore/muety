@@ -470,9 +470,11 @@ export const ProductDetailPage: React.FC = () => {
 
           <div className="pdp-info-col">
             <div className="pdp-header-meta">
-              <span className="pdp-category-sku">
-                {product.category} • SKU: {product.sku || product.id.slice(0, 8).toUpperCase()}
-              </span>
+              {product.category && (
+                <span className="pdp-category-sku">
+                  {product.category}
+                </span>
+              )}
 
               {isManualSoldOut && (
                 <span className="pdp-soldout-pill">
@@ -649,7 +651,7 @@ export const ProductDetailPage: React.FC = () => {
             {/* Atelier Concierge Whatsapp */}
             <div className="pdp-concierge-box">
               <a
-                href={`https://wa.me/919940668095?text=${encodeURIComponent(`Hello MUETY Atelier, I am enquiring about "${product.name}" (SKU: ${product.sku || product.id}). Could you assist with drape consultation and availability?`)}`}
+                href={`https://wa.me/919940668095?text=${encodeURIComponent(`Hello MUETY Atelier, I am enquiring about "${product.name}". Could you assist with drape consultation and availability?`)}`}
                 target="_blank"
                 rel="noreferrer"
                 className="pdp-concierge-link"
@@ -706,12 +708,6 @@ export const ProductDetailPage: React.FC = () => {
             {openAccordion.information && (
               <div className="pdp-accordion-body">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '640px' }}>
-                  {product.sku && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>SKU / Identifier</span>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{product.sku}</span>
-                    </div>
-                  )}
                   {product.category && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>Category</span>

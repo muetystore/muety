@@ -99,7 +99,9 @@ export function mergeCustomerProfiles(primary: UserProfile, secondary: Partial<U
   }
 
   const mergedUid = primary.uid || secondary.uid || `usr-${Date.now()}`;
-  const mergedEmail = (primary.email || secondary.email || '').toLowerCase().trim();
+  const rawEmail = primary.email || secondary.email || '';
+  const cleanEmail = rawEmail.toLowerCase().trim() === 'customer@muety.com' ? '' : rawEmail.toLowerCase().trim();
+  const mergedEmail = cleanEmail;
 
   // Field precedence: evaluate timestamps if available to prevent stale data overwriting newer verified data
   const primaryUpdated = primary.updatedAt ? new Date(primary.updatedAt).getTime() : 0;
@@ -194,7 +196,12 @@ export const customerService = {
 
   getCustomerById(uid: string): UserProfile | undefined {
     const u = storageService.getUserById(uid);
-    return u ? normalizeAdminUser(u) : undefined;
+    if (!u) return undefined;
+    const cleanUser = {
+      ...u,
+      email: (u.email && u.email.toLowerCase().trim() !== 'customer@muety.com') ? u.email.trim() : ''
+    };
+    return normalizeAdminUser(cleanUser);
   },
 
   /**
@@ -605,10 +612,14 @@ export const customerService = {
               const raw = docSnap.data() as any;
               const uid = raw.uid || docSnap.id;
               if (uid) {
+                const incomingEmail = (raw.email && typeof raw.email === 'string' && raw.email.toLowerCase().trim() !== 'customer@muety.com')
+                  ? raw.email.trim()
+                  : '';
+
                 const incoming: UserProfile = {
                   ...raw,
                   uid,
-                  email: raw.email || 'customer@muety.com',
+                  email: incomingEmail,
                   displayName: raw.displayName || raw.fullName || 'MUETY Patron',
                   role: raw.role || 'customer',
                   customerStatus: raw.customerStatus || (raw.isBlocked ? 'blocked' : 'active'),

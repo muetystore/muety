@@ -35,25 +35,26 @@ describe('MUETY Storefront — 8 Core Requirements Verification Suite', () => {
         'utf-8'
       );
 
-      // Verify the hero banner does not contain a sign out button
-      const heroBannerSection = accountPageCode.slice(
-        accountPageCode.indexOf('account-hero-banner'),
-        accountPageCode.indexOf('account-tabs-wrapper')
-      );
-      expect(heroBannerSection.toLowerCase()).not.toContain('sign out');
-      expect(heroBannerSection.toLowerCase()).not.toContain('logout');
+      // Verify the hero banner does not contain a sign out button (or banner is replaced by modern account-page-header)
+      const hasHeroBanner = accountPageCode.includes('account-hero-banner');
+      if (hasHeroBanner) {
+        const heroBannerSection = accountPageCode.slice(
+          accountPageCode.indexOf('account-hero-banner'),
+          accountPageCode.indexOf('account-tabs-wrapper')
+        );
+        expect(heroBannerSection.toLowerCase()).not.toContain('sign out');
+        expect(heroBannerSection.toLowerCase()).not.toContain('logout');
+      } else {
+        expect(accountPageCode).toContain('account-page-header');
+      }
 
-      // Verify the tabs do NOT include a wishlist tab
-      const tabsSection = accountPageCode.slice(
-        accountPageCode.indexOf('account-tabs-wrapper'),
-        accountPageCode.indexOf('{/* Tab 1: Orders History */}')
-      );
-      expect(tabsSection.toLowerCase()).not.toContain("'wishlist'");
-      expect(tabsSection).toContain("'orders'");
-      expect(tabsSection).toContain("'address'");
-      expect(tabsSection).toContain("'profile'");
+      // Verify the tabs/sidebar do NOT include a wishlist tab (wishlist is direct link)
+      expect(accountPageCode).toContain("handleTabChange('orders')");
+      expect(accountPageCode).toContain("handleTabChange('address')");
+      expect(accountPageCode).toContain("handleTabChange('profile')");
+      expect(accountPageCode).toContain('to="/wishlist"');
 
-      // Verify compact sign out action is present in Profile tab
+      // Verify compact sign out action is present in Profile / Connected tab
       expect(accountPageCode).toContain('<span>Sign Out</span>');
       expect(accountPageCode).toContain('Patron Session');
 
@@ -142,24 +143,34 @@ describe('MUETY Storefront — 8 Core Requirements Verification Suite', () => {
   });
 
   // =========================================================================
-  // REQUIREMENT 5: Patron Circle & Mandatory Consent
+  // REQUIREMENT 5: Patron Circle Restructure & Relocation to Sign-In Flow
   // =========================================================================
-  describe('5. Patron Circle Sign-In Integration & Mandatory Consent', () => {
-    it('requires explicit consent checkbox before newsletter subscription', () => {
+  describe('5. Patron Circle Restructure & Relocation to Sign-In Flow', () => {
+    it('verifies Patron Circle section has been removed from HomePage', () => {
       const homePageCode = fs.readFileSync(
         path.join(process.cwd(), 'src/features/catalog/pages/HomePage.tsx'),
         'utf-8'
       );
 
-      // Checkbox initially unchecked
-      expect(homePageCode).toContain("useState<boolean>(false)");
-      expect(homePageCode).toContain('id="patron-circle-consent"');
-      expect(homePageCode).toContain('to="/terms-conditions"');
-      expect(homePageCode).toContain('to="/privacy-policy"');
+      // Section 13 Patron Circle must not exist on HomePage
+      expect(homePageCode).not.toContain('Join the MUETY Patron Circle');
+      expect(homePageCode).not.toContain('BESPOKE COMMUNICATIONS');
+      expect(homePageCode).not.toContain('newsletter-section');
+      expect(homePageCode).not.toContain('id="patron-circle-consent"');
+    });
 
-      // Validation logic
-      expect(homePageCode).toContain("if (!newsletterConsent)");
-      expect(homePageCode).toContain('Please accept the Terms & Conditions');
+    it('verifies LoginPage displays optional Patron Circle opt-in and legal links', () => {
+      const loginCode = fs.readFileSync(
+        path.join(process.cwd(), 'src/features/auth/pages/LoginPage.tsx'),
+        'utf-8'
+      );
+
+      // Checkbox is unchecked by default and optional
+      expect(loginCode).toContain('const [patronCircleOptIn, setPatronCircleOptIn] = useState(false)');
+      expect(loginCode).toContain('id="patron-circle-opt-in"');
+      expect(loginCode).toContain("Yes, I'd like to join the MUETY Patron Circle");
+      expect(loginCode).toContain('to="/terms-conditions"');
+      expect(loginCode).toContain('to="/privacy-policy"');
     });
 
     it('verifies RegisterPage enforces mandatory terms consent before registration', () => {

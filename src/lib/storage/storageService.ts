@@ -557,7 +557,10 @@ class StorageService {
     try {
       const data = localStorage.getItem(KEYS.USERS);
       const parsed: UserProfile[] = data ? JSON.parse(data) : [];
-      const sanitizedParsed = parsed.filter(u => !isLegacyEmail(u.email));
+      const sanitizedParsed = parsed.filter(u => !isLegacyEmail(u.email)).map(u => ({
+        ...u,
+        email: (u.email && u.email.toLowerCase().trim() !== 'customer@muety.com') ? u.email.trim() : ''
+      }));
       const combined = [...sanitizedParsed];
 
       INITIAL_USERS.forEach(initUser => {
