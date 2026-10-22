@@ -24,16 +24,15 @@ import {
   ZoomIn,
   ZoomOut,
   Zap,
-  Upload,
-  Image as ImageIcon,
   CheckCircle2,
   Loader2,
   Eye,
-  Sparkles
+  Sparkles,
+  Upload
 } from 'lucide-react';
 import { auditService } from '@/shared/services/auditService';
 import { useAuth } from '@/shared/context/AuthContext';
-import { Product, Review, PatronReview } from '@/types';
+import { Product, PatronReview } from '@/types';
 import { uploadToCloudinary } from '@/lib/media/cloudinary';
 
 export const ProductDetailPage: React.FC = () => {
@@ -54,6 +53,90 @@ export const ProductDetailPage: React.FC = () => {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const dragStartRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastTapRef = React.useRef<number>(0);
+
+  // Touch swipe gallery navigation
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const [touchDeltaX, setTouchDeltaX] = useState<number>(0);
+  const [isSwipingGallery, setIsSwipingGallery] = useState<boolean>(false);
+
+  const galleryImages = useMemo(() => {
+    return Array.isArray(product?.images) && product.images.length > 0
+      ? product.images
+      : ['/saree_model_individual.jpg'];
+  }, [product?.images]);
+
+  const handleGalleryNext = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (selectedImage < galleryImages.length - 1) {
+      setSelectedImage(prev => prev + 1);
+    }
+  };
+
+  const handleGalleryPrev = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (selectedImage > 0) {
+      setSelectedImage(prev => prev - 1);
+    }
+  };
+
+  const handleGalleryTouchStart = (e: React.TouchEvent) => {
+    if (galleryImages.length <= 1) return;
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    setTouchDeltaX(0);
+    setIsSwipingGallery(false);
+  };
+
+  const handleGalleryTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartPos.current || galleryImages.length <= 1) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartPos.current.x;
+    const dy = touch.clientY - touchStartPos.current.y;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (Math.abs(dx) > 10) {
+        setIsSwipingGallery(true);
+        setTouchDeltaX(dx);
+      }
+    }
+  };
+
+  const handleGalleryTouchEnd = () => {
+    if (!touchStartPos.current || galleryImages.length <= 1) {
+      touchStartPos.current = null;
+      setTouchDeltaX(0);
+      setIsSwipingGallery(false);
+      return;
+    }
+
+    const swipeThreshold = 45;
+    if (isSwipingGallery && Math.abs(touchDeltaX) >= swipeThreshold) {
+      if (touchDeltaX < 0) {
+        if (selectedImage < galleryImages.length - 1) {
+          setSelectedImage(prev => prev + 1);
+        }
+      } else {
+        if (selectedImage > 0) {
+          setSelectedImage(prev => prev - 1);
+        }
+      }
+    }
+
+    touchStartPos.current = null;
+    setTouchDeltaX(0);
+    setIsSwipingGallery(false);
+  };
+
+  const handleGalleryKeyDown = (e: React.KeyboardEvent) => {
+    if (galleryImages.length <= 1) return;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      handleGalleryPrev();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      handleGalleryNext();
+    }
+  };
 
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [selectedSize, setSelectedSize] = useState<string>('');
@@ -433,14 +516,68 @@ export const ProductDetailPage: React.FC = () => {
           <div className="pdp-gallery-col">
             <div 
               className="pdp-main-image-card"
-              onClick={() => setIsLightboxOpen(true)}
+              onClick={() => {
+                if (!isSwipingGallery) {
+                  setIsLightboxOpen(true);
+                }
+              }}
+              onTouchStart={handleGalleryTouchStart}
+              onTouchMove={handleGalleryTouchMove}
+              onTouchEnd={handleGalleryTouchEnd}
+              onTouchCancel={handleGalleryTouchEnd}
+              onKeyDown={handleGalleryKeyDown}
+              tabIndex={0}
+              role="region"
+              aria-label={`Product image gallery for ${product.name}, showing image ${selectedImage + 1} of ${galleryImages.length}`}
               title="Click to view high-resolution saree drape"
+              style={{
+                position: 'relative',
+                touchAction: 'pan-y'
+              }}
             >
               <img 
-                src={product.images[selectedImage] || product.images[0]} 
-                alt={product.name}
+                src={galleryImages[selectedImage] || galleryImages[0]} 
+                alt={`${product.name} - drape view ${selectedImage + 1}`}
                 className="pdp-main-img"
+                style={{
+                  transform: isSwipingGallery ? `translateX(${touchDeltaX * 0.4}px)` : 'translateX(0)',
+                  transition: isSwipingGallery ? 'none' : 'transform 0.25s ease, opacity 0.2s ease'
+                }}
               />
+
+              {/* Accessible Prev/Next navigation controls */}
+              {galleryImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleGalleryPrev}
+                    disabled={selectedImage === 0}
+                    className="pdp-gallery-nav-btn pdp-gallery-nav-prev"
+                    aria-label="Previous product image"
+                    title="Previous product image"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGalleryNext}
+                    disabled={selectedImage === galleryImages.length - 1}
+                    className="pdp-gallery-nav-btn pdp-gallery-nav-next"
+                    aria-label="Next product image"
+                    title="Next product image"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </>
+              )}
+
+              {/* Accessible Image Counter & Pagination Indicator */}
+              {galleryImages.length > 1 && (
+                <div className="pdp-gallery-counter-badge" aria-live="polite">
+                  <span>{selectedImage + 1} / {galleryImages.length}</span>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setIsLightboxOpen(true); }}
@@ -451,9 +588,9 @@ export const ProductDetailPage: React.FC = () => {
               </button>
             </div>
 
-            {product.images.length > 1 && (
+            {galleryImages.length > 1 && (
               <div className="pdp-thumbnails-strip">
-                {product.images.map((img, idx) => (
+                {galleryImages.map((img, idx) => (
                   <button
                     key={idx}
                     type="button"

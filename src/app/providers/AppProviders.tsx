@@ -7,11 +7,10 @@ import { NotificationProvider } from '@/shared/context/NotificationContext';
 interface AppProvidersProps {
   children: ReactNode;
 }
-
 export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
   return (
     <React.StrictMode>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <NotificationProvider>
           <AuthProvider>
             <CartProvider>

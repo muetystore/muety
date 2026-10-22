@@ -128,6 +128,7 @@ class AnnouncementService {
   private async fetchFromServer(): Promise<StoreAnnouncement[] | null> {
     try {
       if (typeof fetch === 'undefined') return null;
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return null;
       const res = await fetch('/api/announcements');
       if (res.ok) {
         const data = await res.json();
@@ -136,8 +137,8 @@ class AnnouncementService {
           return data.announcements;
         }
       }
-    } catch (err) {
-      // Offline or network error
+    } catch {
+      // Offline, network change, or server unreachable
     }
     return null;
   }
@@ -292,10 +293,12 @@ class AnnouncementService {
       if (srv) callback(srv);
     });
 
-    // 2. Poll server every 4 seconds for cross-browser live updates
+    // 2. Poll server periodically for cross-browser live updates when tab is active
     const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
       this.fetchFromServer();
-    }, 4000);
+    }, 12000);
 
     // 3. Tab visibility / window focus instant re-sync
     const handleFocus = () => {

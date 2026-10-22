@@ -82,7 +82,7 @@ export const CategoryProductsPage: React.FC = () => {
         <img 
           src={categoryImage} 
           alt={category?.name || 'Category'}
-          fetchPriority="high"
+          {...({ fetchpriority: 'high' } as any)}
           style={{
             position: 'absolute',
             inset: 0,

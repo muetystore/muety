@@ -196,7 +196,7 @@ export const CampaignHero: React.FC<CampaignHeroProps> = ({
                   <img 
                     src={slide.image} 
                     alt={slide.alt}
-                    fetchPriority={idx === currentIndex || idx === 0 ? 'high' : 'auto'}
+                    {...({ fetchpriority: idx === currentIndex || idx === 0 ? 'high' : 'auto' } as any)}
                     loading={idx === 0 ? 'eager' : 'lazy'}
                     decoding="async"
                     className="campaign-hero-bg-img"

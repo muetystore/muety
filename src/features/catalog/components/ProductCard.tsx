@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Product } from '@/types';
 import { useCart } from '@/shared/context/CartContext';
-import { useAuth } from '@/shared/context/AuthContext';
-import { Heart, ShoppingBag, Eye, Star, Zap, Check } from 'lucide-react';
+import { Heart, ShoppingBag, Eye, Star, Check } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
@@ -12,9 +11,7 @@ interface ProductCardProps {
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, priority = false }) => {
-  const { addToCart, toggleWishlist, isInWishlist, setIsDrawerOpen } = useCart();
-  const { isAuthenticated, openAuthModal } = useAuth();
-  const navigate = useNavigate();
+  const { addToCart, toggleWishlist, isInWishlist } = useCart();
   const [isHovered, setIsHovered] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -31,19 +28,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
 
   const isSoldOut = product.availability === 'sold_out' || product.stock === 0;
   const isManualSoldOut = product.availability === 'sold_out';
-
-  const handleBuyNow = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isSoldOut) return;
-    addToCart(product, 1);
-    setIsDrawerOpen(false);
-    if (!isAuthenticated) {
-      openAuthModal({ redirectPath: '/checkout', reason: 'buy_now' });
-      return;
-    }
-    navigate('/checkout');
-  };
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -102,7 +86,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
             src={hasError ? '/saree_model_individual.jpg' : displayImage} 
             alt={product.name}
             loading={priority ? 'eager' : 'lazy'}
-            fetchPriority={priority ? 'high' : 'auto'}
+            {...({ fetchpriority: priority ? 'high' : 'auto' } as any)}
             decoding="async"
             onLoad={() => setIsLoaded(true)}
             onError={() => {
@@ -365,17 +349,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
           </span>
         </div>
 
-        {/* Action Controls - Compact Height */}
-        <div className="product-card-actions" style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
+        {/* Action Controls - Full-Width Primary Add to Bag */}
+        <div className="product-card-actions" style={{ display: 'flex', marginTop: '4px' }}>
           <button
             type="button"
             onClick={handleQuickAdd}
             disabled={isSoldOut}
             className="btn btn-primary btn-sm product-card-btn-add"
             style={{
+              width: '100%',
               flex: 1,
-              padding: '4px 6px',
-              fontSize: '0.68rem',
+              padding: '5px 8px',
+              fontSize: '0.72rem',
               fontWeight: 700,
               display: 'inline-flex',
               alignItems: 'center',
@@ -387,36 +372,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
             }}
             aria-label={isSoldOut ? 'Item Sold Out' : `Add ${product.name} to bag`}
           >
-            <ShoppingBag size={11} />
+            <ShoppingBag size={12} />
             <span>{isSoldOut ? 'SOLD OUT' : justAdded ? 'Added!' : 'Add to Bag'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleBuyNow}
-            disabled={isSoldOut}
-            className="btn btn-outline btn-sm product-card-btn-buy"
-            style={{
-              padding: '4px 6px',
-              fontSize: '0.68rem',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '3px',
-              minHeight: '29px',
-              backgroundColor: '#f8fafc',
-              borderColor: 'var(--brand-border)',
-              color: 'var(--brand-primary)',
-              opacity: isSoldOut ? 0.6 : 1,
-              cursor: isSoldOut ? 'not-allowed' : 'pointer',
-              flexShrink: 0
-            }}
-            title="Buy Now (Direct Checkout)"
-            aria-label={`Buy ${product.name} now`}
-          >
-            <Zap size={11} color={isSoldOut ? '#94a3b8' : '#d4af37'} />
-            <span className="buy-now-text">Buy Now</span>
           </button>
         </div>
       </div>

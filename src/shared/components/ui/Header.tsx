@@ -35,6 +35,14 @@ export const Header: React.FC = () => {
   const location = useLocation();
 
   const hasGenuineName = Boolean(user?.displayName && !isGeneratedPatronName(user.displayName));
+  const isAdminUser = Boolean(
+    user && (
+      user.role === 'admin' ||
+      user.role === 'super_admin' ||
+      user.role === 'catalog_manager' ||
+      (Array.isArray(user.roles) && user.roles.some((r: string) => ['admin', 'super_admin', 'catalog_manager'].includes(r)))
+    )
+  );
 
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -45,6 +53,7 @@ export const Header: React.FC = () => {
   const [shopByMenuOpen, setShopByMenuOpen] = useState(false);
   const [mobileShopByOpen, setMobileShopByOpen] = useState(false);
   const [mobileCollectionsOpen, setMobileCollectionsOpen] = useState(false);
+  const [mobileNavTab, setMobileNavTab] = useState<'catalog' | 'concierge'>('catalog');
   const [categories, setCategories] = useState<Category[]>([]);
   const [collections, setCollections] = useState<SareeCollection[]>(() => collectionService.getCollections());
   const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => 
@@ -157,6 +166,17 @@ export const Header: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Prevent background scrolling when mobile menu or account drawer is open
+  useEffect(() => {
+    if (mobileMenuOpen || accountDrawerOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [mobileMenuOpen, accountDrawerOpen]);
 
   // Memoized collections for Shop By dropdown (Strictly real admin data only)
   const shopByOccasions = useMemo(() => {
@@ -607,7 +627,7 @@ export const Header: React.FC = () => {
                         </div>
                       </div>
 
-                      {user?.role === 'admin' && (
+                      {isAdminUser && (
                         <Link
                           to="/admin/dashboard"
                           onClick={() => setAccountDropdownOpen(false)}
@@ -844,7 +864,7 @@ export const Header: React.FC = () => {
 
             {/* Drawer Body - Independently Scrollable */}
             <div className="account-drawer-body">
-              {user?.role === 'admin' && (
+              {isAdminUser && (
                 <Link
                   to="/admin/dashboard"
                   onClick={() => setAccountDrawerOpen(false)}
@@ -963,234 +983,412 @@ export const Header: React.FC = () => {
          ========================================================= */}
       {mobileMenuOpen && (
         <div 
-          className="mobile-menu-overlay animate-fade-in"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            top: 'var(--header-height-mobile, 52px)',
-            backgroundColor: '#ffffff',
-            zIndex: 9999,
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '1.25rem',
-            overflowY: 'auto',
-            WebkitOverflowScrolling: 'touch',
-            boxShadow: 'var(--shadow-xl)',
-            boxSizing: 'border-box'
-          }}
+          className="mobile-nav-backdrop"
+          onClick={() => setMobileMenuOpen(false)}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', color: '#c9a227', textTransform: 'uppercase' }}>
-              STORE NAVIGATION
-            </span>
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '1rem', fontWeight: 600 }}>
-              <NavLink 
-                to="/" 
-                onClick={() => setMobileMenuOpen(false)} 
-                style={({ isActive }) => ({ color: isActive ? '#c9a227' : '#10182d', padding: '6px 0', textDecoration: 'none' })}
+          <div 
+            className="mobile-nav-drawer"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Store Navigation"
+          >
+            {/* Drawer Header with Prominent Close (X) Button */}
+            <div className="mobile-nav-header">
+              <div style={{ minWidth: 0 }}>
+                <span className="mobile-nav-kicker">MUETY ATELIER</span>
+                <h3 className="mobile-nav-title">The Atelier Collection</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                className="mobile-nav-close-btn"
+                aria-label="Close Store Navigation"
+                title="Close Store Navigation"
               >
-                Home
-              </NavLink>
+                <X size={20} />
+              </button>
+            </div>
 
-              {/* Mobile Shop By Accordion */}
-              <div style={{ borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9', padding: '6px 0' }}>
-                <button
-                  type="button"
-                  onClick={() => setMobileShopByOpen(!mobileShopByOpen)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    width: '100%',
-                    background: 'none',
-                    border: 'none',
-                    padding: '8px 0',
-                    fontSize: '1rem',
-                    fontWeight: 600,
-                    color: mobileShopByOpen ? '#c9a227' : '#10182d',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Sparkles size={16} color="#c9a227" /> Shop By
-                  </span>
-                  <ChevronDown size={16} style={{ transform: mobileShopByOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
-                </button>
+            {/* Luxury Segmented Switcher */}
+            <div className="mobile-nav-tabs">
+              <button
+                type="button"
+                onClick={() => setMobileNavTab('catalog')}
+                className={`mobile-nav-tab-btn ${mobileNavTab === 'catalog' ? 'active' : ''}`}
+              >
+                <Sparkles size={14} color="#C99A16" />
+                <span>Collections</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileNavTab('concierge')}
+                className={`mobile-nav-tab-btn ${mobileNavTab === 'concierge' ? 'active' : ''}`}
+              >
+                <User size={14} color="#C99A16" />
+                <span>Patron Suite</span>
+                {isAdminUser && <span className="tab-admin-dot" title="Executive Privilege" />}
+              </button>
+            </div>
 
-                {mobileShopByOpen && (
-                  <div style={{ padding: '6px 0 10px 12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {shopByOccasions.length > 0 && (
-                      <div>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Occasion</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
-                          {shopByOccasions.map(col => (
-                            <Link key={col.id} to={`/products?occasion=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
-                              {col.name}
-                            </Link>
-                          ))}
+            {/* Independently Scrollable Navigation Body */}
+            <div className="mobile-nav-body">
+              {mobileNavTab === 'catalog' ? (
+                <nav style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <NavLink 
+                    to="/" 
+                    onClick={() => setMobileMenuOpen(false)} 
+                    className={({ isActive }) => `mobile-nav-card ${isActive ? 'active' : ''}`}
+                  >
+                    <span>Home</span>
+                    <ChevronRight size={16} color="#8492A6" />
+                  </NavLink>
+
+                  <NavLink 
+                    to="/products" 
+                    onClick={() => setMobileMenuOpen(false)} 
+                    className={({ isActive }) => `mobile-nav-card ${isActive ? 'active' : ''}`}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>All Saree Collections</span>
+                      <span className="mobile-nav-tag">HAUTE</span>
+                    </span>
+                    <ChevronRight size={16} color="#8492A6" />
+                  </NavLink>
+
+                  {/* Mobile Shop By Accordion */}
+                  <div className={`mobile-nav-accordion-wrapper ${mobileShopByOpen ? 'open' : ''}`}>
+                    <button
+                      type="button"
+                      onClick={() => setMobileShopByOpen(!mobileShopByOpen)}
+                      className={`mobile-nav-accordion-btn ${mobileShopByOpen ? 'open' : ''}`}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Sparkles size={16} color="#C99A16" />
+                        <span>Curated Selections</span>
+                      </span>
+                      <ChevronDown size={16} color="#8492A6" style={{ transform: mobileShopByOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+                    </button>
+
+                    {mobileShopByOpen && (
+                      <div className="mobile-nav-sub-panel">
+                        {shopByOccasions.length > 0 && (
+                          <div>
+                            <div className="mobile-nav-sub-heading">By Occasion</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              {shopByOccasions.map(col => (
+                                <Link key={col.id} to={`/products?occasion=${col.slug}`} onClick={() => setMobileMenuOpen(false)} className="mobile-nav-sub-link">
+                                  {col.name}
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {shopByFabrics.length > 0 && (
+                          <div>
+                            <div className="mobile-nav-sub-heading">By Fabric & Weave</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              {shopByFabrics.map(col => (
+                                <Link key={col.id} to={`/products?fabric=${col.slug}`} onClick={() => setMobileMenuOpen(false)} className="mobile-nav-sub-link">
+                                  {col.name}
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {shopByStyles.length > 0 && (
+                          <div>
+                            <div className="mobile-nav-sub-heading">By Silhouette & Drape</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              {shopByStyles.map(col => (
+                                <Link key={col.id} to={`/products?style=${col.slug}`} onClick={() => setMobileMenuOpen(false)} className="mobile-nav-sub-link">
+                                  {col.name}
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div>
+                          <div className="mobile-nav-sub-heading">By Investment</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <Link to="/products?maxPrice=2000" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-sub-link">Under ₹2,000</Link>
+                            <Link to="/products?minPrice=2000&maxPrice=5000" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-sub-link">₹2,000 – ₹5,000</Link>
+                            <Link to="/products?minPrice=5000" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-sub-link">Heirloom Silk (Above ₹5,000)</Link>
+                          </div>
                         </div>
                       </div>
                     )}
+                  </div>
 
-                    {shopByFabrics.length > 0 && (
-                      <div>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Fabric</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
-                          {shopByFabrics.map(col => (
-                            <Link key={col.id} to={`/products?fabric=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
-                              {col.name}
+                  {/* Mobile Categories Accordion */}
+                  <div className={`mobile-nav-accordion-wrapper ${mobileCollectionsOpen ? 'open' : ''}`}>
+                    <button
+                      type="button"
+                      onClick={() => setMobileCollectionsOpen(!mobileCollectionsOpen)}
+                      className={`mobile-nav-accordion-btn ${mobileCollectionsOpen ? 'open' : ''}`}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Layers size={16} color="#C99A16" />
+                        <span>Atelier Categories</span>
+                      </span>
+                      <ChevronDown size={16} color="#8492A6" style={{ transform: mobileCollectionsOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+                    </button>
+
+                    {mobileCollectionsOpen && (
+                      <div className="mobile-nav-sub-panel">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          {categories.map((c) => (
+                            <Link key={c.id} to={`/products?cat=${c.slug}`} onClick={() => setMobileMenuOpen(false)} className="mobile-nav-sub-link">
+                              {c.name}
                             </Link>
                           ))}
+                          <Link to="/categories" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-sub-link" style={{ color: '#C99A16', fontWeight: 700 }}>
+                            Browse All Categories &rarr;
+                          </Link>
                         </div>
                       </div>
                     )}
+                  </div>
 
-                    {shopByStyles.length > 0 && (
-                      <div>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Style</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
-                          {shopByStyles.map(col => (
-                            <Link key={col.id} to={`/products?style=${col.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
-                              {col.name}
-                            </Link>
-                          ))}
+                  <div className="mobile-nav-divider">The House of Muety</div>
+
+                  <NavLink 
+                    to="/about" 
+                    onClick={() => setMobileMenuOpen(false)} 
+                    className={({ isActive }) => `mobile-nav-card ${isActive ? 'active' : ''}`}
+                  >
+                    <span>Muety Atelier Heritage</span>
+                    <ChevronRight size={16} color="#8492A6" />
+                  </NavLink>
+
+                  <NavLink 
+                    to="/support" 
+                    onClick={() => setMobileMenuOpen(false)} 
+                    className={({ isActive }) => `mobile-nav-card ${isActive ? 'active' : ''}`}
+                  >
+                    <span>Patron Care & Bespoke Styling</span>
+                    <ChevronRight size={16} color="#8492A6" />
+                  </NavLink>
+
+                  <NavLink 
+                    to="/wishlist" 
+                    onClick={() => setMobileMenuOpen(false)} 
+                    className={({ isActive }) => `mobile-nav-card ${isActive ? 'active' : ''}`}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>Saved Atelier Wishlist</span>
+                      {wishlist.length > 0 && <span className="mobile-nav-tag">{wishlist.length}</span>}
+                    </span>
+                    <ChevronRight size={16} color="#8492A6" />
+                  </NavLink>
+                </nav>
+              ) : (
+                /* Patron Suite Tab Content */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {isAuthenticated ? (
+                    <>
+                      {/* Patron VIP Identification Card */}
+                      <div className="mobile-nav-profile-card">
+                        <div className="mobile-nav-profile-top">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+                            <div className="mobile-nav-avatar">
+                              {hasGenuineName && user?.displayName 
+                                ? user.displayName.trim().charAt(0).toUpperCase() 
+                                : (user?.email?.charAt(0).toUpperCase() || 'P')}
+                            </div>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div className="mobile-nav-profile-name" title={user?.displayName || 'Valued Patron'}>
+                                {hasGenuineName && user?.displayName ? user.displayName : 'Valued Patron'}
+                              </div>
+                              <div className="mobile-nav-profile-meta" title={user?.email || user?.phoneNumber || ''}>
+                                {user?.email || user?.phoneNumber}
+                              </div>
+                              <div className="mobile-nav-profile-badge">
+                                {isAdminUser ? 'Executive Super Admin' : 'Patron Circle Member'}
+                              </div>
+                            </div>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => { logout(); setMobileMenuOpen(false); }} 
+                            className="mobile-nav-signout-btn"
+                            title="Sign Out"
+                          >
+                            <LogOut size={13} />
+                            <span>Exit</span>
+                          </button>
                         </div>
                       </div>
-                    )}
 
-                    <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Price Range</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
-                        <Link to="/products?maxPrice=2000" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Under ₹2,000</Link>
-                        <Link to="/products?minPrice=2000&maxPrice=5000" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>₹2,000 – ₹5,000</Link>
-                        <Link to="/products?minPrice=5000" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>Above ₹5,000</Link>
+                      {/* VIP Executive Admin Hero Card if admin */}
+                      {isAdminUser && (
+                        <Link 
+                          to="/admin/dashboard" 
+                          onClick={() => setMobileMenuOpen(false)} 
+                          className="mobile-nav-admin-hero-card"
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                            <div className="mobile-nav-card-icon" style={{ background: '#FBF5E7', color: '#C99A16', borderColor: '#C99A16' }}>
+                              <LayoutDashboard size={18} />
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#111827' }}>Executive Admin Dashboard</div>
+                              <div style={{ fontSize: '0.72rem', color: '#8492A6', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Catalog, orders, customers & store</div>
+                            </div>
+                          </div>
+                          <ChevronRight size={16} color="#8492A6" style={{ flexShrink: 0 }} />
+                        </Link>
+                      )}
+
+                      {/* Quick Action Tiles */}
+                      <Link to="/account?tab=orders" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-action-card">
+                        <div className="mobile-nav-card-icon"><Package size={16} /></div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#111827' }}>My Orders & Shipments</div>
+                          <div style={{ fontSize: '0.72rem', color: '#8492A6' }}>Live tracking & order history</div>
+                        </div>
+                        <ChevronRight size={14} color="#8492A6" />
+                      </Link>
+
+                      <Link to="/account" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-action-card">
+                        <div className="mobile-nav-card-icon"><User size={16} /></div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#111827' }}>Patron Profile</div>
+                          <div style={{ fontSize: '0.72rem', color: '#8492A6' }}>Personal details & measurements</div>
+                        </div>
+                        <ChevronRight size={14} color="#8492A6" />
+                      </Link>
+
+                      <Link to="/account?tab=address" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-action-card">
+                        <div className="mobile-nav-card-icon"><MapPin size={16} /></div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#111827' }}>Delivery Addresses</div>
+                          <div style={{ fontSize: '0.72rem', color: '#8492A6' }}>Saved white-glove shipping destinations</div>
+                        </div>
+                        <ChevronRight size={14} color="#8492A6" />
+                      </Link>
+
+                      <Link to="/account?tab=profile" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-action-card">
+                        <div className="mobile-nav-card-icon"><Settings size={16} /></div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#111827' }}>Security & Settings</div>
+                          <div style={{ fontSize: '0.72rem', color: '#8492A6' }}>Password & session preferences</div>
+                        </div>
+                        <ChevronRight size={14} color="#8492A6" />
+                      </Link>
+
+                      <Link to="/account?tab=connected" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-action-card">
+                        <div className="mobile-nav-card-icon"><Link2 size={16} /></div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#111827' }}>Connected Accounts</div>
+                          <div style={{ fontSize: '0.72rem', color: '#8492A6' }}>Google & phone authentication methods</div>
+                        </div>
+                        <ChevronRight size={14} color="#8492A6" />
+                      </Link>
+
+                      {/* Direct Concierge Contact */}
+                      <Link to="/support" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-action-card" style={{ borderStyle: 'dashed', borderColor: '#C99A16' }}>
+                        <div className="mobile-nav-card-icon" style={{ background: '#FBF5E7', color: '#C99A16' }}>
+                          <Sparkles size={16} color="#C99A16" />
+                        </div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#C99A16' }}>Bespoke Styling Concierge</div>
+                          <div style={{ fontSize: '0.72rem', color: '#8492A6' }}>Private saree drapers & styling</div>
+                        </div>
+                        <ChevronRight size={14} color="#C99A16" />
+                      </Link>
+                    </>
+                  ) : (
+                    /* Guest View in Patron Suite */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div className="mobile-nav-profile-card" style={{ textAlign: 'center', padding: '20px 16px' }}>
+                        <div className="mobile-nav-avatar" style={{ margin: '0 auto 12px' }}>
+                          <Sparkles size={20} color="#C99A16" />
+                        </div>
+                        <h4 style={{ color: '#111827', fontSize: '1.05rem', fontWeight: 700, marginBottom: '6px' }}>
+                          Muety Patron Circle
+                        </h4>
+                        <p style={{ color: '#8492A6', fontSize: '0.8rem', lineHeight: 1.5, marginBottom: '16px' }}>
+                          Sign in to access your curated bridal wishlist, white-glove order tracking, and bespoke styling privileges.
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="dock-btn-primary">
+                            Sign In
+                          </Link>
+                          <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="dock-btn-secondary">
+                            Register
+                          </Link>
+                        </div>
+                      </div>
+
+                      <Link to="/account?tab=orders" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-action-card">
+                        <div className="mobile-nav-card-icon"><Package size={16} /></div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#111827' }}>Track Existing Order</div>
+                          <div style={{ fontSize: '0.72rem', color: '#8492A6' }}>Check delivery status with your order ID</div>
+                        </div>
+                        <ChevronRight size={14} color="#8492A6" />
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Drawer Footer with Patron Concierge & Safe-Area Padding */}
+            <div className="mobile-nav-footer">
+              {mobileNavTab === 'catalog' ? (
+                isAuthenticated ? (
+                  <div 
+                    className="mobile-nav-patron-dock" 
+                    onClick={() => setMobileNavTab('concierge')}
+                    role="button"
+                    tabIndex={0}
+                    title="Open Patron Suite"
+                  >
+                    <div className="dock-left">
+                      <div className="dock-avatar">
+                        {hasGenuineName && user?.displayName 
+                          ? user.displayName.trim().charAt(0).toUpperCase() 
+                          : (user?.email?.charAt(0).toUpperCase() || 'P')}
+                      </div>
+                      <div className="dock-info">
+                        <div className="dock-name">
+                          {hasGenuineName && user?.displayName ? user.displayName : 'Valued Patron'}
+                        </div>
+                        <div className="dock-role">
+                          {isAdminUser ? 'Executive Admin Console' : 'Patron Circle Suite'}
+                        </div>
                       </div>
                     </div>
+                    <div className="dock-right">
+                      <span>Patron Suite</span>
+                      <ChevronRight size={14} color="#C99A16" />
+                    </div>
                   </div>
-                )}
-              </div>
-
-              {/* Mobile Categories Accordion */}
-              <div style={{ borderBottom: '1px solid #f1f5f9', padding: '6px 0' }}>
+                ) : (
+                  <div className="mobile-nav-guest-dock">
+                    <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="dock-btn-primary">
+                      Sign In
+                    </Link>
+                    <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="dock-btn-secondary">
+                      Register
+                    </Link>
+                  </div>
+                )
+              ) : (
                 <button
                   type="button"
-                  onClick={() => setMobileCollectionsOpen(!mobileCollectionsOpen)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    width: '100%',
-                    background: 'none',
-                    border: 'none',
-                    padding: '8px 0',
-                    fontSize: '1rem',
-                    fontWeight: 600,
-                    color: mobileCollectionsOpen ? '#c9a227' : '#10182d',
-                    cursor: 'pointer'
-                  }}
+                  onClick={() => setMobileNavTab('catalog')}
+                  className="mobile-nav-return-btn"
                 >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Layers size={16} color="#c9a227" /> Categories
-                  </span>
-                  <ChevronDown size={16} style={{ transform: mobileCollectionsOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+                  <span>&larr; Return to Atelier Collections</span>
                 </button>
-
-                {mobileCollectionsOpen && (
-                  <div style={{ padding: '6px 0 10px 12px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.9rem' }}>
-                    {categories.map((c) => (
-                      <Link key={c.id} to={`/products?cat=${c.slug}`} onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', textDecoration: 'none' }}>
-                        {c.name}
-                      </Link>
-                    ))}
-                    <Link to="/categories" onClick={() => setMobileMenuOpen(false)} style={{ color: '#c9a227', fontWeight: 600, textDecoration: 'none' }}>
-                      Browse All Categories &rarr;
-                    </Link>
-                    <Link to="/products" onClick={() => setMobileMenuOpen(false)} style={{ color: '#10182d', fontWeight: 600, textDecoration: 'none' }}>
-                      Complete Catalog &rarr;
-                    </Link>
-                  </div>
-                )}
-              </div>
-
-              <NavLink 
-                to="/about" 
-                onClick={() => setMobileMenuOpen(false)} 
-                style={({ isActive }) => ({ color: isActive ? '#c9a227' : '#10182d', padding: '6px 0', textDecoration: 'none' })}
-              >
-                Muety Atelier
-              </NavLink>
-
-              <NavLink 
-                to="/support" 
-                onClick={() => setMobileMenuOpen(false)} 
-                style={({ isActive }) => ({ color: isActive ? '#c9a227' : '#10182d', padding: '6px 0', textDecoration: 'none' })}
-              >
-                Patron Care
-              </NavLink>
-
-              <NavLink 
-                to="/wishlist" 
-                onClick={() => setMobileMenuOpen(false)} 
-                style={({ isActive }) => ({ color: isActive ? '#c9a227' : '#10182d', padding: '6px 0', textDecoration: 'none' })}
-              >
-                Saved Wishlist ({wishlist.length})
-              </NavLink>
-
-              <NavLink 
-                to="/account" 
-                onClick={() => setMobileMenuOpen(false)} 
-                style={({ isActive }) => ({ color: isActive ? '#c9a227' : '#10182d', padding: '6px 0', textDecoration: 'none' })}
-              >
-                Patron Account
-              </NavLink>
-            </nav>
-          </div>
-
-          <div style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid #f1f5f9' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: '0.85rem' }}>
-              PATRON CONCIERGE
-            </span>
-            {isAuthenticated ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#10182d', marginBottom: '2px' }}>
-                  {hasGenuineName && user?.displayName ? user.displayName : 'Valued Patron'}
-                  <span style={{ display: 'block', fontSize: '0.78rem', color: '#64748b', fontWeight: 400 }}>{user?.email || user?.phoneNumber}</span>
-                </div>
-                {user?.role === 'admin' && (
-                  <Link to="/admin/dashboard" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start', color: '#854d0e', fontWeight: 700 }}>
-                    <LayoutDashboard size={15} /> Executive Admin Dashboard
-                  </Link>
-                )}
-                <Link to="/account" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start' }}>
-                  <User size={15} /> Account Dashboard
-                </Link>
-                <Link to="/account?tab=orders" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start' }}>
-                  <Package size={15} /> My Orders
-                </Link>
-                <Link to="/account?tab=address" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start' }}>
-                  <MapPin size={15} /> Delivery Addresses
-                </Link>
-                <Link to="/account?tab=profile" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start' }}>
-                  <Settings size={15} /> Profile Settings
-                </Link>
-                <Link to="/account?tab=connected" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'flex-start' }}>
-                  <Link2 size={15} /> Connected Accounts
-                </Link>
-                <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="btn btn-outline btn-sm" style={{ width: '100%', justifyContent: 'flex-start', color: '#b91c1c', borderColor: '#fca5a5', marginTop: '4px' }}>
-                  <LogOut size={15} /> Sign Out
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="btn btn-primary btn-sm" style={{ flex: 1 }}>Sign In</Link>
-                  <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="btn btn-outline btn-sm" style={{ flex: 1 }}>Register</Link>
-                </div>
-                <Link to="/account?tab=orders" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
-                  <Package size={14} /> Track Order
-                </Link>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

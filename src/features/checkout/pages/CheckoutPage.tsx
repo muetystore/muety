@@ -12,16 +12,20 @@ import {
   Lock, 
   Zap, 
   Check, 
-  QrCode,
   Building2,
   Truck,
   Banknote,
-  MapPin,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  Tag,
+  ChevronDown,
+  X,
+  Loader2
 } from 'lucide-react';
 import { Address } from '@/shared/types';
+import { Coupon } from '@/features/coupons/types';
 import { calculateOrderFinancials } from '@/shared/utils/pricingEngine';
+import { couponService } from '@/features/coupons/services/couponService';
 import { 
   customerAddressService, 
   isValidIndianPin, 
@@ -37,12 +41,77 @@ export const CheckoutPage: React.FC = () => {
     subtotal, 
     discountAmount, 
     appliedCoupon, 
-    shippingFee, 
-    taxAmount, 
-    grandTotal, 
+    applyCoupon,
+    removeCoupon,
     clearCart 
   } = useCart();
   const { error, success } = useNotification();
+
+  // Promo Code State for Checkout
+  const [isPromoExpanded, setIsPromoExpanded] = useState<boolean>(() => Boolean(appliedCoupon));
+  const [promoInputCode, setPromoInputCode] = useState<string>('');
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoSuccessMessage, setPromoSuccessMessage] = useState<string | null>(null);
+  const [isApplyingPromo, setIsApplyingPromo] = useState<boolean>(false);
+  const [availableCoupons, setAvailableCoupons] = useState<Coupon[]>([]);
+  const [showEligibleList, setShowEligibleList] = useState<boolean>(false);
+
+  // Load available active coupons
+  useEffect(() => {
+    try {
+      const allCoupons = couponService.getAllCoupons();
+      const now = Date.now();
+      const eligible = allCoupons.filter(c => c.isActive && new Date(c.expiresAt).getTime() > now);
+      setAvailableCoupons(eligible);
+    } catch {
+      setAvailableCoupons([]);
+    }
+  }, []);
+
+  // Synchronize expansion if coupon is already applied
+  useEffect(() => {
+    if (appliedCoupon) {
+      setIsPromoExpanded(true);
+      setPromoError(null);
+    }
+  }, [appliedCoupon]);
+
+  const handleApplyPromoCode = (codeToApply?: string) => {
+    const targetCode = (codeToApply || promoInputCode).trim().toUpperCase();
+    if (!targetCode) {
+      setPromoError('Please enter a promotional code');
+      return;
+    }
+
+    if (appliedCoupon && appliedCoupon.code.toUpperCase() === targetCode) {
+      setPromoError(`Code ${targetCode} is already applied`);
+      return;
+    }
+
+    setIsApplyingPromo(true);
+    setPromoError(null);
+    setPromoSuccessMessage(null);
+
+    // Apply through authoritative cart/coupon pipeline
+    setTimeout(() => {
+      const res = applyCoupon(targetCode);
+      setIsApplyingPromo(false);
+      if (res.success) {
+        setPromoSuccessMessage(res.message);
+        setPromoInputCode('');
+        setShowEligibleList(false);
+      } else {
+        setPromoError(res.message);
+      }
+    }, 150);
+  };
+
+  const handleRemovePromoCode = () => {
+    removeCoupon();
+    setPromoError(null);
+    setPromoSuccessMessage(null);
+    setPromoInputCode('');
+  };
 
   // Saved Addresses State
   const [savedAddresses, setSavedAddresses] = useState<Address[]>(() => 
@@ -237,6 +306,17 @@ export const CheckoutPage: React.FC = () => {
       postalCode,
       country
     };
+
+    // Authoritative promotion validation prior to payment
+    if (appliedCoupon) {
+      const revalidation = couponService.validateCoupon(appliedCoupon.code, financials.subtotal);
+      if (!revalidation.valid) {
+        removeCoupon();
+        setPromoError(revalidation.message);
+        error(revalidation.message, 'Coupon Ineligible');
+        return;
+      }
+    }
 
     setIsProcessing(true);
     const amountToPayNow = financials.amountDueOnline;
@@ -786,6 +866,260 @@ export const CheckoutPage: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Promo Code Accordion Section */}
+              <div 
+                className="checkout-promo-section"
+                style={{
+                  borderTop: '1px solid var(--brand-border)',
+                  paddingTop: '1rem',
+                  paddingBottom: '0.75rem',
+                  marginBottom: '0.25rem'
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsPromoExpanded(!isPromoExpanded)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    background: 'none',
+                    border: 'none',
+                    padding: '4px 0',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    color: appliedCoupon ? '#997819' : 'var(--brand-primary)'
+                  }}
+                  aria-expanded={isPromoExpanded}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Tag size={16} color={appliedCoupon ? '#c9a227' : 'var(--brand-accent-hover)'} />
+                    <span>Have a promo code?</span>
+                    {appliedCoupon && (
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        backgroundColor: 'var(--brand-accent-light)',
+                        color: '#997819',
+                        padding: '2px 8px',
+                        borderRadius: 'var(--radius-sm)',
+                        letterSpacing: '0.04em'
+                      }}>
+                        {appliedCoupon.code} Applied
+                      </span>
+                    )}
+                  </span>
+                  <ChevronDown 
+                    size={16} 
+                    style={{ 
+                      transform: isPromoExpanded ? 'rotate(180deg)' : 'none', 
+                      transition: 'transform 0.2s ease',
+                      color: 'var(--brand-muted)'
+                    }} 
+                  />
+                </button>
+
+                {isPromoExpanded && (
+                  <div style={{ marginTop: '0.75rem', animation: 'fadeIn 0.2s ease' }}>
+                    {appliedCoupon ? (
+                      /* Applied Promo State */
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 12px',
+                        backgroundColor: 'var(--brand-accent-light)',
+                        border: '1px solid rgba(212, 175, 55, 0.4)',
+                        borderRadius: 'var(--radius-md)',
+                        marginBottom: '0.25rem'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <CheckCircle2 size={16} color="#16a34a" />
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#997819' }}>
+                              Code {appliedCoupon.code} Applied
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                              {appliedCoupon.discountType === 'percentage' 
+                                ? `${appliedCoupon.discountValue}% Off` 
+                                : `₹${appliedCoupon.discountValue} Off`}
+                              {' • '}
+                              <strong style={{ color: '#15803d' }}>Save ₹{financials.discount.toFixed(2)}</strong>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemovePromoCode}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#b91c1c',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            padding: '4px 8px',
+                            borderRadius: 'var(--radius-sm)',
+                            backgroundColor: '#fff1f2'
+                          }}
+                          title="Remove promo code"
+                        >
+                          <X size={13} /> Remove
+                        </button>
+                      </div>
+                    ) : (
+                      /* Promo Code Input & Apply */
+                      <div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input
+                            type="text"
+                            placeholder="e.g. DIWALI25"
+                            value={promoInputCode}
+                            onChange={(e) => {
+                              setPromoInputCode(e.target.value.toUpperCase());
+                              if (promoError) setPromoError(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleApplyPromoCode();
+                              }
+                            }}
+                            className="form-input"
+                            style={{
+                              flex: 1,
+                              textTransform: 'uppercase',
+                              fontSize: '0.85rem',
+                              padding: '8px 10px'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleApplyPromoCode()}
+                            disabled={isApplyingPromo || !promoInputCode.trim()}
+                            className="btn btn-outline"
+                            style={{
+                              padding: '0 14px',
+                              fontSize: '0.82rem',
+                              fontWeight: 700,
+                              minWidth: '72px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            {isApplyingPromo ? <Loader2 size={13} className="animate-spin" /> : 'Apply'}
+                          </button>
+                        </div>
+
+                        {promoError && (
+                          <div style={{ color: '#dc2626', fontSize: '0.76rem', marginTop: '6px' }}>
+                            {promoError}
+                          </div>
+                        )}
+
+                        {promoSuccessMessage && (
+                          <div style={{ color: '#16a34a', fontSize: '0.76rem', marginTop: '6px' }}>
+                            {promoSuccessMessage}
+                          </div>
+                        )}
+
+                        {/* Available Offers Toggle */}
+                        {availableCoupons.length > 0 && (
+                          <div style={{ marginTop: '8px' }}>
+                            <button
+                              type="button"
+                              onClick={() => setShowEligibleList(!showEligibleList)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                fontSize: '0.76rem',
+                                color: '#c9a227',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                textDecoration: 'underline'
+                              }}
+                            >
+                              {showEligibleList ? 'Hide available offers' : `View available offers (${availableCoupons.length})`}
+                            </button>
+
+                            {showEligibleList && (
+                              <div style={{
+                                marginTop: '8px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '6px',
+                                maxHeight: '180px',
+                                overflowY: 'auto',
+                                padding: '8px',
+                                backgroundColor: '#f8fafc',
+                                border: '1px solid var(--brand-border)',
+                                borderRadius: 'var(--radius-md)'
+                              }}>
+                                {availableCoupons.map((coupon) => {
+                                  const isEligible = subtotal >= coupon.minSpend;
+                                  return (
+                                    <div
+                                      key={coupon.id}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: '6px 10px',
+                                        backgroundColor: '#ffffff',
+                                        borderRadius: 'var(--radius-sm)',
+                                        border: '1px dashed var(--brand-border)'
+                                      }}
+                                    >
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          <span style={{ fontWeight: 800, fontSize: '0.82rem', color: 'var(--brand-primary)' }}>
+                                            {coupon.code}
+                                          </span>
+                                          <span style={{ fontSize: '0.7rem', color: '#15803d', fontWeight: 700 }}>
+                                            {coupon.discountType === 'percentage' ? `${coupon.discountValue}% OFF` : `₹${coupon.discountValue} OFF`}
+                                          </span>
+                                        </div>
+                                        <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                                          {coupon.minSpend > 0 ? `Min spend ₹${coupon.minSpend}` : 'No minimum spend'}
+                                          {coupon.maxDiscount ? ` • Max discount ₹${coupon.maxDiscount}` : ''}
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApplyPromoCode(coupon.code)}
+                                        disabled={!isEligible}
+                                        className="btn btn-outline btn-sm"
+                                        style={{
+                                          padding: '2px 8px',
+                                          fontSize: '0.72rem',
+                                          fontWeight: 700,
+                                          borderColor: isEligible ? 'var(--brand-accent)' : '#cbd5e1',
+                                          color: isEligible ? 'var(--brand-accent-hover)' : '#94a3b8'
+                                        }}
+                                      >
+                                        Apply
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Totals Breakdown */}
