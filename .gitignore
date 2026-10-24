@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
-
+.agents/
+.aider-desk/
 # Builds
 dist/
 /build/
@@ -44,6 +45,7 @@ Thumbs.db
 
 # Firebase local/emulator artifacts
 .firebase/
+scripts/backups/
 
 # Local Scratch & JDK
 jdk*/

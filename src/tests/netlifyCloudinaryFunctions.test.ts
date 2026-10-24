@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-// @ts-ignore
+// @ts-expect-error - Netlify ESM JavaScript function module
 import { handler as signatureHandler } from '../../netlify/functions/cloudinary-signature.mjs';
-// @ts-ignore
+// @ts-expect-error - Netlify ESM JavaScript function module
 import { handler as deleteHandler } from '../../netlify/functions/cloudinary-delete.mjs';
 
 describe('Netlify Cloudinary Functions Suite', () => {

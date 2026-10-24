@@ -7,6 +7,11 @@ import { auditService } from '@/shared/services/auditService';
 import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { Product, Category } from '@/types';
+import { 
+  categoryService, 
+  resolveProductCategoriesForDisplay, 
+  computeCategoryProductCount 
+} from '@/features/catalog/services/categoryService';
 import { getUserRoles } from '@/shared/utils/permissions';
 import { 
   Plus, 
@@ -40,17 +45,22 @@ export const AdminProducts: React.FC = () => {
 
   const loadCatalogData = () => {
     setProducts(productService.getAllProducts());
-    setCategories(storageService.getCategories());
+    setCategories(categoryService.getCategories());
   };
 
   useEffect(() => {
     loadCatalogData();
-    const unsub = productService.subscribeToProducts((liveProducts) => {
+    const unsubCats = categoryService.subscribeToCategories((liveCats) => {
+      if (liveCats && liveCats.length > 0) {
+        setCategories(liveCats);
+      }
+    });
+    const unsubProds = productService.subscribeToProducts((liveProducts) => {
       setProducts(liveProducts);
-      setCategories(storageService.getCategories());
     });
     return () => {
-      if (typeof unsub === 'function') unsub();
+      if (typeof unsubCats === 'function') unsubCats();
+      if (typeof unsubProds === 'function') unsubProds();
     };
   }, []);
 
@@ -123,10 +133,16 @@ export const AdminProducts: React.FC = () => {
     
     let matchCat = selectedCat === 'all';
     if (!matchCat) {
-      const targetCatObj = categories.find(c => c.slug === selectedCat || c.id === selectedCat);
+      const targetCatObj = categories.find(c => 
+        (c.slug && c.slug.toLowerCase() === selectedCat.toLowerCase()) || 
+        c.id === selectedCat
+      );
       const targetId = targetCatObj ? targetCatObj.id : selectedCat;
-      matchCat = (p.categoryIds && p.categoryIds.includes(targetId)) ||
-                 (p.categorySlug || '').toLowerCase() === selectedCat.toLowerCase();
+      const targetSlug = targetCatObj ? targetCatObj.slug.toLowerCase() : selectedCat.toLowerCase();
+      matchCat = (Array.isArray(p.categoryIds) && p.categoryIds.includes(targetId)) ||
+                 p.primaryCategoryId === targetId ||
+                 p.categoryId === targetId ||
+                 (p.categorySlug || '').toLowerCase() === targetSlug;
     }
 
     const prodAvailability = p.availability || 'available';
@@ -211,16 +227,13 @@ export const AdminProducts: React.FC = () => {
           </button>
 
           {categories.map(cat => {
-            const count = products.filter(p => 
-              (p.categoryIds && p.categoryIds.includes(cat.id)) ||
-              ((p.categorySlug || '').toLowerCase() === (cat.slug || '').toLowerCase()) ||
-              ((p.category || '').toLowerCase() === (cat.name || '').toLowerCase())
-            ).length;
+            const count = computeCategoryProductCount(cat.id, products);
+            const isSelected = selectedCat === cat.slug || selectedCat === cat.id;
             return (
               <button 
                 key={cat.id} 
-                onClick={() => setSelectedCat(cat.slug)} 
-                className={`btn btn-sm ${selectedCat === cat.slug ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setSelectedCat(cat.slug || cat.id)} 
+                className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-outline'}`}
               >
                 {cat.name} ({count})
               </button>
@@ -274,9 +287,14 @@ export const AdminProducts: React.FC = () => {
                   className="form-select"
                 >
                   <option value="all">All Categories ({products.length})</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.slug}>{cat.name}</option>
-                  ))}
+                  {categories.map(cat => {
+                    const count = computeCategoryProductCount(cat.id, products);
+                    return (
+                      <option key={cat.id} value={cat.slug || cat.id}>
+                        {cat.name} ({count})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </div>
@@ -345,20 +363,19 @@ export const AdminProducts: React.FC = () => {
 
                     <td style={{ padding: '14px 18px' }}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {(prod.categoryIds && prod.categoryIds.length > 0 ? prod.categoryIds : [prod.primaryCategoryId || prod.categoryId || prod.category]).map(cid => {
-                          const catObj = categories.find(c => c.id === cid || c.slug === cid || c.name === cid);
-                          const nameStr = catObj ? catObj.name : (cid || prod.category);
-                          const isPrimary = cid === prod.primaryCategoryId || cid === prod.categoryId;
-                          return (
-                            <span 
-                              key={cid} 
-                              className={`badge ${isPrimary ? 'badge-primary' : 'badge-outline'}`} 
-                              style={{ fontSize: '0.74rem' }}
-                            >
-                              {nameStr} {isPrimary ? '★' : ''}
-                            </span>
-                          );
-                        })}
+                        {resolveProductCategoriesForDisplay(prod, categories).map(badge => (
+                          <span 
+                            key={badge.key} 
+                            className={`badge ${badge.isPrimary ? 'badge-primary' : 'badge-outline'}`} 
+                            style={{ 
+                              fontSize: '0.74rem',
+                              opacity: badge.status === 'archived' || badge.status === 'legacy' ? 0.85 : 1
+                            }}
+                            title={badge.tooltip}
+                          >
+                            {badge.label} {badge.isPrimary ? '★' : ''}
+                          </span>
+                        ))}
                       </div>
                     </td>
 

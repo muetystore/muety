@@ -64,6 +64,20 @@ export const isGeneratedPatronName = (name?: string | null): boolean => {
   return false;
 };
 
+export function sanitizeClientFirestoreProfile(profile: Partial<UserProfile>): Record<string, any> {
+  const sanitized: Record<string, any> = { ...profile };
+  const protectedKeys = [
+    'roles', 'role', 'roleId', 'roleSlug', 'roleName',
+    'departmentId', 'departmentName', 'department',
+    'permissions', 'status', 'invitationStatus', 'isBlocked', 'customerStatus',
+    'ordersCount', 'totalSpent', 'orderCount', 'totalSpend', 'internalNotes'
+  ];
+  for (const k of protectedKeys) {
+    delete sanitized[k];
+  }
+  return sanitized;
+}
+
 export class AuthService {
   private static instance: AuthService;
   private currentUser: UserProfile | null = null;
@@ -417,7 +431,8 @@ export class AuthService {
 
     if (db && isLiveFirebase) {
       try {
-        await withTimeout(setDoc(doc(db, 'users', uid), profile, { merge: true }), 2500);
+        const clientPayload = sanitizeClientFirestoreProfile(profile);
+        await withTimeout(setDoc(doc(db, 'users', uid), clientPayload, { merge: true }), 2500);
       } catch (firestoreErr) {
         console.warn('Firestore setDoc user profile note:', firestoreErr);
       }
@@ -456,12 +471,13 @@ export class AuthService {
 
         const profile = await this.fetchUserProfile(cred.user);
         
-        // Ensure user document exists in Firestore /users and /customers
+        // Ensure user document exists in Firestore /users and /customers (complying with security rules)
         if (db && isLiveFirebase) {
           try {
+            const clientPayload = sanitizeClientFirestoreProfile(profile);
             await Promise.all([
-              setDoc(doc(db, 'users', cred.user.uid), profile, { merge: true }),
-              setDoc(doc(db, 'customers', cred.user.uid), profile, { merge: true })
+              setDoc(doc(db, 'users', cred.user.uid), clientPayload, { merge: true }),
+              setDoc(doc(db, 'customers', cred.user.uid), clientPayload, { merge: true })
             ]);
           } catch (docErr) {
             console.warn('Firestore setDoc Google user note:', docErr);
@@ -509,7 +525,11 @@ export class AuthService {
           const profile = await this.fetchUserProfile(cred.user);
           if (db && isLiveFirebase) {
             try {
-              await setDoc(doc(db, 'users', cred.user.uid), profile, { merge: true });
+              const clientPayload = sanitizeClientFirestoreProfile(profile);
+              await Promise.all([
+                setDoc(doc(db, 'users', cred.user.uid), clientPayload, { merge: true }),
+                setDoc(doc(db, 'customers', cred.user.uid), clientPayload, { merge: true })
+              ]);
             } catch {}
           }
           this.setCurrentUser(profile);
@@ -620,9 +640,10 @@ export class AuthService {
 
       if (db && isLiveFirebase) {
         try {
+          const clientPayload = sanitizeClientFirestoreProfile(profile);
           await Promise.all([
-            setDoc(doc(db, 'users', cred.user.uid), profile, { merge: true }),
-            setDoc(doc(db, 'customers', cred.user.uid), profile, { merge: true })
+            setDoc(doc(db, 'users', cred.user.uid), clientPayload, { merge: true }),
+            setDoc(doc(db, 'customers', cred.user.uid), clientPayload, { merge: true })
           ]);
         } catch (docErr) {
           console.warn('Firestore setDoc Phone user note:', docErr);

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
-import { customerService, isStaffOrAdminUser, CustomerMetrics } from '@/features/customers/services/customerService';
+import { customerService, isStaffOrAdminUser, CustomerMetrics, normalizePhoneNumber } from '@/features/customers/services/customerService';
 import { storageService } from '@/lib/storage/storageService';
+import { orderService } from '@/features/orders/services/orderService';
 import { auditService } from '@/shared/services/auditService';
 import { authService } from '@/features/auth/services/authService';
 import { useAuth } from '@/shared/context/AuthContext';
@@ -10,6 +11,14 @@ import { useNotification } from '@/shared/context/NotificationContext';
 import { UserProfile, CustomerStatus, Address } from '@/shared/types';
 import { Order } from '@/features/orders/types';
 import { getUserRoles } from '@/shared/utils/permissions';
+import { 
+  calculateOrdersSummary, 
+  filterCustomerOrders 
+} from '@/shared/utils/orderMetrics';
+import { 
+  generateIdentityDryRunReport, 
+  formatDryRunReportText 
+} from '@/features/customers/services/identityAuditService';
 import { AdminModal } from '@/features/admin/components/AdminModal';
 import { 
   Search, 
@@ -35,7 +44,10 @@ import {
   Layers,
   ArrowRight,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle,
+  RefreshCw,
+  Sparkles
 } from 'lucide-react';
 
 export const AdminCustomers: React.FC = () => {
@@ -51,6 +63,7 @@ export const AdminCustomers: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedCustomer, setSelectedCustomer] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'contact' | 'addresses' | 'orders' | 'account'>('overview');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Contact Form State
   const [editName, setEditName] = useState('');
@@ -76,26 +89,108 @@ export const AdminCustomers: React.FC = () => {
   // Password reset & Account action loading
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [isTogglingCircle, setIsTogglingCircle] = useState(false);
+  const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
+  const [inspectedConflictCustomer, setInspectedConflictCustomer] = useState<UserProfile | null>(null);
+  const [showDryRunModal, setShowDryRunModal] = useState(false);
+  const [dryRunReportText, setDryRunReportText] = useState<string>('');
+  const [, setOrdersLoaded] = useState(false);
 
-  // Subscribe to live customers & orders
+  // Loading state machine
+  type CrmLoadingState = 'loading' | 'loaded' | 'refreshing' | 'error' | 'empty';
+  const [crmState, setCrmState] = useState<CrmLoadingState>('loading');
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Manual Synchronize handler
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    setCrmState(customers.length > 0 ? 'refreshing' : 'loading');
+    setSyncError(null);
+    try {
+      const livePatrons = await customerService.syncCustomers();
+      if (Array.isArray(livePatrons)) {
+        if (livePatrons.length > 0) {
+          setCustomers(livePatrons);
+          setCrmState('loaded');
+        } else if (customers.length === 0) {
+          setCrmState('empty');
+        } else {
+          setCrmState('loaded');
+        }
+      }
+      const stats = (livePatrons as any)?.stats;
+      if (stats) {
+        success(`Sync Complete: ${stats.read} records scanned (${stats.created} new, ${stats.updated} updated, ${stats.skipped} unchanged). ${stats.conflictsDetected} shared phone conflicts monitored.`);
+      } else {
+        success(`Successfully synchronized ${livePatrons.length} patrons from Cloud Firestore.`);
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to synchronize with Firestore.';
+      setSyncError(msg);
+      setCrmState(customers.length > 0 ? 'loaded' : 'error');
+      notifyError(msg);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Subscribe to live customers & orders with stable listener lifecycle (never re-subscribe on selectedCustomer changes)
   useEffect(() => {
-    const unsubscribe = customerService.subscribeToCustomers((liveUsers) => {
-      const canonicalCustomers = liveUsers.filter(u => !isStaffOrAdminUser(u));
-      setCustomers(canonicalCustomers);
-      const liveOrders = storageService.getOrders();
-      setOrders(liveOrders);
+    let hasLoadedServer = false;
 
-      // Keep selected customer synchronized if modal is open
-      if (selectedCustomer) {
-        const updated = canonicalCustomers.find(u => u.uid === selectedCustomer.uid);
-        if (updated) setSelectedCustomer(updated);
+    const unsubCustomers = customerService.subscribeToCustomers((liveUsers) => {
+      const canonicalCustomers = liveUsers.filter(u => !isStaffOrAdminUser(u));
+      if (hasLoadedServer || (liveUsers as any).stats !== undefined || canonicalCustomers.length > 0) {
+        hasLoadedServer = true;
+        setCustomers(canonicalCustomers);
+        setCrmState(canonicalCustomers.length > 0 ? 'loaded' : 'empty');
       }
     });
 
+    const unsubOrders = orderService.subscribeToAllOrders((liveOrders) => {
+      setOrders(liveOrders);
+      setOrdersLoaded(true);
+    });
+
+    // Authoritative initial sync with server to fetch all Firebase Auth patrons and Firestore records
+    customerService.syncCustomers()
+      .then((livePatrons) => {
+        hasLoadedServer = true;
+        const canonical = (livePatrons || []).filter(u => !isStaffOrAdminUser(u));
+        setCustomers(canonical);
+        setCrmState(canonical.length > 0 ? 'loaded' : 'empty');
+      })
+      .catch((err) => {
+        hasLoadedServer = true;
+        const fallback = customerService.getOnlyCustomers();
+        setCustomers(fallback);
+        setCrmState(fallback.length > 0 ? 'loaded' : 'error');
+        setSyncError(err?.message || 'Sync failed');
+      });
+
+    // Fallback timer if network takes >2500ms
+    const fallbackTimer = setTimeout(() => {
+      if (!hasLoadedServer) {
+        const fallback = customerService.getOnlyCustomers();
+        setCustomers(fallback);
+        setCrmState(fallback.length > 0 ? 'loaded' : 'empty');
+      }
+    }, 2500);
+
     return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
+      clearTimeout(fallbackTimer);
+      if (typeof unsubCustomers === 'function') unsubCustomers();
+      if (typeof unsubOrders === 'function') unsubOrders();
     };
-  }, [selectedCustomer?.uid]);
+  }, []);
+
+  // Keep selected customer synchronized if customer list updates, without tearing down subscribers
+  useEffect(() => {
+    if (selectedCustomer) {
+      const updated = customers.find(u => u.uid === selectedCustomer.uid);
+      if (updated) setSelectedCustomer(updated);
+    }
+  }, [customers]);
 
   // Derive per-customer metrics map for fast lookup
   const customerMetricsMap = useMemo(() => {
@@ -106,17 +201,19 @@ export const AdminCustomers: React.FC = () => {
     return map;
   }, [customers, orders]);
 
+  // Canonical orders summary matching Executive Dashboard
+  const ordersSummary = useMemo(() => calculateOrdersSummary(orders), [orders]);
+
   // CRM Aggregate KPI Metrics
   const totalCustomers = customers.length;
   const activeAccounts = customers.filter(u => !u.isBlocked).length;
+  const patronCircleCount = customers.filter(u => Boolean(u.patronCircleMember || (u as any).joinCircle || (u as any).isPatronCircle)).length;
   const vipCustomersCount = customers.filter(u => {
     const m = customerMetricsMap.get(u.uid);
     return u.customerStatus === 'VIP' || (m && m.isVip);
   }).length;
-  const totalLTV = customers.reduce((sum, u) => {
-    const m = customerMetricsMap.get(u.uid);
-    return sum + (m ? m.totalSpend : 0);
-  }, 0);
+  const suspendedAccountsCount = customers.filter(u => !!u.isBlocked).length;
+  const totalLTV = ordersSummary.cumulativeSpend;
 
   // Filtered customer directory
   const filteredCustomers = useMemo(() => {
@@ -127,19 +224,50 @@ export const AdminCustomers: React.FC = () => {
         (u.fullName || '').toLowerCase().includes(q) ||
         (u.email || '').toLowerCase().includes(q) ||
         (u.phoneNumber || '').toLowerCase().includes(q) ||
-        (u.phone || '').toLowerCase().includes(q);
+        (u.phone || '').toLowerCase().includes(q) ||
+        (u.uid || '').toLowerCase().includes(q);
 
       const m = customerMetricsMap.get(u.uid);
       const isVip = u.customerStatus === 'VIP' || (m && m.isVip);
+      const isPatronCircle = Boolean(u.patronCircleMember || (u as any).joinCircle || (u as any).isPatronCircle);
 
       let matchesStatus = true;
       if (statusFilter === 'active') matchesStatus = !u.isBlocked;
+      else if (statusFilter === 'patron_circle') matchesStatus = isPatronCircle;
       else if (statusFilter === 'VIP') matchesStatus = !!isVip;
       else if (statusFilter === 'blocked') matchesStatus = !!u.isBlocked;
 
       return matchesQuery && matchesStatus;
     });
   }, [customers, search, statusFilter, customerMetricsMap]);
+
+  // Toggle Patron Circle membership
+  const handleTogglePatronCircle = async () => {
+    if (!selectedCustomer) return;
+    setIsTogglingCircle(true);
+    try {
+      const currentCircle = Boolean(selectedCustomer.patronCircleMember || (selectedCustomer as any).joinCircle || (selectedCustomer as any).isPatronCircle);
+      const willJoin = !currentCircle;
+      const updated = await customerService.togglePatronCircleMembership(selectedCustomer.uid, willJoin);
+      setSelectedCustomer(updated);
+
+      await auditService.logAction({
+        actorUid: currentUser?.uid || 'system',
+        actorEmail: currentUser?.email || 'admin@muety.in',
+        actorRole: getUserRoles(currentUser)[0] || 'admin',
+        action: willJoin ? 'PATRON_CIRCLE_ENROLLED' : 'PATRON_CIRCLE_REMOVED',
+        entityType: 'CUSTOMER',
+        entityId: selectedCustomer.uid,
+        reason: `${willJoin ? 'Enrolled' : 'Removed'} patron ${selectedCustomer.email || selectedCustomer.displayName} ${willJoin ? 'into' : 'from'} MUETY Patron Circle VIP Experience`
+      });
+
+      success(willJoin ? 'Patron enrolled into MUETY Patron Circle.' : 'Patron removed from Patron Circle.');
+    } catch (err: any) {
+      notifyError(err?.message || 'Failed to update Patron Circle status.');
+    } finally {
+      setIsTogglingCircle(false);
+    }
+  };
 
   // Open Workspace Modal
   const handleOpenCustomer = (customer: UserProfile, tab: 'overview' | 'contact' | 'addresses' | 'orders' | 'account' = 'overview') => {
@@ -250,6 +378,32 @@ export const AdminCustomers: React.FC = () => {
       notifyError(err?.message || 'Failed to send password recovery email. Verify network and email settings.');
     } finally {
       setIsSendingReset(false);
+    }
+  };
+
+  // Permanent Delete Patron Account Handler
+  const handleDeleteCustomer = async (cust?: UserProfile) => {
+    const target = cust || selectedCustomer;
+    if (!target) return;
+
+    const patronName = target.displayName || target.fullName || target.email || target.uid;
+    const confirmed = window.confirm(
+      `Permanently delete patron "${patronName}" from Firebase?\n\nThis will completely purge this patron from Firebase Authentication, Cloud Firestore, and the Patron CRM.`
+    );
+    if (!confirmed) return;
+
+    setIsDeletingCustomer(true);
+    try {
+      await customerService.deleteCustomer(target.uid);
+      setCustomers(prev => prev.filter(c => c.uid !== target.uid));
+      if (selectedCustomer?.uid === target.uid) {
+        setSelectedCustomer(null);
+      }
+      success(`Patron "${patronName}" permanently deleted from Firebase.`);
+    } catch (err: any) {
+      notifyError(err?.message || 'Failed to delete patron.');
+    } finally {
+      setIsDeletingCustomer(false);
     }
   };
 
@@ -395,11 +549,7 @@ export const AdminCustomers: React.FC = () => {
   const selectedCustomerMetrics = selectedCustomer ? customerMetricsMap.get(selectedCustomer.uid) || customerService.calculateCustomerMetrics(selectedCustomer, orders) : null;
   const customerOrdersList = useMemo(() => {
     if (!selectedCustomer) return [];
-    const cEmail = (selectedCustomer.email || '').toLowerCase().trim();
-    return orders.filter(o => 
-      (o.customerId && o.customerId === selectedCustomer.uid) ||
-      (o.customerEmail && o.customerEmail.toLowerCase().trim() === cEmail)
-    ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return filterCustomerOrders(orders, selectedCustomer.uid, selectedCustomer.email);
   }, [selectedCustomer, orders]);
 
   return (
@@ -416,14 +566,41 @@ export const AdminCustomers: React.FC = () => {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '20px' }}>
-          <ShieldCheck size={16} color="#16a34a" />
-          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#15803d' }}>Storefront Auth Synchronized</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => {
+              const report = generateIdentityDryRunReport(customers, orders);
+              setDryRunReportText(formatDryRunReportText(report));
+              setShowDryRunModal(true);
+            }}
+            className="btn btn-outline btn-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', padding: '6px 14px' }}
+            title="Generate non-destructive dry-run audit of patron identities, shared phone numbers, and orders"
+          >
+            <ShieldAlert size={14} color="#d97706" />
+            Identity Dry-Run
+          </button>
+
+          <button
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', padding: '6px 14px' }}
+          >
+            <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+            {isSyncing ? 'Syncing...' : 'Sync Patrons'}
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '20px' }}>
+            <ShieldCheck size={16} color="#16a34a" />
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#15803d' }}>Storefront Auth Synchronized</span>
+          </div>
         </div>
       </div>
 
       {/* CRM KPI Cards */}
-      <div className="grid-4" style={{ gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
         
         {/* Total Customers */}
         <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column' }}>
@@ -437,16 +614,30 @@ export const AdminCustomers: React.FC = () => {
           <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 'auto', paddingTop: '6px' }}>{activeAccounts} active patron accounts</span>
         </div>
 
-        {/* VIP Patrons */}
+        {/* Patron Circle Members */}
         <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', backgroundColor: '#fffdf5', borderColor: '#fde68a' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#92400e', textTransform: 'uppercase' }}>VIP Clients</span>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Sparkles size={14} color="#d4af37" /> Patron Circle
+            </span>
             <Award size={18} color="#d4af37" />
           </div>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#92400e', fontFamily: 'var(--font-heading)' }}>
+            {patronCircleCount}
+          </div>
+          <span style={{ fontSize: '0.78rem', color: '#b45309', marginTop: 'auto', paddingTop: '6px' }}>Enrolled VIP Circle Members</span>
+        </div>
+
+        {/* VIP Patrons */}
+        <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase' }}>VIP Clients</span>
+            <Award size={18} color="#d4af37" />
+          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
             {vipCustomersCount}
           </div>
-          <span style={{ fontSize: '0.78rem', color: '#b45309', marginTop: 'auto', paddingTop: '6px' }}>Spend volume &ge; ₹50,000</span>
+          <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 'auto', paddingTop: '6px' }}>Spend volume &ge; ₹50,000</span>
         </div>
 
         {/* Total Orders Volume */}
@@ -456,9 +647,11 @@ export const AdminCustomers: React.FC = () => {
             <ShoppingBag size={18} color="#10b981" />
           </div>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
-            {orders.filter(o => o.orderStatus !== 'cancelled' && o.orderStatus !== 'failed').length}
+            {ordersSummary.verifiedOrdersCount}
           </div>
-          <span style={{ fontSize: '0.78rem', color: '#10b981', marginTop: 'auto', paddingTop: '6px' }}>Completed & active orders</span>
+          <span style={{ fontSize: '0.78rem', color: '#10b981', marginTop: 'auto', paddingTop: '6px' }}>
+            {ordersSummary.completedOrdersCount} completed &bull; {ordersSummary.pendingOrdersCount} in-progress
+          </span>
         </div>
 
         {/* Customer Total LTV */}
@@ -468,9 +661,9 @@ export const AdminCustomers: React.FC = () => {
             <DollarSign size={18} color="#0284c7" />
           </div>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
-            ₹{totalLTV.toLocaleString('en-IN')}
+            ₹{ordersSummary.cumulativeSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 'auto', paddingTop: '6px' }}>Gross completed order revenue</span>
+          <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 'auto', paddingTop: '6px' }}>Net completed order revenue</span>
         </div>
       </div>
 
@@ -493,12 +686,13 @@ export const AdminCustomers: React.FC = () => {
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
             className="form-input"
-            style={{ width: '220px', margin: 0 }}
+            style={{ width: '270px', margin: 0, fontWeight: 600 }}
           >
             <option value="all">All Patron Categories ({totalCustomers})</option>
-            <option value="active">Active Accounts</option>
-            <option value="VIP">VIP Clients (&ge;₹50k spend)</option>
-            <option value="blocked">Suspended Accounts</option>
+            <option value="active">Active Accounts ({activeAccounts})</option>
+            <option value="patron_circle">✨ Join Circle / Patron Circle ({patronCircleCount})</option>
+            <option value="VIP">VIP Clients (&ge;₹50k spend) ({vipCustomersCount})</option>
+            <option value="blocked">Suspended Accounts ({suspendedAccountsCount})</option>
           </select>
         </div>
       </div>
@@ -513,15 +707,22 @@ export const AdminCustomers: React.FC = () => {
               <tr style={{ backgroundColor: '#090d16', color: '#f8fafc', borderBottom: '1px solid #1e293b' }}>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Patron Details</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Contact Information</th>
-                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Account & Tier</th>
-                <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'center' }}>Completed Orders</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Account &amp; Tier</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'center' }}>Verified Orders</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Lifetime Spend</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Registration</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Workspace</th>
               </tr>
             </thead>
             <tbody>
-              {filteredCustomers.length === 0 ? (
+              {crmState === 'loading' ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: '3.5rem', textAlign: 'center', color: '#64748b' }}>
+                    <RefreshCw className="animate-spin" size={32} color="var(--brand-accent)" style={{ margin: '0 auto 0.75rem', display: 'block' }} />
+                    <p style={{ margin: 0, fontWeight: 600 }}>Synchronizing Patron CRM with Cloud Firestore...</p>
+                  </td>
+                </tr>
+              ) : filteredCustomers.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#64748b' }}>
                     <Users size={40} color="#cbd5e1" style={{ margin: '0 auto 0.75rem', display: 'block' }} />
@@ -582,10 +783,15 @@ export const AdminCustomers: React.FC = () => {
                       {/* Contact Info */}
                       <td style={{ padding: '14px 18px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <span style={{ color: customer.email ? 'var(--text-primary)' : '#94a3b8', fontWeight: customer.email ? 500 : 400, fontStyle: customer.email ? 'normal' : 'italic' }}>
-                            {customer.email || 'Not connected'}
+                          <span style={{ 
+                            color: customer.email ? 'var(--text-primary)' : 'var(--brand-accent)', 
+                            fontWeight: customer.email ? 500 : 600, 
+                            fontStyle: 'normal',
+                            fontSize: '0.85rem'
+                          }}>
+                            {customer.email || 'Phone Verified Patron'}
                           </span>
-                          <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                          <span style={{ fontSize: '0.82rem', color: (customer.phoneNumber || customer.phone) ? 'var(--brand-primary)' : '#94a3b8', fontWeight: (customer.phoneNumber || customer.phone) ? 600 : 400 }}>
                             {customer.phoneNumber || customer.phone || 'No phone registered'}
                           </span>
                         </div>
@@ -593,36 +799,75 @@ export const AdminCustomers: React.FC = () => {
 
                       {/* Account Status & VIP Tier */}
                       <td style={{ padding: '14px 18px' }}>
-                        {isBlocked ? (
-                          <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 700, backgroundColor: '#fee2e2', color: '#b91c1c', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <UserX size={12} /> Suspended
-                          </span>
-                        ) : isVip ? (
-                          <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 700, backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Award size={13} color="#d4af37" /> VIP Patron
-                          </span>
-                        ) : (
-                          <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 700, backgroundColor: '#dcfce7', color: '#15803d', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <CheckCircle2 size={12} /> Active Patron
-                          </span>
-                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-start' }}>
+                          {Boolean(customer.patronCircleMember || (customer as any).joinCircle || (customer as any).isPatronCircle) && (
+                            <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '0.74rem', fontWeight: 700, backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <Sparkles size={11} color="#d4af37" /> Patron Circle
+                            </span>
+                          )}
+                          {metrics.hasIdentityConflict && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInspectedConflictCustomer(customer);
+                              }}
+                              style={{ 
+                                padding: '3px 8px', 
+                                borderRadius: '10px', 
+                                fontSize: '0.72rem', 
+                                fontWeight: 700, 
+                                backgroundColor: '#fffbeb', 
+                                color: '#b45309', 
+                                border: '1px solid #fde68a', 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '4px',
+                                cursor: 'pointer' 
+                              }}
+                              title={`Shares contact phone with distinct accounts. Click to inspect identity conflict details.`}
+                            >
+                              <AlertTriangle size={11} color="#d97706" /> Shared Phone
+                            </button>
+                          )}
+                          {isBlocked ? (
+                            <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '0.74rem', fontWeight: 700, backgroundColor: '#fee2e2', color: '#b91c1c', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <UserX size={11} /> Suspended
+                            </span>
+                          ) : isVip ? (
+                            <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '0.74rem', fontWeight: 700, backgroundColor: '#fffbeb', color: '#b45309', border: '1px solid #fef08a', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <Award size={11} color="#d4af37" /> VIP Patron
+                            </span>
+                          ) : (
+                            <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '0.74rem', fontWeight: 700, backgroundColor: '#dcfce7', color: '#15803d', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <CheckCircle2 size={11} /> Active Patron
+                            </span>
+                          )}
+                        </div>
                       </td>
 
-                      {/* Orders Count */}
+                      {/* Verified Orders Count */}
                       <td style={{ padding: '14px 18px', textAlign: 'center', fontWeight: 700 }}>
-                        <span style={{ 
-                          padding: '3px 10px', 
-                          borderRadius: '12px', 
-                          backgroundColor: metrics.orderCount > 0 ? '#f1f5f9' : '#fafafa',
-                          color: metrics.orderCount > 0 ? 'var(--brand-primary)' : '#94a3b8'
-                        }}>
-                          {metrics.orderCount}
-                        </span>
+                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                          <span style={{ 
+                            padding: '3px 10px', 
+                            borderRadius: '12px', 
+                            backgroundColor: metrics.verifiedOrdersCount > 0 ? '#f1f5f9' : '#fafafa',
+                            color: metrics.verifiedOrdersCount > 0 ? 'var(--brand-primary)' : '#94a3b8'
+                          }}>
+                            {metrics.verifiedOrdersCount}
+                          </span>
+                          {metrics.completedOrdersCount > 0 && (
+                            <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 600 }}>
+                              {metrics.completedOrdersCount} delivered
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Lifetime Spend */}
                       <td style={{ padding: '14px 18px', fontWeight: 800, color: 'var(--brand-primary)' }}>
-                        ₹{metrics.totalSpend.toLocaleString('en-IN')}
+                        ₹{metrics.totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
 
                       {/* Enrolled Date */}
@@ -636,13 +881,24 @@ export const AdminCustomers: React.FC = () => {
 
                       {/* Actions */}
                       <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                        <button 
-                          onClick={() => handleOpenCustomer(customer)} 
-                          className="btn btn-primary btn-sm"
-                          style={{ fontWeight: 600, padding: '6px 14px' }}
-                        >
-                          CRM Profile
-                        </button>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button 
+                            onClick={() => handleOpenCustomer(customer)} 
+                            className="btn btn-primary btn-sm"
+                            style={{ fontWeight: 600, padding: '6px 14px' }}
+                          >
+                            CRM Profile
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCustomer(customer)}
+                            className="btn btn-outline btn-sm"
+                            style={{ padding: '6px 8px', color: '#dc2626', borderColor: '#fca5a5' }}
+                            title="Delete patron from Firebase"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -763,6 +1019,74 @@ export const AdminCustomers: React.FC = () => {
                   </div>
                 </div>
 
+                {/* MUETY Patron Circle VIP Card */}
+                {(() => {
+                  const isSelectedPatronCircle = Boolean(selectedCustomer.patronCircleMember || (selectedCustomer as any).joinCircle || (selectedCustomer as any).isPatronCircle);
+                  return (
+                    <div style={{
+                      padding: '1.25rem',
+                      backgroundColor: isSelectedPatronCircle ? '#fffdf5' : '#f8fafc',
+                      border: `1px solid ${isSelectedPatronCircle ? '#fde68a' : '#e2e8f0'}`,
+                      borderRadius: 'var(--radius-md)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '1rem'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          width: '42px',
+                          height: '42px',
+                          borderRadius: '50%',
+                          backgroundColor: isSelectedPatronCircle ? '#d4af37' : '#e2e8f0',
+                          color: isSelectedPatronCircle ? '#090d16' : '#64748b',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <Sparkles size={20} />
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <strong style={{ fontSize: '1rem', color: isSelectedPatronCircle ? '#92400e' : 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
+                              MUETY Patron Circle
+                            </strong>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              backgroundColor: isSelectedPatronCircle ? '#fef3c7' : '#f1f5f9',
+                              color: isSelectedPatronCircle ? '#92400e' : '#64748b',
+                              border: isSelectedPatronCircle ? '1px solid #fde68a' : 'none'
+                            }}>
+                              {isSelectedPatronCircle ? '✨ Enrolled Member' : 'Not Enrolled'}
+                            </span>
+                          </div>
+                          <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: isSelectedPatronCircle ? '#b45309' : '#64748b' }}>
+                            {isSelectedPatronCircle 
+                              ? `Enrolled in VIP Circle${selectedCustomer.patronCircleJoinedAt ? ` on ${new Date(selectedCustomer.patronCircleJoinedAt).toLocaleDateString('en-IN')}` : ''}. Eligible for private drops and concierge styling.`
+                              : 'Patron has not yet joined the MUETY Patron Circle VIP Experience.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={isTogglingCircle}
+                        onClick={handleTogglePatronCircle}
+                        className={isSelectedPatronCircle ? 'btn btn-outline btn-sm' : 'btn btn-primary btn-sm'}
+                        style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <Sparkles size={14} />
+                        {isTogglingCircle ? 'Updating...' : isSelectedPatronCircle ? 'Remove from Circle' : 'Enroll in Patron Circle'}
+                      </button>
+                    </div>
+                  );
+                })()}
+
                 {/* KPI Metrics */}
                 <div className="grid-3" style={{ gap: '1rem' }}>
                   <div style={{ padding: '1.25rem', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-md)' }}>
@@ -770,7 +1094,7 @@ export const AdminCustomers: React.FC = () => {
                       Total Lifetime Spend
                     </span>
                     <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--brand-primary)', marginTop: '4px' }}>
-                      ₹{selectedCustomerMetrics.totalSpend.toLocaleString('en-IN')}
+                      ₹{selectedCustomerMetrics.totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px', display: 'block' }}>
                       Calculated from real completed orders
@@ -779,13 +1103,13 @@ export const AdminCustomers: React.FC = () => {
 
                   <div style={{ padding: '1.25rem', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-md)' }}>
                     <span style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>
-                      Completed Orders Count
+                      Verified Orders Count
                     </span>
                     <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--brand-primary)', marginTop: '4px' }}>
-                      {selectedCustomerMetrics.orderCount} orders
+                      {selectedCustomerMetrics.verifiedOrdersCount} verified
                     </div>
                     <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px', display: 'block' }}>
-                      Excluding cancelled & refunded orders
+                      {selectedCustomerMetrics.completedOrdersCount} delivered &bull; {selectedCustomerMetrics.activeOrdersCount} in-progress
                     </span>
                   </div>
 
@@ -1220,6 +1544,70 @@ export const AdminCustomers: React.FC = () => {
                   </button>
                 </div>
 
+                {/* Patron Circle VIP Enrollment Management Card */}
+                {(() => {
+                  const isSelectedPatronCircle = Boolean(selectedCustomer.patronCircleMember || (selectedCustomer as any).joinCircle || (selectedCustomer as any).isPatronCircle);
+                  return (
+                    <div className="card" style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', backgroundColor: isSelectedPatronCircle ? '#fffdf5' : '#ffffff', borderColor: isSelectedPatronCircle ? '#fde68a' : undefined }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <h5 style={{ margin: 0, fontSize: '0.92rem', color: isSelectedPatronCircle ? '#92400e' : 'var(--brand-primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Sparkles size={16} color="#d4af37" /> MUETY Patron Circle VIP Access
+                          </h5>
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: '10px',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            backgroundColor: isSelectedPatronCircle ? '#fef3c7' : '#f1f5f9',
+                            color: isSelectedPatronCircle ? '#92400e' : '#64748b'
+                          }}>
+                            {isSelectedPatronCircle ? 'Enrolled' : 'Not Enrolled'}
+                          </span>
+                        </div>
+                        <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                          {isSelectedPatronCircle 
+                            ? 'Patron is enrolled into the exclusive MUETY Patron Circle with private preview and luxury privileges.' 
+                            : 'Enable Patron Circle VIP membership for this patron to grant priority concierge and festive preview access.'}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={isTogglingCircle}
+                        onClick={handleTogglePatronCircle}
+                        className={isSelectedPatronCircle ? 'btn btn-outline btn-sm' : 'btn btn-outline-gold btn-sm'}
+                        style={{ fontWeight: 700, backgroundColor: '#ffffff', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <Sparkles size={14} />
+                        {isTogglingCircle ? 'Updating...' : isSelectedPatronCircle ? 'Remove from Circle' : 'Enroll in Patron Circle'}
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {/* Permanent Delete Patron Account Card */}
+                <div className="card" style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', backgroundColor: '#fff5f5', borderColor: '#fecdd3' }}>
+                  <div>
+                    <h5 style={{ margin: 0, fontSize: '0.92rem', color: '#b91c1c', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Trash2 size={16} color="#dc2626" /> Permanent Patron Deletion
+                    </h5>
+                    <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                      Permanently purge this patron account, credentials, and profile records from Firebase Authentication and Cloud Firestore.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isDeletingCustomer}
+                    onClick={() => handleDeleteCustomer()}
+                    className="btn btn-danger btn-sm"
+                    style={{ fontWeight: 700 }}
+                  >
+                    {isDeletingCustomer ? 'Deleting...' : 'Delete Patron Account'}
+                  </button>
+                </div>
+
               </div>
             )}
 
@@ -1403,6 +1791,215 @@ export const AdminCustomers: React.FC = () => {
               </button>
             </div>
           </form>
+        </AdminModal>
+      )}
+
+      {/* Shared Phone Identity Conflict Modal */}
+      {inspectedConflictCustomer && (
+        <AdminModal
+          isOpen={true}
+          onClose={() => setInspectedConflictCustomer(null)}
+          title="Patron Identity Inspection — Shared Contact Phone"
+          maxWidth="750px"
+        >
+          <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            
+            {/* Warning / Informational Banner */}
+            <div style={{ 
+              padding: '1rem 1.25rem', 
+              backgroundColor: '#fffbeb', 
+              border: '1px solid #fde68a', 
+              borderRadius: '8px',
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'flex-start'
+            }}>
+              <AlertTriangle size={20} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <h4 style={{ margin: '0 0 4px', fontSize: '0.95rem', fontWeight: 700, color: '#92400e' }}>
+                  Informational Status: Shared Contact Number Detected
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.84rem', color: '#b45309', lineHeight: 1.5 }}>
+                  Contact Phone: <strong>{inspectedConflictCustomer.phoneNumber || inspectedConflictCustomer.phone || 'N/A'}</strong>.
+                  Multiple distinct authentication records share this contact number. In accordance with MUETY security policies,
+                  accounts are <strong>never automatically merged</strong>. Orders, delivery addresses, and private data remain strictly isolated by UID.
+                </p>
+              </div>
+            </div>
+
+            {/* Comparison Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+              
+              {/* Selected Patron Card */}
+              <div style={{ 
+                border: '2px solid var(--brand-primary)', 
+                borderRadius: '8px', 
+                padding: '1rem',
+                backgroundColor: '#f8fafc'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--brand-primary)' }}>
+                    Inspected Patron
+                  </span>
+                  <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '10px', backgroundColor: '#e2e8f0', fontWeight: 600 }}>
+                    Selected Row
+                  </span>
+                </div>
+                <h4 style={{ margin: '0 0 6px', fontSize: '1.05rem', color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
+                  {inspectedConflictCustomer.displayName || inspectedConflictCustomer.fullName || 'Patron'}
+                </h4>
+                <div style={{ fontSize: '0.82rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div><strong>UID:</strong> <code style={{ fontSize: '0.78rem', backgroundColor: '#edf2f7', padding: '1px 4px', borderRadius: '3px' }}>{inspectedConflictCustomer.uid}</code></div>
+                  <div><strong>Email:</strong> {inspectedConflictCustomer.email || 'None recorded'}</div>
+                  <div><strong>Patron Circle:</strong> {inspectedConflictCustomer.patronCircleMember ? 'Yes (Enrolled)' : 'No'}</div>
+                  <div><strong>Verified Orders:</strong> {filterCustomerOrders(orders, inspectedConflictCustomer.uid, inspectedConflictCustomer.email).length}</div>
+                </div>
+              </div>
+
+              {/* Conflicting Accounts */}
+              {customers
+                .filter(c => {
+                  const targetP = normalizePhoneNumber(inspectedConflictCustomer.phoneNumber || inspectedConflictCustomer.phone);
+                  const cP = normalizePhoneNumber(c.phoneNumber || c.phone);
+                  return targetP && cP === targetP && c.uid !== inspectedConflictCustomer.uid;
+                })
+                .map(conf => {
+                  const confOrders = filterCustomerOrders(orders, conf.uid, conf.email);
+                  return (
+                    <div 
+                      key={conf.uid} 
+                      style={{ 
+                        border: '1px solid #cbd5e1', 
+                        borderRadius: '8px', 
+                        padding: '1rem',
+                        backgroundColor: '#ffffff'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#d97706' }}>
+                          Conflicting Account
+                        </span>
+                        <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '10px', backgroundColor: '#fef3c7', color: '#92400e', fontWeight: 600 }}>
+                          Shared Phone
+                        </span>
+                      </div>
+                      <h4 style={{ margin: '0 0 6px', fontSize: '1.05rem', color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
+                        {conf.displayName || conf.fullName || 'Patron'}
+                      </h4>
+                      <div style={{ fontSize: '0.82rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '10px' }}>
+                        <div><strong>UID:</strong> <code style={{ fontSize: '0.78rem', backgroundColor: '#edf2f7', padding: '1px 4px', borderRadius: '3px' }}>{conf.uid}</code></div>
+                        <div><strong>Email:</strong> {conf.email || 'None recorded'}</div>
+                        <div><strong>Patron Circle:</strong> {conf.patronCircleMember ? 'Yes (Enrolled)' : 'No'}</div>
+                        <div><strong>Verified Orders:</strong> {confOrders.length}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCustomer(conf);
+                          setInspectedConflictCustomer(null);
+                        }}
+                        className="btn btn-outline btn-sm"
+                        style={{ fontSize: '0.78rem', padding: '4px 10px', width: '100%' }}
+                      >
+                        Inspect This Account in CRM Detail
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* Resolution Workflow Guidance */}
+            <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.82rem', color: '#334155', lineHeight: 1.5 }}>
+              <div style={{ fontWeight: 700, color: 'var(--brand-primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <ShieldCheck size={16} color="var(--brand-primary)" />
+                Legitimate Identity Resolution Policy
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                <li><strong>No Silent Merging:</strong> Staff must not merge patron accounts manually or reassign orders without cryptographic ownership proof.</li>
+                <li><strong>Storefront Provider Linking:</strong> If both accounts belong to the same client, the patron can securely link them via storefront Profile Settings using Firebase Auth authenticated provider linking.</li>
+                <li><strong>Order Protection:</strong> Orders placed under each UID remain strictly confidential and are never revealed to another account.</li>
+              </ul>
+            </div>
+
+            {/* Footer Buttons */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const report = generateIdentityDryRunReport(customers, orders);
+                  setDryRunReportText(formatDryRunReportText(report));
+                  setShowDryRunModal(true);
+                }}
+                className="btn btn-outline"
+                style={{ fontSize: '0.85rem' }}
+              >
+                Generate Full Dry-Run Report
+              </button>
+              <button
+                type="button"
+                onClick={() => setInspectedConflictCustomer(null)}
+                className="btn btn-primary"
+                style={{ fontSize: '0.85rem', fontWeight: 700 }}
+              >
+                Close Inspector
+              </button>
+            </div>
+
+          </div>
+        </AdminModal>
+      )}
+
+      {/* Full Identity Dry-Run Diagnostic Modal */}
+      {showDryRunModal && (
+        <AdminModal
+          isOpen={true}
+          onClose={() => setShowDryRunModal(false)}
+          title="Patron Identity & Order Migration Dry-Run Audit"
+          maxWidth="850px"
+        >
+          <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569' }}>
+                Non-destructive diagnostic scan of all patron accounts, normalized phone numbers, and orders.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(dryRunReportText);
+                  success('Dry-run report copied to clipboard.');
+                }}
+                className="btn btn-outline btn-sm"
+                style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+              >
+                Copy Report
+              </button>
+            </div>
+
+            <pre style={{ 
+              backgroundColor: '#0f172a', 
+              color: '#f8fafc', 
+              padding: '1rem', 
+              borderRadius: '8px', 
+              fontSize: '0.78rem', 
+              lineHeight: 1.45,
+              maxHeight: '450px',
+              overflowY: 'auto',
+              fontFamily: 'monospace'
+            }}>
+              {dryRunReportText}
+            </pre>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+              <button
+                type="button"
+                onClick={() => setShowDryRunModal(false)}
+                className="btn btn-primary"
+                style={{ fontWeight: 700 }}
+              >
+                Close Audit
+              </button>
+            </div>
+          </div>
         </AdminModal>
       )}
 

@@ -23,6 +23,7 @@ import {
   validateCategoryCode,
   isCategoryCodeUnique
 } from './categoryCodeService';
+import { categoryService, canDeleteCategory } from './categoryService';
 import { 
   uploadToCloudinary, 
   uploadProductImagesToCloudinary,
@@ -55,7 +56,7 @@ export function clearInFlightSkus(): void {
 }
 
 export function resolveCategoryCode(primaryCategoryId: string): string {
-  const categories = storageService.getCategories();
+  const categories = categoryService.getCategories();
   const primaryCat = categories.find(c => 
     c.id === primaryCategoryId || 
     c.slug === primaryCategoryId || 
@@ -579,7 +580,7 @@ export const productService = {
     const slug = productData.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || productId;
 
     // Multi-category & Primary category normalization
-    const categories = storageService.getCategories();
+    const categories = categoryService.getCategories();
     let categoryIds: string[] = Array.isArray(productData.categoryIds) && productData.categoryIds.length > 0 
       ? productData.categoryIds 
       : [];
@@ -811,14 +812,26 @@ export const productService = {
     return newProduct;
   },
 
-  async updateProduct(product: Product): Promise<Product> {
-    const productId = product.id;
+  async updateProduct(productOrId: Product | string, productUpdates?: Partial<Product>): Promise<Product> {
+    let product: Partial<Product>;
+    let productId: string;
+    if (typeof productOrId === 'string') {
+      productId = productOrId;
+      product = { ...(productUpdates || {}), id: productId };
+    } else {
+      product = productOrId;
+      productId = product.id || '';
+    }
     const existing = storageService.getProductById(productId);
-    const title = product.name || product.title || 'Untitled Product';
-    const slug = product.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || productId;
+    const title = (
+      (product.name && product.name !== existing?.name) 
+        ? product.name 
+        : (product.title || product.name || existing?.title || existing?.name || 'Untitled Product')
+    ).trim();
+    const slug = product.slug || existing?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || productId;
 
     // Multi-category & Primary category normalization
-    const categories = storageService.getCategories();
+    const categories = categoryService.getCategories();
     let categoryIds: string[] = Array.isArray(product.categoryIds) && product.categoryIds.length > 0 
       ? product.categoryIds 
       : (existing?.categoryIds || []);
@@ -830,8 +843,8 @@ export const productService = {
         categoryIds = [existing.categoryId];
       } else {
         const catObj = categories.find(c => 
-          c.name.toLowerCase() === (product.category || '').toLowerCase() ||
-          c.slug.toLowerCase() === (product.categorySlug || '').toLowerCase()
+          c.name.toLowerCase() === (product.category || existing?.category || '').toLowerCase() ||
+          c.slug.toLowerCase() === (product.categorySlug || existing?.categorySlug || '').toLowerCase()
         );
         if (catObj) categoryIds = [catObj.id];
       }
@@ -843,11 +856,11 @@ export const productService = {
     }
 
     // PERMANENT SKU INVARIANT: Existing product SKU must NEVER be changed on edit!
-    const finalSku = existing?.sku || product.sku;
+    const finalSku = existing?.sku || product.sku || '';
 
     const primaryCat = categories.find(c => c.id === primaryCategoryId);
-    const categoryName = primaryCat ? primaryCat.name : (product.category || 'Festive Silk Sarees');
-    const categorySlug = primaryCat ? primaryCat.slug : (product.categorySlug || 'sarees');
+    const categoryName = primaryCat ? primaryCat.name : (product.category || existing?.category || 'Festive Silk Sarees');
+    const categorySlug = primaryCat ? primaryCat.slug : (product.categorySlug || existing?.categorySlug || 'sarees');
 
     let mediaMetadata: CloudinaryMediaMetadata[] = [];
     const imagesChanged = !existing || !existing.images || JSON.stringify(existing.images) !== JSON.stringify(product.images);
@@ -901,7 +914,9 @@ export const productService = {
     const finalImages = mediaMetadata.length > 0 ? mediaMetadata.map(m => m.url) : (product.images || ['/saree_model_individual.jpg']);
 
     const updated: Product = {
+      ...(existing || {}),
       ...product,
+      id: productId,
       name: title,
       title,
       slug,
@@ -910,13 +925,21 @@ export const productService = {
       primaryCategoryId,
       categoryId: primaryCategoryId,
       category: categoryName,
-      categorySlug,
+      categorySlug: categorySlug || 'sarees',
+      description: product.description || existing?.description || title || 'Exquisite handcrafted MUETY piece.',
+      shortDescription: product.shortDescription || existing?.shortDescription || (product.description ? product.description.slice(0, 100) : title) || 'Atelier creation.',
+      tags: Array.isArray(product.tags) ? product.tags : (existing?.tags || [categorySlug, 'luxury', 'atelier']),
+      price: Number(product.price !== undefined ? product.price : (existing?.price || 0)),
+      rating: Number(product.rating !== undefined ? product.rating : (existing?.rating ?? 5.0)),
+      reviewCount: Number(product.reviewCount !== undefined ? product.reviewCount : (existing?.reviewCount ?? 0)),
       stock,
       inventory: stock,
       status,
       availability: product.availability || existing?.availability || 'available',
       images: finalImages,
       media: mediaMetadata,
+      specifications: (product.specifications && typeof product.specifications === 'object') ? product.specifications : (existing?.specifications || {}),
+      createdAt: product.createdAt || existing?.createdAt || nowIso,
       updatedAt: nowIso
     };
 
@@ -1383,98 +1406,12 @@ export const productService = {
     return updated;
   },
 
-  async deleteCategory(id: string): Promise<boolean> {
-    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
-    if (db && !isTestEnv) {
-      try {
-        await deleteDoc(doc(db, 'categories', id));
-        if (import.meta.env.DEV) {
-          console.log('[FIRESTORE WRITE SUCCESS] Category deleted:', id);
-        }
-      } catch (err: any) {
-        console.error('[FIRESTORE WRITE ERROR] Category deletion failed:', err);
-        throw new Error(`Firestore category deletion failed: ${err?.message || 'Permission denied or network failure.'}`);
-      }
-    }
-
-    storageService.deleteCategory(id);
-    return true;
+  async deleteCategory(id: string, force = false): Promise<boolean> {
+    return categoryService.deleteCategory(id, force);
   },
 
   subscribeToCategories(callback: (categories: Category[]) => void, onError?: (err: Error) => void): Unsubscribe {
-    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
-    if (db && !isTestEnv) {
-      try {
-        const unsubscribe = onSnapshot(collection(db, 'categories'), (snapshot) => {
-          const cloudCats: Category[] = [];
-          if (!snapshot.empty) {
-            snapshot.forEach(docSnap => {
-              const raw = docSnap.data() as any;
-              if (raw && (raw.id || docSnap.id)) {
-                let imgUrl = raw.imageUrl || raw.image || raw.coverImage || raw.coverImageUrl || '/saree_model_individual.jpg';
-                if (imgUrl.startsWith('data:') || imgUrl.startsWith('blob:') || imgUrl.startsWith('file:')) {
-                  imgUrl = 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1200&q=80';
-                }
-                cloudCats.push({ 
-                  ...raw, 
-                  id: docSnap.id || raw.id,
-                  image: imgUrl,
-                  imageUrl: imgUrl,
-                  categoryCode: raw.categoryCode || generateCategoryCodeSuggestion(raw.name) || 'XX'
-                });
-              }
-            });
-          }
-
-          if (import.meta.env.DEV) {
-            cloudCats.forEach(c => {
-              console.log('[CATEGORY IMAGE] Firestore category received', {
-                id: c.id,
-                name: c.name,
-                categoryCode: c.categoryCode,
-                image: (c.image || '').slice(0, 80) + ((c.image || '').length > 80 ? '...' : ''),
-                imageUrl: (c.imageUrl || '').slice(0, 80) + ((c.imageUrl || '').length > 80 ? '...' : ''),
-                coverImage: ((c as any).coverImage || '').slice(0, 80),
-                coverImageUrl: ((c as any).coverImageUrl || '').slice(0, 80)
-              });
-            });
-            console.log('[Firestore Categories]', {
-              snapshotSize: snapshot.size,
-              categories: cloudCats.map(category => ({
-                id: category.id,
-                name: category.name,
-                categoryCode: category.categoryCode,
-                imageUrl: category.imageUrl || category.image
-              }))
-            });
-          }
-
-          storageService.saveCategories(cloudCats);
-          callback(cloudCats);
-        }, (err) => {
-          console.error('[Firestore Categories] Live subscription read error:', err);
-          if (onError) onError(err as Error);
-          else callback(storageService.getCategories());
-        });
-
-        return unsubscribe;
-      } catch (err: any) {
-        console.error('[Firestore Categories] Live subscription init error:', err);
-        if (onError) onError(err as Error);
-      }
-    }
-
-    callback(storageService.getCategories());
-    const unsubLocal = subscribeLocalCategories((updatedCats) => callback(updatedCats));
-    const handler = () => callback(storageService.getCategories());
-    if (typeof window !== 'undefined') {
-      window.addEventListener('muety_categories_updated', handler);
-      return () => {
-        unsubLocal();
-        window.removeEventListener('muety_categories_updated', handler);
-      };
-    }
-    return unsubLocal;
+    return categoryService.subscribeToCategories(callback, onError);
   },
 
   async setProductAvailability(productId: string, availability: 'available' | 'sold_out'): Promise<Product> {

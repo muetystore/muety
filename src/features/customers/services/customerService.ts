@@ -2,6 +2,13 @@ import { UserProfile, CustomerProfile, CustomerStatus, Address } from '@/shared/
 import { Order } from '@/features/orders/types';
 import { storageService } from '@/lib/storage/storageService';
 import { getUserRoles } from '@/shared/utils/permissions';
+import { getAuthHeaders } from '@/shared/utils/authHeader';
+import { 
+  isVerifiedOrder, 
+  isCompletedOrder, 
+  calculateOrderNetRevenue, 
+  filterCustomerOrders 
+} from '@/shared/utils/orderMetrics';
 import { db } from '@/lib/firebase/firebase';
 import { 
   collection, 
@@ -14,10 +21,36 @@ import {
   Unsubscribe 
 } from 'firebase/firestore';
 
+const customerListeners = new Set<(customers: UserProfile[]) => void>();
+
+const isTestEnv = (): boolean => {
+  return (typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || Boolean(process.env?.VITEST))) ||
+    (typeof import.meta !== 'undefined' && Boolean((import.meta as any).env?.MODE === 'test'));
+};
+
+export function normalizeToE164(phone?: string | null, defaultCountryCode: string = '+91'): string {
+  if (!phone) return '';
+  const cleaned = String(phone).trim();
+  const sanitized = cleaned.replace(/[^\d+]/g, '');
+  if (!sanitized) return '';
+  if (sanitized.startsWith('+')) {
+    return sanitized;
+  }
+  const noLeadingZero = sanitized.replace(/^0+/, '');
+  if (noLeadingZero.length === 10) {
+    return `${defaultCountryCode}${noLeadingZero}`;
+  }
+  return `+${noLeadingZero}`;
+}
+
+export function normalizePhoneNumber(phone?: string | null): string {
+  return normalizeToE164(phone);
+}
+
 export function isStaffOrAdminUser(u: UserProfile | null | undefined): boolean {
   if (!u) return false;
   const emailLower = (u.email || '').toLowerCase().trim();
-  if (emailLower.endsWith('@muety.in') || emailLower.endsWith('@muetystore.com') || emailLower === 'kalvimohan03@gmail.com') {
+  if (emailLower.endsWith('@muety.in') || emailLower.endsWith('@muetystore.com')) {
     return true;
   }
   const roles = getUserRoles(u);
@@ -78,6 +111,9 @@ export function normalizeAdminUser(user: UserProfile): UserProfile {
 
 export interface CustomerMetrics {
   totalValidOrders: number;
+  verifiedOrdersCount: number;
+  completedOrdersCount: number;
+  activeOrdersCount: number;
   paidOrdersCount: number;
   netLifetimeSpend: number;
   orderCount: number; // Backward compatibility alias
@@ -90,6 +126,8 @@ export interface CustomerMetrics {
   customerCategory: string;
   eligibleOrders: Order[];
   refundDataAvailable: boolean;
+  hasIdentityConflict?: boolean;
+  conflictingUids?: string[];
 }
 
 export function mergeCustomerProfiles(primary: UserProfile, secondary: Partial<UserProfile>): UserProfile {
@@ -189,9 +227,118 @@ export const customerService = {
   },
 
   getOnlyCustomers(): UserProfile[] {
-    return storageService.getUsers()
+    const rawUsers = storageService.getUsers()
       .map(normalizeAdminUser)
       .filter(u => !isStaffOrAdminUser(u));
+
+    const customerMap = new Map<string, UserProfile>();
+    const emailMap = new Map<string, string>();
+    const phoneToUidsMap = new Map<string, string[]>();
+
+    rawUsers.forEach(u => {
+      customerMap.set(u.uid, u);
+      const e = (u.email || '').toLowerCase().trim();
+      if (e) emailMap.set(e, u.uid);
+
+      const p = normalizePhoneNumber(u.phoneNumber || u.phone);
+      if (p) {
+        const existing = phoneToUidsMap.get(p) || [];
+        if (!existing.includes(u.uid)) existing.push(u.uid);
+        phoneToUidsMap.set(p, existing);
+      }
+    });
+
+    // Synthesize patrons from orders if an order exists with a customerId not yet in user store
+    const orders = storageService.getOrders();
+    orders.forEach(o => {
+      const oEmail = (o.customerEmail || '').toLowerCase().trim();
+      const oPhone = normalizePhoneNumber(o.customerPhone || o.shippingAddress?.phone || (o as any).phone);
+      const oUid = o.customerId;
+
+      // 1. Primary match: exact canonical UID
+      let matchedUid: string | null = null;
+      if (oUid && customerMap.has(oUid)) {
+        matchedUid = oUid;
+      } else if ((!oUid || oUid.startsWith('guest-')) && oEmail && emailMap.has(oEmail)) {
+        // Fall back to verified email match ONLY for guest/unassigned orders
+        matchedUid = emailMap.get(oEmail)!;
+      }
+
+      if (matchedUid && customerMap.has(matchedUid)) {
+        const cust = customerMap.get(matchedUid)!;
+        if ((!cust.addresses || cust.addresses.length === 0) && o.shippingAddress) {
+          cust.addresses = [{
+            id: `addr-ord-${o.id || o.orderNumber}`,
+            fullName: o.shippingAddress.fullName || cust.displayName || 'Patron',
+            phone: o.shippingAddress.phone || cust.phoneNumber || cust.phone || '',
+            streetAddress: o.shippingAddress.streetAddress || '',
+            apartment: o.shippingAddress.apartment || '',
+            city: o.shippingAddress.city || '',
+            state: o.shippingAddress.state || '',
+            postalCode: o.shippingAddress.postalCode || '',
+            country: o.shippingAddress.country || 'India',
+            isDefault: true
+          }];
+        }
+      } else if (oUid || (oEmail && !oEmail.endsWith('@muety.in')) || oPhone) {
+        // Canonical customer profile for this UID (never reassigning to another user merely because phone matches)
+        const synthUid = oUid || (oEmail ? `cust-email-${oEmail}` : `cust-ord-${o.id || o.orderNumber}`);
+        const synthName = o.customerName || (o.shippingAddress?.fullName) || (oEmail ? oEmail.split('@')[0] : (oPhone ? `Patron (${oPhone.slice(-4)})` : 'Patron'));
+        const addresses: Address[] = o.shippingAddress ? [{
+          id: `addr-ord-${o.id || o.orderNumber}`,
+          fullName: o.shippingAddress.fullName || synthName,
+          phone: o.shippingAddress.phone || oPhone,
+          streetAddress: o.shippingAddress.streetAddress || '',
+          apartment: o.shippingAddress.apartment || '',
+          city: o.shippingAddress.city || '',
+          state: o.shippingAddress.state || '',
+          postalCode: o.shippingAddress.postalCode || '',
+          country: o.shippingAddress.country || 'India',
+          isDefault: true
+        }] : [];
+
+        const synthUser: UserProfile = {
+          uid: synthUid,
+          email: oEmail,
+          displayName: synthName,
+          fullName: synthName,
+          phoneNumber: o.customerPhone || o.shippingAddress?.phone || '',
+          phone: o.customerPhone || o.shippingAddress?.phone || '',
+          role: 'customer',
+          roles: ['customer'],
+          customerStatus: 'active',
+          isBlocked: false,
+          addresses,
+          patronCircleMember: false,
+          createdAt: o.createdAt || new Date().toISOString(),
+          updatedAt: o.updatedAt || o.createdAt || new Date().toISOString()
+        };
+
+        customerMap.set(synthUid, synthUser);
+        if (oEmail) emailMap.set(oEmail, synthUid);
+        if (oPhone) {
+          const existing = phoneToUidsMap.get(oPhone) || [];
+          if (!existing.includes(synthUid)) existing.push(synthUid);
+          phoneToUidsMap.set(oPhone, existing);
+        }
+      }
+    });
+
+    // Detect and annotate shared/conflicting phone numbers without silent merging
+    customerMap.forEach(customer => {
+      const p = normalizePhoneNumber(customer.phoneNumber || customer.phone);
+      if (p && phoneToUidsMap.has(p)) {
+        const uidsWithPhone = phoneToUidsMap.get(p)!;
+        if (uidsWithPhone.length > 1) {
+          (customer as any).hasIdentityConflict = true;
+          (customer as any).conflictingUids = uidsWithPhone.filter(id => id !== customer.uid);
+        }
+      }
+    });
+
+    return Array.from(customerMap.values()).sort(
+      (a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
+    );
   },
 
   getCustomerById(uid: string): UserProfile | undefined {
@@ -208,36 +355,47 @@ export const customerService = {
    * Derive real order metrics, net lifetime spend, and VIP category from canonical order source
    */
   calculateCustomerMetrics(customer: UserProfile, allOrders?: Order[]): CustomerMetrics {
-    const ordersList = allOrders || storageService.getOrders();
-    const customerEmailLower = (customer.email || '').toLowerCase().trim();
+    const ordersList = allOrders !== undefined ? allOrders : storageService.getOrders();
 
-    // Match orders by customerId (exact UID) or customerEmail
-    const rawUserOrders = ordersList.filter(o => 
-      (o.customerId && o.customerId === customer.uid) ||
-      (o.customerEmail && o.customerEmail.toLowerCase().trim() === customerEmailLower)
-    );
-
-    // Deduplicate orders by unique canonical order id or orderNumber
-    const seenOrderKeys = new Set<string>();
-    const userOrders: Order[] = [];
-    for (const o of rawUserOrders) {
-      const key = o.id || o.orderNumber;
-      if (key && !seenOrderKeys.has(key)) {
-        seenOrderKeys.add(key);
-        userOrders.push(o);
-      }
+    // If live orders have not finished loading, preserve confirmed aggregate fields from customer profile
+    if (ordersList.length === 0 && (Number(customer.ordersCount) > 0 || Number(customer.totalSpent) > 0)) {
+      const storedOrders = Number(customer.ordersCount) || 0;
+      const storedSpend = Number(customer.totalSpent) || 0;
+      return {
+        totalValidOrders: storedOrders,
+        verifiedOrdersCount: storedOrders,
+        completedOrdersCount: storedOrders,
+        activeOrdersCount: 0,
+        paidOrdersCount: storedOrders,
+        netLifetimeSpend: storedSpend,
+        orderCount: storedOrders,
+        totalSpend: storedSpend,
+        cancelledOrdersCount: 0,
+        failedOrdersCount: 0,
+        refundedOrdersCount: 0,
+        pendingOrdersCount: 0,
+        isVip: customer.customerStatus === 'VIP' || storedSpend >= 50000,
+        customerCategory: storedSpend >= 50000 ? 'VIP Patron' : (storedOrders >= 1 ? 'Active Buyer' : 'Standard Patron'),
+        eligibleOrders: [],
+        refundDataAvailable: true,
+        hasIdentityConflict: (customer as any).hasIdentityConflict || false,
+        conflictingUids: (customer as any).conflictingUids || []
+      };
     }
 
-    // Sort descending by creation date
-    userOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    // Match orders strictly by canonical customer UID (and guest email for unassigned orders).
+    // NEVER match by phone number to prevent order cross-contamination across shared-phone accounts!
+    const userOrders = filterCustomerOrders(ordersList, customer.uid, customer.email);
 
-    let totalValidOrders = 0;
-    let paidOrdersCount = 0;
-    let netLifetimeSpend = 0;
+    let totalValidOrders = 0;       // Verified non-cancelled, non-failed orders
+    let completedOrdersCount = 0;   // Delivered orders
+    let activeOrdersCount = 0;      // Pending/confirmed/processing/shipped
+    let paidOrdersCount = 0;        // Payment captured
+    let netLifetimeSpend = 0;       // Realized monetary revenue
     let cancelledOrdersCount = 0;
     let failedOrdersCount = 0;
     let refundedOrdersCount = 0;
-    let pendingOrdersCount = 0;
+    let pendingOrdersCount = 0;     // Awaiting payment capture
     let refundDataAvailable = true;
 
     for (const ord of userOrders) {
@@ -247,10 +405,10 @@ export const customerService = {
 
       const isCancelled = ord.orderStatus === 'cancelled';
       const isFailed = ord.orderStatus === 'failed' || ord.paymentStatus === 'failed';
-      const isRefunded = ord.paymentStatus === 'refunded';
+      const isRefunded = ord.paymentStatus === 'refunded' || (ord.orderStatus as string) === 'refunded';
+      const isDelivered = isCompletedOrder(ord);
       const isPaid = ord.paymentStatus === 'paid';
-      const isCodPending = ord.paymentMethod === 'cash_on_delivery' && ord.paymentStatus !== 'paid';
-      const isPending = isCodPending || ord.paymentStatus === 'pending';
+      const isPending = ord.orderStatus === 'pending' || ord.paymentStatus === 'pending';
 
       if (isCancelled) {
         cancelledOrdersCount++;
@@ -259,33 +417,38 @@ export const customerService = {
       } else if (isRefunded) {
         refundedOrdersCount++;
         totalValidOrders++;
-        // Fully refunded orders count as a past valid transaction but contribute ₹0 to net spend
-      } else if (isPaid) {
-        paidOrdersCount++;
+      } else if (isVerifiedOrder(ord)) {
         totalValidOrders++;
-        const rawTotal = Number(ord.total) || 0;
-        // Subtract partial refunds if present
-        const partialRefund = Number((ord as any).refundedAmount || (ord as any).refundAmount) || 0;
-        const netOrderSpend = Math.max(0, rawTotal - partialRefund);
-        netLifetimeSpend += netOrderSpend;
-      } else if (isPending) {
-        pendingOrdersCount++;
-        totalValidOrders++;
-        // Pending payments (e.g. unpaid COD) count as placed active orders, but not realized spend until captured
-      } else {
-        totalValidOrders++;
-        netLifetimeSpend += Number(ord.total) || 0;
+
+        if (isDelivered) {
+          completedOrdersCount++;
+        } else {
+          activeOrdersCount++;
+        }
+
+        if (isPaid) {
+          paidOrdersCount++;
+        }
+
+        if (isPending) {
+          pendingOrdersCount++;
+        }
+
+        netLifetimeSpend += calculateOrderNetRevenue(ord);
       }
     }
+
+    // Eliminate floating-point accumulation inaccuracies
+    netLifetimeSpend = Math.round((netLifetimeSpend + Number.EPSILON) * 100) / 100;
 
     const isVip = (customer.customerStatus === 'VIP') || (netLifetimeSpend >= 50000);
 
     let customerCategory = 'Standard Patron';
     if (isVip) {
       customerCategory = 'VIP Patron';
-    } else if (paidOrdersCount > 2) {
+    } else if (completedOrdersCount > 2 || paidOrdersCount > 2) {
       customerCategory = 'Loyal Patron';
-    } else if (paidOrdersCount === 1 || paidOrdersCount === 2) {
+    } else if (completedOrdersCount >= 1 || paidOrdersCount >= 1) {
       customerCategory = 'Active Buyer';
     } else {
       customerCategory = 'New Prospect';
@@ -293,9 +456,12 @@ export const customerService = {
 
     return {
       totalValidOrders,
+      verifiedOrdersCount: totalValidOrders,
+      completedOrdersCount,
+      activeOrdersCount,
       paidOrdersCount,
       netLifetimeSpend,
-      orderCount: paidOrdersCount,
+      orderCount: totalValidOrders, // Stable canonical alias for verified orders
       totalSpend: netLifetimeSpend,
       cancelledOrdersCount,
       failedOrdersCount,
@@ -304,7 +470,9 @@ export const customerService = {
       isVip,
       customerCategory,
       eligibleOrders: userOrders,
-      refundDataAvailable
+      refundDataAvailable,
+      hasIdentityConflict: (customer as any).hasIdentityConflict || false,
+      conflictingUids: (customer as any).conflictingUids || []
     };
   },
 
@@ -329,9 +497,9 @@ export const customerService = {
       orderCount: metrics.paidOrdersCount,
       totalSpend: metrics.netLifetimeSpend,
       customerStatus: user.customerStatus || (user.isBlocked ? 'blocked' : (metrics.isVip ? 'VIP' : 'active')),
-      marketingConsent: true,
-      whatsappConsent: true,
-      emailConsent: true,
+      marketingConsent: user.marketingConsent === true,
+      whatsappConsent: (user as any).whatsappConsent === true,
+      emailConsent: user.marketingConsent === true || (user as any).emailConsent === true,
       internalNotes: '',
       createdAt: user.createdAt,
       updatedAt: user.updatedAt || user.createdAt,
@@ -419,6 +587,16 @@ export const customerService = {
       }
     }
 
+    if (typeof window !== 'undefined') {
+      getAuthHeaders().then(headers => {
+        fetch('/api/customers/update', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(sanitizedUser)
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
     return sanitizedUser;
   },
 
@@ -472,6 +650,21 @@ export const customerService = {
     const updated: UserProfile = { ...user, isBlocked, customerStatus, updatedAt: new Date().toISOString() };
     await this.saveCustomer(updated);
     return isBlocked;
+  },
+
+  async togglePatronCircleMembership(uid: string, optIn: boolean): Promise<UserProfile> {
+    const user = storageService.getUserById(uid) || this.getOnlyCustomers().find(c => c.uid === uid);
+    if (!user) throw new Error('Customer profile not found.');
+
+    const updated: UserProfile = {
+      ...user,
+      patronCircleMember: optIn,
+      patronCircleJoinedAt: optIn ? (user.patronCircleJoinedAt || new Date().toISOString()) : undefined,
+      patronCircleConsentText: optIn ? (user.patronCircleConsentText || 'Enrolled in MUETY Patron Circle VIP Experience') : undefined,
+      updatedAt: new Date().toISOString()
+    };
+
+    return this.saveCustomer(updated);
   },
 
   /**
@@ -579,6 +772,19 @@ export const customerService = {
     const users = storageService.getUsers().filter(u => u.uid !== uid);
     storageService.saveUsers(users);
 
+    if (typeof window !== 'undefined') {
+      try {
+        const headers = await getAuthHeaders();
+        await fetch('/api/customers/delete', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ uid })
+        });
+      } catch (apiErr: any) {
+        console.warn('[customerService] Server delete API note:', apiErr?.message || apiErr);
+      }
+    }
+
     if (db) {
       try {
         await Promise.race([
@@ -594,18 +800,109 @@ export const customerService = {
     return true;
   },
 
-  subscribeToCustomers(callback: (customers: UserProfile[]) => void): Unsubscribe {
-    callback(storageService.getUsers());
+  /**
+   * Synchronize customer registry with server-authoritative Firestore data
+   */
+  async syncCustomers(): Promise<UserProfile[]> {
+    try {
+      if (typeof window !== 'undefined') {
+        const headers = await getAuthHeaders();
+        const res = await fetch('/api/customers/list', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({})
+        });
 
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.customers)) {
+            const customerMap = new Map<string, UserProfile>();
+            let createdCount = 0;
+            let updatedCount = 0;
+            let skippedCount = 0;
+
+            // Retain staff/admin accounts and offline-pending patrons from local storage
+            storageService.getUsers().forEach(u => {
+              if (u.uid && (isStaffOrAdminUser(u) || (u as any).isOfflinePending === true)) {
+                customerMap.set(u.uid, u);
+              }
+            });
+
+            // Merge server customers (server is authoritative; deleted patrons are removed)
+            data.customers.forEach((c: UserProfile) => {
+              if (c && c.uid) {
+                if (customerMap.has(c.uid)) {
+                  const existing = customerMap.get(c.uid)!;
+                  const merged = mergeCustomerProfiles(existing, c);
+                  const isSame = JSON.stringify(existing) === JSON.stringify(merged);
+                  if (isSame) {
+                    skippedCount++;
+                  } else {
+                    updatedCount++;
+                    customerMap.set(c.uid, merged);
+                  }
+                } else {
+                  createdCount++;
+                  customerMap.set(c.uid, c);
+                }
+              }
+            });
+
+            const mergedList = Array.from(customerMap.values());
+            storageService.saveUsers(mergedList);
+            customerListeners.forEach(cb => {
+              try { cb(mergedList); } catch {}
+            });
+            const resultList = mergedList.filter(u => !isStaffOrAdminUser(u));
+            (resultList as any).stats = {
+              read: data.stats?.read ?? (data.customers.length + storageService.getOrders().length),
+              created: createdCount,
+              updated: updatedCount,
+              skipped: skippedCount,
+              failed: 0,
+              conflictsDetected: data.stats?.conflictsDetected ?? 0
+            };
+            return resultList;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[customerService] syncCustomers note:', err);
+    }
+    return this.getOnlyCustomers();
+  },
+
+  subscribeToCustomers(callback: (customers: UserProfile[]) => void): Unsubscribe {
+    customerListeners.add(callback);
+    // Only emit immediate local cache in offline or test environments to prevent UI flickering on refresh
+    if (!db || isTestEnv()) {
+      callback(this.getOnlyCustomers());
+    }
+
+    // Trigger background sync with server-authoritative Firestore endpoint
+    this.syncCustomers().catch(() => {});
+
+    const handleWindowUpdate = () => {
+      callback(this.getOnlyCustomers());
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('muety_users_updated', handleWindowUpdate);
+      window.addEventListener('muety_customers_updated', handleWindowUpdate);
+      window.addEventListener('muety_orders_updated', handleWindowUpdate);
+    }
+
+    let firestoreUnsub: Unsubscribe | null = null;
     if (db) {
       try {
-        const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
+        firestoreUnsub = onSnapshot(collection(db, 'users'), (snapshot) => {
           if (!snapshot.empty) {
             const customerMap = new Map<string, UserProfile>();
             
-            // Seed from existing local storage first
+            // Only seed staff/admin accounts and offline-pending patrons from local storage
             storageService.getUsers().forEach(u => {
-              if (u.uid) customerMap.set(u.uid, u);
+              if (u.uid && (isStaffOrAdminUser(u) || (u as any).isOfflinePending === true)) {
+                customerMap.set(u.uid, u);
+              }
             });
 
             snapshot.forEach(docSnap => {
@@ -625,33 +922,41 @@ export const customerService = {
                   customerStatus: raw.customerStatus || (raw.isBlocked ? 'blocked' : 'active'),
                   ordersCount: Number(raw.ordersCount) || 0,
                   totalSpent: Number(raw.totalSpent) || 0,
+                  patronCircleMember: Boolean(raw.patronCircleMember || raw.joinCircle || raw.isPatronCircle),
                   addresses: Array.isArray(raw.addresses) ? raw.addresses : [],
                   createdAt: raw.createdAt || new Date().toISOString()
                 };
 
-                if (customerMap.has(uid)) {
-                  customerMap.set(uid, mergeCustomerProfiles(customerMap.get(uid)!, incoming));
-                } else {
-                  customerMap.set(uid, incoming);
-                }
+                customerMap.set(uid, incoming);
               }
             });
 
             const mergedList = Array.from(customerMap.values());
             storageService.saveUsers(mergedList);
-            callback(mergedList);
+            callback(this.getOnlyCustomers());
           } else {
-            callback(storageService.getUsers());
+            callback(this.getOnlyCustomers());
           }
-        }, () => {
-          callback(storageService.getUsers());
+        }, (err: any) => {
+          // If Firestore permission denied on client collection listener, do NOT clobber loaded patrons
+          if (import.meta.env.DEV) {
+            console.debug('[customerService] users collection listener note:', err?.message || err);
+          }
         });
-
-        return unsubscribe;
       } catch {}
     }
 
-    return () => {};
+    return () => {
+      customerListeners.delete(callback);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('muety_users_updated', handleWindowUpdate);
+        window.removeEventListener('muety_customers_updated', handleWindowUpdate);
+        window.removeEventListener('muety_orders_updated', handleWindowUpdate);
+      }
+      if (typeof firestoreUnsub === 'function') {
+        try { firestoreUnsub(); } catch {}
+      }
+    };
   },
 
   async pushAllCustomersToFirestore(): Promise<{ success: boolean; count: number; message: string }> {

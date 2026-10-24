@@ -1,4 +1,5 @@
 import { getAdminFirestore, verifyIdTokenAndGetClaims } from './firebaseAdmin';
+import { processOrderConfirmationEmails } from './email/emailService';
 
 export async function handleCreateServerOrder(authHeader: string | undefined, body: any) {
   const caller = await verifyIdTokenAndGetClaims(authHeader);
@@ -99,7 +100,7 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
 
   // If live Firestore Admin SDK is available, perform authoritative recalculation & atomic inventory transaction
   if (db) {
-    return await db.runTransaction(async (transaction: any) => {
+    const txResult = await db.runTransaction(async (transaction: any) => {
       // 0. Atomic verification of patron suspension status inside transaction
       if (sanitizedCustomerId && !sanitizedCustomerId.startsWith('guest-')) {
         const userRef = db.collection('users').doc(sanitizedCustomerId);
@@ -154,7 +155,10 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
         }
 
         const productData = snap.data()!;
-        if (productData.published === false) {
+        if (productData.availability === 'sold_out') {
+          throw new Error(`FAILED_PRECONDITION: Product "${productData.name}" is currently sold out.`);
+        }
+        if (productData.published === false && productData.availability !== 'available') {
           throw new Error(`PERMISSION_DENIED: Product "${productData.name}" is currently unavailable.`);
         }
 
@@ -314,6 +318,13 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
         message: `Order ${orderNumber} created successfully with server-verified calculations.`
       };
     });
+
+    // Durably trigger automated order email notifications in the background
+    processOrderConfirmationEmails(txResult.order).catch(emailErr => {
+      console.error('[OrderApi] Background email notification error:', emailErr);
+    });
+
+    return txResult;
   }
 
   // Fallback if live database server is offline (Local dev calculation)
@@ -372,6 +383,11 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
     createdAt: now,
     updatedAt: now
   };
+
+  // Trigger email notifications for fallback path
+  processOrderConfirmationEmails(orderPayload).catch(emailErr => {
+    console.error('[OrderApi] Background fallback email notification error:', emailErr);
+  });
 
   return {
     success: true,

@@ -36,12 +36,19 @@ export const CategoryProductsPage: React.FC = () => {
 
   const products = allProducts.filter(p => {
     if (!category && !slug) return false;
+    // Storefront publication rule: only active/published items are displayed to patrons
+    if (p.published === false || p.status === 'draft') return false;
+
     const targetSlug = (category?.slug || slug || '').toLowerCase();
     const targetId = category?.id || slug || '';
+    const pCategoryIds = Array.isArray(p.categoryIds) ? p.categoryIds : [];
+    
     return (
       (p.categorySlug || '').toLowerCase() === targetSlug ||
       (p.category || '').toLowerCase() === (category?.name || '').toLowerCase() ||
-      (p.categoryIds || []).includes(targetId)
+      pCategoryIds.includes(targetId) ||
+      p.categoryId === targetId ||
+      p.primaryCategoryId === targetId
     );
   });
 

@@ -251,8 +251,10 @@ class StorageService {
     const index = list.findIndex(c => c.id === category.id);
     if (index !== -1) {
       list[index] = category;
-      this.saveCategories(list);
+    } else {
+      list.push(category);
     }
+    this.saveCategories(list);
     return category;
   }
 
@@ -551,7 +553,7 @@ class StorageService {
     const isLegacyEmail = (email?: string) => {
       if (!email) return false;
       const lower = email.toLowerCase();
-      return lower.includes('muetystore.com') || lower === 'kalvimohan03@gmail.com';
+      return lower.includes('muetystore.com');
     };
 
     try {
@@ -577,6 +579,10 @@ class StorageService {
 
   saveUsers(users: UserProfile[]): void {
     localStorage.setItem(KEYS.USERS, JSON.stringify(users));
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('muety_users_updated', { detail: users }));
+      window.dispatchEvent(new CustomEvent('muety_customers_updated', { detail: users }));
+    }
   }
 
   getUserById(uid: string): UserProfile | undefined {

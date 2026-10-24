@@ -1,7 +1,6 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { getStorage } from 'firebase-admin/storage';
 import fs from 'fs';
 import path from 'path';
 
@@ -49,13 +48,11 @@ export function initializeFirebaseAdmin() {
   if (credential) {
     adminApp = initializeApp({
       credential,
-      projectId,
-      storageBucket: `${projectId}.firebasestorage.app`
+      projectId
     });
   } else {
     adminApp = initializeApp({
-      projectId,
-      storageBucket: `${projectId}.firebasestorage.app`
+      projectId
     });
   }
 
@@ -74,7 +71,11 @@ export function getAdminAuth() {
   return getAuth(adminApp);
 }
 
+/**
+ * Cloud Storage is intentionally not provisioned for MUETY.
+ * Media assets are managed via Cloudinary or persistent external URLs.
+ */
 export function getAdminStorage() {
-  if (!adminApp) initializeFirebaseAdmin();
-  return getStorage(adminApp);
+  console.info('ℹ️ Firebase Cloud Storage is not provisioned for MUETY. Media assets are handled via Cloudinary.');
+  return null;
 }

@@ -28,7 +28,16 @@ import {
   Loader2,
   Eye,
   Sparkles,
-  Upload
+  Upload,
+  ArrowLeft,
+  Share2,
+  Copy,
+  Check,
+  MessageCircle,
+  Mail,
+  Facebook,
+  Twitter,
+  ExternalLink
 } from 'lucide-react';
 import { auditService } from '@/shared/services/auditService';
 import { useAuth } from '@/shared/context/AuthContext';
@@ -65,6 +74,107 @@ export const ProductDetailPage: React.FC = () => {
       : ['/saree_model_individual.jpg'];
   }, [product?.images]);
 
+  // Product Link Sharing state and handlers
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [isLinkCopied, setIsLinkCopied] = useState<boolean>(false);
+
+  const shareUrl = useMemo(() => {
+    if (typeof window === 'undefined' || !product) return '';
+    return `${window.location.origin}/products/${product.slug || product.id}`;
+  }, [product]);
+
+  const shareTitle = product?.name || 'MUETY Handcrafted Saree';
+  const shareMessage = `Discover ${product?.name || 'this handcrafted saree'} (₹${product?.price?.toLocaleString('en-IN')}) at MUETY Atelier:`;
+
+  const handleCopyLink = async () => {
+    if (!shareUrl) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = shareUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setIsLinkCopied(true);
+      success('Product link copied to clipboard!');
+      setTimeout(() => setIsLinkCopied(false), 2500);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+    }
+  };
+
+  const handleShareChannel = (channel: 'whatsapp' | 'facebook' | 'twitter' | 'pinterest' | 'email') => {
+    if (!shareUrl) return;
+    let url = '';
+    const fullText = `${shareMessage} ${shareUrl}`;
+
+    switch (channel) {
+      case 'whatsapp':
+        url = `https://api.whatsapp.com/send?text=${encodeURIComponent(fullText)}`;
+        break;
+      case 'facebook':
+        url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+        break;
+      case 'twitter':
+        url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMessage)}&url=${encodeURIComponent(shareUrl)}`;
+        break;
+      case 'pinterest':
+        url = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&media=${encodeURIComponent(galleryImages[0] || '')}&description=${encodeURIComponent(shareMessage)}`;
+        break;
+      case 'email':
+        url = `mailto:?subject=${encodeURIComponent(`Exquisite Handcrafted Saree: ${shareTitle}`)}&body=${encodeURIComponent(`${shareMessage}\n\nView details: ${shareUrl}`)}`;
+        break;
+    }
+
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const hasNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+
+  const handleNativeShare = async () => {
+    if (!hasNativeShare || !shareUrl) return;
+    try {
+      await navigator.share({
+        title: shareTitle,
+        text: shareMessage,
+        url: shareUrl
+      });
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.warn('Native share note:', err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isShareModalOpen) {
+        setIsShareModalOpen(false);
+      }
+    };
+    if (isShareModalOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isShareModalOpen]);
+
+  const handleGoBack = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/products');
+    }
+  };
+
   const handleGalleryNext = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (selectedImage < galleryImages.length - 1) {
@@ -94,9 +204,16 @@ export const ProductDetailPage: React.FC = () => {
     const dy = touch.clientY - touchStartPos.current.y;
 
     if (Math.abs(dx) > Math.abs(dy)) {
-      if (Math.abs(dx) > 10) {
+      if (Math.abs(dx) > 8) {
         setIsSwipingGallery(true);
-        setTouchDeltaX(dx);
+        // Tactile edge resistance when attempting to swipe past first/last slide
+        const isAtStart = selectedImage === 0 && dx > 0;
+        const isAtEnd = selectedImage === galleryImages.length - 1 && dx < 0;
+        if (isAtStart || isAtEnd) {
+          setTouchDeltaX(dx * 0.28);
+        } else {
+          setTouchDeltaX(dx);
+        }
       }
     }
   };
@@ -500,6 +617,17 @@ export const ProductDetailPage: React.FC = () => {
       <div className="pdp-breadcrumb-bar">
         <div className="container">
           <div className="pdp-breadcrumb-inner">
+            <button 
+              type="button" 
+              onClick={handleGoBack} 
+              className="pdp-breadcrumb-back-btn"
+              aria-label="Go back to previous page"
+              title="Back"
+            >
+              <ArrowLeft size={14} />
+              <span>Back</span>
+            </button>
+            <span className="pdp-breadcrumb-divider">|</span>
             <Link to="/" className="pdp-breadcrumb-link">Home</Link>
             <ChevronRight size={13} style={{ flexShrink: 0 }} />
             <Link to="/products" className="pdp-breadcrumb-link">Catalog</Link>
@@ -507,6 +635,16 @@ export const ProductDetailPage: React.FC = () => {
             <Link to={`/category/${product.categorySlug}`} className="pdp-breadcrumb-link">{product.category}</Link>
             <ChevronRight size={13} style={{ flexShrink: 0 }} />
             <span className="pdp-breadcrumb-current">{product.name}</span>
+            <button
+              type="button"
+              onClick={() => setIsShareModalOpen(true)}
+              className="pdp-breadcrumb-share-btn"
+              title="Share Product"
+              aria-label="Share this saree"
+            >
+              <Share2 size={13} />
+              <span>Share</span>
+            </button>
           </div>
         </div>
       </div>
@@ -516,11 +654,6 @@ export const ProductDetailPage: React.FC = () => {
           <div className="pdp-gallery-col">
             <div 
               className="pdp-main-image-card"
-              onClick={() => {
-                if (!isSwipingGallery) {
-                  setIsLightboxOpen(true);
-                }
-              }}
               onTouchStart={handleGalleryTouchStart}
               onTouchMove={handleGalleryTouchMove}
               onTouchEnd={handleGalleryTouchEnd}
@@ -529,21 +662,51 @@ export const ProductDetailPage: React.FC = () => {
               tabIndex={0}
               role="region"
               aria-label={`Product image gallery for ${product.name}, showing image ${selectedImage + 1} of ${galleryImages.length}`}
-              title="Click to view high-resolution saree drape"
               style={{
                 position: 'relative',
                 touchAction: 'pan-y'
               }}
             >
-              <img 
-                src={galleryImages[selectedImage] || galleryImages[0]} 
-                alt={`${product.name} - drape view ${selectedImage + 1}`}
-                className="pdp-main-img"
-                style={{
-                  transform: isSwipingGallery ? `translateX(${touchDeltaX * 0.4}px)` : 'translateX(0)',
-                  transition: isSwipingGallery ? 'none' : 'transform 0.25s ease, opacity 0.2s ease'
-                }}
-              />
+              {/* Top-Left Floating Back Arrow Button (Perfect UI & UX for mobile/desktop) */}
+              <button
+                type="button"
+                onClick={handleGoBack}
+                className="pdp-floating-back-btn"
+                aria-label="Go back to previous page"
+                title="Go back"
+              >
+                <ArrowLeft size={20} />
+              </button>
+
+              {/* Ultra-Smooth Continuous Gallery Slider Viewport & Track */}
+              <div className="pdp-gallery-slider-viewport">
+                <div 
+                  className="pdp-gallery-slider-track"
+                  style={{
+                    display: 'flex',
+                    width: '100%',
+                    height: '100%',
+                    transform: `translateX(calc(-${selectedImage * 100}% + ${touchDeltaX}px))`,
+                    transition: isSwipingGallery ? 'none' : 'transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)'
+                  }}
+                >
+                  {galleryImages.map((img, idx) => (
+                    <div 
+                      key={idx}
+                      className="pdp-gallery-slide"
+                      aria-hidden={selectedImage !== idx}
+                    >
+                      <img 
+                        src={img} 
+                        alt={`${product.name} - drape view ${idx + 1}`}
+                        className="pdp-main-img"
+                        loading={idx === 0 ? "eager" : "lazy"}
+                        draggable={false}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               {/* Accessible Prev/Next navigation controls */}
               {galleryImages.length > 1 && (
@@ -573,19 +736,24 @@ export const ProductDetailPage: React.FC = () => {
 
               {/* Accessible Image Counter & Pagination Indicator */}
               {galleryImages.length > 1 && (
-                <div className="pdp-gallery-counter-badge" aria-live="polite">
-                  <span>{selectedImage + 1} / {galleryImages.length}</span>
-                </div>
-              )}
+                <>
+                  <div className="pdp-gallery-counter-badge" aria-live="polite">
+                    <span>{selectedImage + 1} / {galleryImages.length}</span>
+                  </div>
 
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setIsLightboxOpen(true); }}
-                className="pdp-expand-btn"
-                aria-label="Expand image gallery"
-              >
-                <Maximize2 size={13} /> Expand Gallery
-              </button>
+                  <div className="pdp-gallery-dots" aria-hidden="true">
+                    {galleryImages.map((_, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setSelectedImage(idx); }}
+                        className={`pdp-gallery-dot ${selectedImage === idx ? 'active' : ''}`}
+                        aria-label={`Go to slide ${idx + 1}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {galleryImages.length > 1 && (
@@ -716,15 +884,28 @@ export const ProductDetailPage: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => toggleWishlist(product.id)}
-                  className={`pdp-wishlist-btn ${isSaved ? 'saved' : ''}`}
-                  aria-label="Wishlist"
-                >
-                  <Heart size={18} fill={isSaved ? '#ef4444' : 'none'} color={isSaved ? '#ef4444' : 'currentColor'} />
-                  <span>{isSaved ? 'Saved' : 'Wishlist'}</span>
-                </button>
+                <div className="pdp-secondary-actions">
+                  <button
+                    type="button"
+                    onClick={() => toggleWishlist(product.id)}
+                    className={`pdp-wishlist-btn ${isSaved ? 'saved' : ''}`}
+                    aria-label="Wishlist"
+                  >
+                    <Heart size={18} fill={isSaved ? '#ef4444' : 'none'} color={isSaved ? '#ef4444' : 'currentColor'} />
+                    <span>{isSaved ? 'Saved' : 'Wishlist'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsShareModalOpen(true)}
+                    className="pdp-share-btn"
+                    aria-label="Share product"
+                    title="Share this saree"
+                  >
+                    <Share2 size={17} />
+                    <span>Share</span>
+                  </button>
+                </div>
               </div>
 
               <div className="pdp-buttons-grid">
@@ -987,49 +1168,71 @@ export const ProductDetailPage: React.FC = () => {
                 </div>
 
                 {showReviewForm && (
-                  <div className="pdp-muety-form-wrapper">
-                    <div className="pdp-muety-form-gold-bar" />
+                  <div className="pdp-muety-form-wrapper animate-fade-in">
                     <div className="pdp-muety-form-body">
-                      <div className="pdp-muety-form-badge">
-                        <Sparkles size={13} />
-                        <span>MUETY Patron Sanctuary</span>
+                      <div className="pdp-muety-form-header-row">
+                        <div>
+                          <div className="pdp-muety-form-badge">
+                            <Sparkles size={13} color="var(--brand-accent)" />
+                            <span>MUETY Patron Sanctuary</span>
+                          </div>
+                          <h4 className="pdp-muety-form-title">Submit Your Drape Experience</h4>
+                          <p className="pdp-muety-form-subtitle">
+                            Share your authentic reflections on fabric feel, drape elegance, and artisanal luster.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowReviewForm(false)}
+                          className="pdp-muety-form-close-btn"
+                          aria-label="Close review form"
+                          title="Close"
+                        >
+                          <X size={18} />
+                        </button>
                       </div>
-                      <h4 className="pdp-muety-form-title">Submit Your Drape Experience</h4>
-                      <p className="pdp-muety-form-subtitle">
-                        Share your authentic reflections on fabric feel, drape elegance, and artisanal luster.
-                      </p>
 
-                      <form onSubmit={handleAddReview}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '1.25rem' }}>
-                          <div>
-                            <label className="pdp-muety-form-label">Your Full Name *</label>
+                      <form onSubmit={handleAddReview} className="pdp-muety-form">
+                        <div className="pdp-muety-form-row">
+                          <div className="form-group pdp-muety-form-group">
+                            <label className="form-label pdp-muety-form-label">
+                              <span>Your Full Name</span>
+                              <span className="pdp-req-star">*</span>
+                            </label>
                             <input 
                               type="text" 
                               value={reviewerName} 
                               onChange={e => setReviewerName(e.target.value)} 
                               required 
-                              className="pdp-muety-form-input" 
+                              className="form-input pdp-muety-form-input" 
                               placeholder="e.g. Ananya Sharma" 
                             />
                           </div>
-                          <div>
-                            <label className="pdp-muety-form-label">City / Location (Optional)</label>
+
+                          <div className="form-group pdp-muety-form-group">
+                            <label className="form-label pdp-muety-form-label">
+                              <span>City / Location</span>
+                              <span className="pdp-opt-tag">(Optional)</span>
+                            </label>
                             <input 
                               type="text" 
                               value={reviewerLocation} 
                               onChange={e => setReviewerLocation(e.target.value)} 
-                              className="pdp-muety-form-input" 
+                              className="form-input pdp-muety-form-input" 
                               placeholder="e.g. Chennai, Tamil Nadu" 
                             />
                           </div>
                         </div>
 
                         {/* Interactive 5-Star Rating Selector */}
-                        <div style={{ marginBottom: '1.25rem' }}>
-                          <label className="pdp-muety-form-label">Patron Rating *</label>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                        <div className="form-group pdp-muety-form-group">
+                          <label className="form-label pdp-muety-form-label">
+                            <span>Patron Rating</span>
+                            <span className="pdp-req-star">*</span>
+                          </label>
+                          <div className="pdp-muety-rating-container">
                             <div 
-                              style={{ display: 'inline-flex', gap: '6px', padding: '6px 10px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #e7e2dc' }}
+                              className="pdp-muety-stars-box"
                               onMouseLeave={() => setHoverRating(null)}
                             >
                               {[1, 2, 3, 4, 5].map((val) => {
@@ -1046,7 +1249,7 @@ export const ProductDetailPage: React.FC = () => {
                                     aria-label={`Select ${val} star rating`}
                                   >
                                     <Star 
-                                      size={26} 
+                                      size={24} 
                                       fill={isFilled ? '#f59e0b' : 'none'} 
                                       color={isFilled ? '#f59e0b' : '#cbd5e1'} 
                                       strokeWidth={1.5}
@@ -1055,63 +1258,60 @@ export const ProductDetailPage: React.FC = () => {
                                 );
                               })}
                             </div>
-                            <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#2a0813' }}>
-                              {(hoverRating ?? reviewRating) === 5 && '★★★★★ 5 Stars (Exceptional)'}
-                              {(hoverRating ?? reviewRating) === 4 && '★★★★☆ 4 Stars (Very Good)'}
-                              {(hoverRating ?? reviewRating) === 3 && '★★★☆☆ 3 Stars (Average)'}
-                              {(hoverRating ?? reviewRating) === 2 && '★★☆☆☆ 2 Stars (Fair)'}
-                              {(hoverRating ?? reviewRating) === 1 && '★☆☆☆☆ 1 Star (Needs Improvement)'}
-                            </span>
+                            <div className="pdp-muety-rating-badge">
+                              <Star size={13} fill="#c9a227" color="#c9a227" />
+                              <span className="pdp-muety-rating-score">{(hoverRating ?? reviewRating)}.0</span>
+                              <span className="pdp-muety-rating-desc">
+                                {(hoverRating ?? reviewRating) === 5 && 'Exceptional Drape'}
+                                {(hoverRating ?? reviewRating) === 4 && 'Very Good Quality'}
+                                {(hoverRating ?? reviewRating) === 3 && 'Pleasing Experience'}
+                                {(hoverRating ?? reviewRating) === 2 && 'Fair Drape'}
+                                {(hoverRating ?? reviewRating) === 1 && 'Needs Improvement'}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
-                        <div style={{ marginBottom: '1.25rem' }}>
-                          <label className="pdp-muety-form-label">Review Title (Optional)</label>
+                        <div className="form-group pdp-muety-form-group">
+                          <label className="form-label pdp-muety-form-label">
+                            <span>Review Title</span>
+                            <span className="pdp-opt-tag">(Optional)</span>
+                          </label>
                           <input 
                             type="text" 
                             value={reviewTitle} 
                             onChange={e => setReviewTitle(e.target.value)} 
-                            className="pdp-muety-form-input" 
+                            className="form-input pdp-muety-form-input" 
                             placeholder="e.g. Royal luster and exquisite zari craftsmanship" 
                           />
                         </div>
 
-                        <div style={{ marginBottom: '1.25rem' }}>
-                          <label className="pdp-muety-form-label">Review Comment *</label>
+                        <div className="form-group pdp-muety-form-group">
+                          <label className="form-label pdp-muety-form-label">
+                            <span>Review Comment</span>
+                            <span className="pdp-req-star">*</span>
+                          </label>
                           <textarea 
                             value={reviewComment} 
                             onChange={e => setReviewComment(e.target.value)} 
                             required 
                             rows={3} 
-                            className="pdp-muety-form-input" 
+                            className="form-input form-textarea pdp-muety-form-input" 
                             placeholder="Describe your drape experience with this creation..." 
                             style={{ resize: 'vertical' }}
                           />
                         </div>
 
                         {/* Patron Photograph Upload */}
-                        <div style={{ marginBottom: '1.75rem' }}>
-                          <label className="pdp-muety-form-label">
-                            Attach Drape / Saree Photo (Optional)
+                        <div className="form-group pdp-muety-form-group">
+                          <label className="form-label pdp-muety-form-label">
+                            <span>Attach Drape / Saree Photo</span>
+                            <span className="pdp-opt-tag">(Optional)</span>
                           </label>
                           <div className="pdp-muety-photo-dropzone">
-                            <label style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              padding: '8px 18px',
-                              borderRadius: '9999px',
-                              border: '1px solid #c9a227',
-                              backgroundColor: '#ffffff',
-                              cursor: 'pointer',
-                              fontSize: '0.85rem',
-                              fontWeight: 600,
-                              color: '#2a0813',
-                              boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
-                              transition: 'all 0.2s ease'
-                            }}>
-                              <Upload size={16} color="#c9a227" />
-                              <span>{reviewPhotoFile ? 'Change Photo' : 'Upload Photo'}</span>
+                            <label className="pdp-muety-photo-upload-btn">
+                              <Upload size={16} color="var(--brand-accent)" />
+                              <span>{reviewPhotoFile ? 'Change Drape Photo' : 'Upload Drape Photo'}</span>
                               <input 
                                 type="file" 
                                 accept="image/*" 
@@ -1121,58 +1321,69 @@ export const ProductDetailPage: React.FC = () => {
                             </label>
 
                             {reviewPhotoPreview ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <div style={{
-                                  width: '46px',
-                                  height: '46px',
-                                  borderRadius: '6px',
-                                  overflow: 'hidden',
-                                  border: '1.5px solid #c9a227',
-                                  backgroundColor: '#0f172a'
-                                }}>
-                                  <img 
-                                    src={reviewPhotoPreview} 
-                                    alt="Preview" 
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                                  />
+                              <div className="pdp-muety-photo-preview-item">
+                                <img 
+                                  src={reviewPhotoPreview} 
+                                  alt="Preview" 
+                                  className="pdp-muety-photo-thumb"
+                                />
+                                <div className="pdp-muety-photo-details">
+                                  <span className="pdp-muety-photo-name">
+                                    {reviewPhotoFile?.name}
+                                  </span>
+                                  <span className="pdp-muety-photo-status">Ready to publish</span>
                                 </div>
-                                <span style={{ fontSize: '0.82rem', color: '#64748b', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {reviewPhotoFile?.name}
-                                </span>
                                 <button 
                                   type="button" 
                                   onClick={() => { setReviewPhotoFile(null); setReviewPhotoPreview(null); }}
-                                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                                  className="pdp-muety-photo-del-btn"
                                   title="Remove photo"
+                                  aria-label="Remove photo"
                                 >
-                                  <X size={16} />
+                                  <X size={15} />
                                 </button>
                               </div>
                             ) : (
-                              <span style={{ fontSize: '0.82rem', color: '#8b95a5' }}>
-                                PNG, JPG or WebP up to 10MB
+                              <span className="pdp-muety-photo-guideline">
+                                PNG, JPG or WebP up to 10MB • Showcases authentic luster
                               </span>
                             )}
                           </div>
                         </div>
 
-                        <button 
-                          type="submit" 
-                          disabled={isSubmittingReview}
-                          className="pdp-muety-submit-btn"
-                        >
-                          {isSubmittingReview ? (
-                            <>
-                              <Loader2 size={16} className="animate-spin" />
-                              <span>Publishing Reflection...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles size={16} />
-                              <span>Submit Patron Review</span>
-                            </>
-                          )}
-                        </button>
+                        {/* Actions Row */}
+                        <div className="pdp-muety-form-actions-row">
+                          <button 
+                            type="submit" 
+                            disabled={isSubmittingReview}
+                            className="btn btn-primary pdp-muety-submit-btn"
+                          >
+                            {isSubmittingReview ? (
+                              <>
+                                <Loader2 size={16} className="animate-spin" />
+                                <span>Publishing Reflection...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles size={16} />
+                                <span>Submit Patron Review</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowReviewForm(false)}
+                            className="btn btn-outline pdp-muety-cancel-btn"
+                          >
+                            Cancel
+                          </button>
+
+                          <div className="pdp-muety-trust-badge">
+                            <ShieldCheck size={15} color="var(--brand-accent)" />
+                            <span>Verified Patron Submission</span>
+                          </div>
+                        </div>
                       </form>
                     </div>
                   </div>
@@ -1375,108 +1586,6 @@ export const ProductDetailPage: React.FC = () => {
         )}
       </div>
 
-      {isLightboxOpen && product && createPortal(
-        <div 
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(5, 8, 15, 0.96)',
-            backdropFilter: 'blur(12px)',
-            zIndex: 999999,
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'fadeIn 0.25s ease'
-          }}
-          onClick={() => { setIsLightboxOpen(false); resetZoom(); }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#ffffff' }}>
-            <div>
-              <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{product.name}</span>
-              <span style={{ color: '#94a3b8', fontSize: '0.85rem', marginLeft: '12px' }}>
-                Image {selectedImage + 1} of {product.images.length}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <button 
-                onClick={(e) => { e.stopPropagation(); setZoomScale(prev => Math.min(prev + 0.5, 4)); }} 
-                style={{ color: '#ffffff', background: 'none', border: 'none', cursor: 'pointer', padding: '6px' }}
-                title="Zoom In"
-              >
-                <ZoomIn size={22} />
-              </button>
-              <button 
-                onClick={(e) => { e.stopPropagation(); resetZoom(); }} 
-                style={{ color: '#ffffff', background: 'none', border: 'none', cursor: 'pointer', padding: '6px' }}
-                title="Reset Zoom"
-              >
-                <ZoomOut size={22} />
-              </button>
-              <button 
-                onClick={(e) => { e.stopPropagation(); setIsLightboxOpen(false); resetZoom(); }} 
-                style={{ color: '#ffffff', background: 'none', border: 'none', cursor: 'pointer', padding: '6px' }}
-                title="Close Lightbox"
-              >
-                <X size={26} />
-              </button>
-            </div>
-          </div>
-
-          <div 
-            style={{
-              flex: 1,
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-              userSelect: 'none'
-            }}
-            onClick={(e) => e.stopPropagation()}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-          >
-            <img 
-              src={product.images[selectedImage] || product.images[0]} 
-              alt={product.name}
-              onDoubleClick={handleImageDoubleClick}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              style={{
-                maxWidth: '90vw',
-                maxHeight: '82vh',
-                objectFit: 'contain',
-                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
-                transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`,
-                transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                cursor: zoomScale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in'
-              }}
-            />
-
-            {product.images.length > 1 && (
-              <>
-                <button
-                  onClick={(e) => { e.stopPropagation(); resetZoom(); setSelectedImage(prev => (prev > 0 ? prev - 1 : product.images.length - 1)); }}
-                  style={{ position: 'absolute', left: '24px', backgroundColor: 'rgba(255,255,255,0.15)', color: '#ffffff', border: 'none', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                >
-                  <ChevronLeft size={28} />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); resetZoom(); setSelectedImage(prev => (prev < product.images.length - 1 ? prev + 1 : 0)); }}
-                  style={{ position: 'absolute', right: '24px', backgroundColor: 'rgba(255,255,255,0.15)', color: '#ffffff', border: 'none', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                >
-                  <ChevronRight size={28} />
-                </button>
-              </>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
-
       {/* Patron Photo Full Preview Lightbox */}
       {previewPhotoModal && createPortal(
         <div 
@@ -1533,6 +1642,153 @@ export const ProductDetailPage: React.FC = () => {
                 alt={previewPhotoModal.author} 
                 style={{ maxWidth: '85vw', maxHeight: '78vh', objectFit: 'contain', borderRadius: '4px' }} 
               />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Product Link Sharing Modal */}
+      {isShareModalOpen && product && createPortal(
+        <div 
+          className="pdp-share-modal-overlay" 
+          onClick={() => setIsShareModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pdp-share-modal-title"
+        >
+          <div 
+            className="pdp-share-modal-card" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pdp-share-modal-header">
+              <h3 id="pdp-share-modal-title" className="pdp-share-modal-title">
+                <Share2 size={18} color="var(--brand-accent, #C99A16)" />
+                <span>Share Atelier Creation</span>
+              </h3>
+              <button 
+                type="button" 
+                className="pdp-share-modal-close"
+                onClick={() => setIsShareModalOpen(false)}
+                aria-label="Close share dialog"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="pdp-share-modal-body">
+              {/* Product preview card */}
+              <div className="pdp-share-product-preview">
+                <img 
+                  src={galleryImages[0] || '/saree_model_individual.jpg'} 
+                  alt={product.name} 
+                  className="pdp-share-product-thumb"
+                />
+                <div className="pdp-share-product-info">
+                  <div className="pdp-share-product-name">{product.name}</div>
+                  <div className="pdp-share-product-meta">
+                    <span style={{ fontWeight: 700, color: 'var(--brand-primary)' }}>₹{product.price.toLocaleString('en-IN')}</span>
+                    {product.category && <span>• {product.category}</span>}
+                    <span>• Pure Handloom</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Copy Direct Link */}
+              <div className="pdp-share-link-box">
+                <label htmlFor="pdp-share-link-input" className="pdp-share-label">Product Link</label>
+                <div className="pdp-share-input-group">
+                  <input 
+                    id="pdp-share-link-input"
+                    type="text" 
+                    readOnly 
+                    value={shareUrl} 
+                    className="pdp-share-input"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={handleCopyLink}
+                    className={`pdp-share-copy-btn ${isLinkCopied ? 'copied' : ''}`}
+                    aria-label="Copy product link"
+                  >
+                    {isLinkCopied ? (
+                      <>
+                        <Check size={16} />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={16} />
+                        <span>Copy Link</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Share Channels */}
+              <div>
+                <span className="pdp-share-label">Share with Connoisseurs</span>
+                <div className="pdp-share-channels-grid">
+                  <button 
+                    type="button"
+                    onClick={() => handleShareChannel('whatsapp')}
+                    className="pdp-share-channel-btn pdp-share-btn-whatsapp"
+                    aria-label="Share via WhatsApp"
+                  >
+                    <MessageCircle size={16} />
+                    <span>WhatsApp</span>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => handleShareChannel('facebook')}
+                    className="pdp-share-channel-btn pdp-share-btn-facebook"
+                    aria-label="Share on Facebook"
+                  >
+                    <Facebook size={16} />
+                    <span>Facebook</span>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => handleShareChannel('twitter')}
+                    className="pdp-share-channel-btn pdp-share-btn-twitter"
+                    aria-label="Share on X"
+                  >
+                    <Twitter size={16} />
+                    <span>X</span>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => handleShareChannel('pinterest')}
+                    className="pdp-share-channel-btn pdp-share-btn-pinterest"
+                    aria-label="Save to Pinterest"
+                  >
+                    <ExternalLink size={16} />
+                    <span>Pinterest</span>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => handleShareChannel('email')}
+                    className="pdp-share-channel-btn pdp-share-btn-email"
+                    aria-label="Share via Email"
+                  >
+                    <Mail size={16} />
+                    <span>Email</span>
+                  </button>
+                  {hasNativeShare && (
+                    <button 
+                      type="button"
+                      onClick={handleNativeShare}
+                      className="pdp-share-channel-btn pdp-share-btn-native"
+                      aria-label="More sharing options"
+                    >
+                      <Share2 size={16} />
+                      <span>More Options</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>,

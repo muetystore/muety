@@ -66,11 +66,27 @@ export const AccountPage: React.FC = () => {
     sendPhoneLinkOtp, 
     verifyPhoneLinkOtp, 
     setupRecaptcha, 
-    getConnectedStatus 
+    getConnectedStatus,
+    recordPatronCircleConsent
   } = useAuth();
   const { wishlist } = useCart();
   const { success, warning } = useNotification();
   const navigate = useNavigate();
+
+  const [isJoiningCircle, setIsJoiningCircle] = useState(false);
+
+  const handleJoinPatronCircle = async () => {
+    if (!user) return;
+    setIsJoiningCircle(true);
+    try {
+      await recordPatronCircleConsent(user.uid, true, user.email, user.phoneNumber);
+      success('Welcome to the MUETY Patron Circle! You now enjoy exclusive VIP benefits.', 'Patron Circle VIP');
+    } catch (err: any) {
+      warning(err.message || 'Unable to join Patron Circle.');
+    } finally {
+      setIsJoiningCircle(false);
+    }
+  };
 
   // If user navigates with legacy ?tab=wishlist, redirect to dedicated /wishlist page
   useEffect(() => {
@@ -782,6 +798,86 @@ export const AccountPage: React.FC = () => {
                       <Link to="/login?redirect=/account" className="btn btn-primary btn-sm" style={{ padding: '8px 18px', fontWeight: 700 }}>
                         Sign In / Register
                       </Link>
+                    </div>
+                  </div>
+                )}
+
+                {/* MUETY Patron Circle Luxury VIP Card */}
+                {isAuthenticated && user && (
+                  <div className="card account-card-fluid" style={{ 
+                    background: user.patronCircleMember 
+                      ? 'linear-gradient(135deg, #090d16 0%, #1a1612 100%)' 
+                      : 'linear-gradient(135deg, #fffdfa 0%, #faf5ea 100%)',
+                    border: `1px solid ${user.patronCircleMember ? '#d4af37' : '#fde68a'}`,
+                    padding: '1.5rem',
+                    borderRadius: 'var(--radius-md)',
+                    color: user.patronCircleMember ? '#ffffff' : 'var(--brand-primary)',
+                    boxShadow: '0 4px 15px rgba(212, 175, 55, 0.08)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.25rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: '240px' }}>
+                        <div style={{
+                          width: '48px',
+                          height: '48px',
+                          borderRadius: '50%',
+                          backgroundColor: user.patronCircleMember ? 'rgba(212, 175, 55, 0.2)' : '#fef3c7',
+                          color: '#d4af37',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          border: '1px solid rgba(212, 175, 55, 0.4)'
+                        }}>
+                          <Sparkles size={24} />
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 800, letterSpacing: '0.12em', color: '#d4af37', textTransform: 'uppercase' }}>
+                              MUETY PATRON CIRCLE
+                            </span>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              backgroundColor: user.patronCircleMember ? 'rgba(212, 175, 55, 0.25)' : '#e2e8f0',
+                              color: user.patronCircleMember ? '#fef08a' : '#64748b'
+                            }}>
+                              {user.patronCircleMember ? '✨ Active Member' : 'Available Invitation'}
+                            </span>
+                          </div>
+                          <h3 style={{ margin: '4px 0 2px', fontSize: '1.18rem', fontFamily: 'var(--font-heading)', color: user.patronCircleMember ? '#ffffff' : 'var(--brand-primary)' }}>
+                            {user.patronCircleMember ? 'Exclusive VIP Patron Privileges' : 'Join the MUETY Patron Circle'}
+                          </h3>
+                          <p style={{ margin: 0, fontSize: '0.85rem', color: user.patronCircleMember ? '#cbd5e1' : 'var(--text-secondary)', maxWidth: '580px' }}>
+                            {user.patronCircleMember 
+                              ? 'Welcome, esteemed patron. You have VIP reservation access to new handloom drops, private couture concierge, and festive private previews.'
+                              : 'Experience Salem pure silks with priority drop reservations, invitation-only festival edits, and complimentary concierge assistance.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {!user.patronCircleMember && (
+                        <button
+                          type="button"
+                          disabled={isJoiningCircle}
+                          onClick={handleJoinPatronCircle}
+                          className="btn btn-primary btn-sm"
+                          style={{
+                            padding: '10px 22px',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: '#090d16',
+                            borderColor: '#d4af37',
+                            color: '#d4af37'
+                          }}
+                        >
+                          <Sparkles size={15} />
+                          {isJoiningCircle ? 'Joining Circle...' : 'Join Patron Circle'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}

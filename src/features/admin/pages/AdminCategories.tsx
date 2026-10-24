@@ -4,7 +4,7 @@ import { productService } from '@/features/catalog/services/productService';
 import { auditService } from '@/shared/services/auditService';
 import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
-import { Category } from '@/types';
+import { Category, Product } from '@/types';
 import { auth, db } from '@/lib/firebase/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { uploadToCloudinary } from '@/lib/media/cloudinary';
@@ -14,6 +14,12 @@ import {
   isCategoryCodeUnique, 
   isCategoryCodeLocked 
 } from '@/features/catalog/services/categoryCodeService';
+import { 
+  categoryService, 
+  normalizeCategorySlug, 
+  canDeleteCategory, 
+  computeCategoryProductCount 
+} from '@/features/catalog/services/categoryService';
 import { AdminModal } from '@/features/admin/components/AdminModal';
 import { Plus, Trash2, Edit3, X, Upload, Image as ImageIcon, Loader2, CheckCircle2, Lock, AlertTriangle } from 'lucide-react';
 
@@ -22,7 +28,8 @@ export const AdminCategories: React.FC = () => {
   const { user } = useAuth();
   const { success, warning, error } = useNotification();
 
-  const [categories, setCategories] = useState<Category[]>(() => productService.getCategories());
+  const [categories, setCategories] = useState<Category[]>(() => categoryService.getCategories());
+  const [products, setProducts] = useState<Product[]>(() => productService.getAllProducts());
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCat, setEditingCat] = useState<Category | null>(null);
 
@@ -42,7 +49,7 @@ export const AdminCategories: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const unsubscribe = productService.subscribeToCategories(
+    const unsubCats = categoryService.subscribeToCategories(
       (liveCats) => {
         setCategories(liveCats);
       },
@@ -52,8 +59,13 @@ export const AdminCategories: React.FC = () => {
       }
     );
 
+    const unsubProds = productService.subscribeToProducts((liveProds) => {
+      setProducts(liveProds || []);
+    });
+
     return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
+      if (typeof unsubCats === 'function') unsubCats();
+      if (typeof unsubProds === 'function') unsubProds();
     };
   }, []);
 
@@ -209,9 +221,19 @@ export const AdminCategories: React.FC = () => {
   };
 
   const handleDelete = async (id: string, catName: string) => {
+    const check = canDeleteCategory(id, products);
+    if (!check.canDelete) {
+      const sampleNames = check.sampleProductNames.map(n => `"${n}"`).join(', ');
+      warning(
+        `Cannot delete category "${catName}". It is currently assigned to ${check.assignedCount} product(s) (${sampleNames}). Please reassign these products to another category before deleting.`,
+        'Category In Use'
+      );
+      return;
+    }
+
     if (window.confirm(`Delete category "${catName}"?`)) {
       try {
-        await productService.deleteCategory(id);
+        await categoryService.deleteCategory(id, true);
         await auditService.logAction({
           actorUid: user?.uid || 'admin',
           actorEmail: user?.email || 'superadmin@muety.in',
@@ -240,6 +262,15 @@ export const AdminCategories: React.FC = () => {
 
     if (cleanName.length < 3 || invalidWords.includes(cleanName.toLowerCase())) {
       const errMsg = 'Please enter a descriptive category title (minimum 3 characters).';
+      setFormError(errMsg);
+      warning(errMsg);
+      return;
+    }
+
+    const slug = normalizeCategorySlug(cleanName);
+    const slugConflict = categories.find(c => c.slug === slug && c.id !== editingCat?.id);
+    if (slugConflict) {
+      const errMsg = `Category slug "${slug}" is already used by "${slugConflict.name}". Please enter a distinct category title.`;
       setFormError(errMsg);
       warning(errMsg);
       return;
@@ -477,7 +508,7 @@ export const AdminCategories: React.FC = () => {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--brand-border)', paddingTop: '10px', flexWrap: 'wrap', gap: '8px' }}>
                 <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)', fontWeight: 600 }}>
-                  {cat.itemCount || 0} Pieces Active
+                  {computeCategoryProductCount(cat.id, products)} Pieces Active
                 </span>
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                   <button 

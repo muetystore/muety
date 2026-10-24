@@ -11,7 +11,6 @@ import {
   Search, 
   Eye, 
   X, 
-  Cloud, 
   Loader2, 
   Trash2,
   Truck,
@@ -19,11 +18,35 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  FileText,
   User,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  ShoppingBag,
+  MapPin,
+  CreditCard,
+  Printer,
+  Copy,
+  ExternalLink,
+  ChevronRight,
+  Sparkles,
+  Phone,
+  Mail,
+  MessageCircle,
+  Check,
+  Tag,
+  ShieldCheck,
+  ArrowUpRight
 } from 'lucide-react';
+import { AdminModal } from '@/features/admin/components/AdminModal';
+
+const POPULAR_COURIERS = [
+  'Blue Dart Express',
+  'DTDC Express',
+  'Delhivery Express',
+  'India Post / Speed Post',
+  'Shadowfax',
+  'MUETY Global Express'
+];
 
 export const AdminOrders: React.FC = () => {
   useDocumentTitle('Orders ERP & Fulfillment');
@@ -36,6 +59,8 @@ export const AdminOrders: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [isCreatingSample, setIsCreatingSample] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Derive currently selected order from live orders list to prevent any state flickering
   const selectedOrder = React.useMemo(() => {
@@ -66,12 +91,48 @@ export const AdminOrders: React.FC = () => {
     return 'MUETY-LUXE';
   };
 
+  const handleCopy = (text: string, fieldKey: string, msg: string = 'Copied to clipboard') => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldKey);
+    success(msg);
+    setTimeout(() => {
+      setCopiedField(prev => (prev === fieldKey ? null : prev));
+    }, 2200);
+  };
+
+  const getCleanPhone = (phone?: string): string => {
+    if (!phone) return '';
+    return phone.replace(/[^\d+]/g, '');
+  };
+
+  const getTrackingUrl = (courierName: string, awb: string): string => {
+    if (!awb) return '';
+    const name = courierName.toLowerCase();
+    if (name.includes('blue dart') || name.includes('bluedart')) {
+      return `https://www.bluedart.com/tracking?trackNumber=${encodeURIComponent(awb)}`;
+    }
+    if (name.includes('delhivery')) {
+      return `https://www.delhivery.com/track/package/${encodeURIComponent(awb)}`;
+    }
+    if (name.includes('dtdc')) {
+      return `https://www.dtdc.in/tracking/shipment-tracking.asp?strCnno=${encodeURIComponent(awb)}`;
+    }
+    if (name.includes('india post') || name.includes('speed post')) {
+      return `https://www.indiapost.gov.in/_layouts/15/dpt.cept.tracking/trackconsignment.aspx`;
+    }
+    return `https://www.google.com/search?q=track+${encodeURIComponent(courierName)}+${encodeURIComponent(awb)}`;
+  };
+
   useEffect(() => {
     setLoading(true);
     setQueryError(null);
 
+    let liveReceived = false;
+
     const unsubscribe = orderService.subscribeToAllOrders(
       (liveOrders) => {
+        liveReceived = true;
         setOrders(liveOrders);
         setLoading(false);
         setQueryError(null);
@@ -83,7 +144,15 @@ export const AdminOrders: React.FC = () => {
       }
     );
 
+    const fallbackTimer = setTimeout(() => {
+      if (!liveReceived) {
+        setOrders(storageService.getOrders());
+        setLoading(false);
+      }
+    }, 2500);
+
     return () => {
+      clearTimeout(fallbackTimer);
       if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, []);
@@ -91,7 +160,7 @@ export const AdminOrders: React.FC = () => {
   const openOrderDetails = (ord: Order) => {
     setSelectedOrderId(ord.id);
     setTrackingNumber(ord.trackingNumber || '');
-    setCourier(ord.courier || ord.trackingCarrier || 'Bluedart Express');
+    setCourier(ord.courier || ord.trackingCarrier || 'Blue Dart Express');
     setStatusNote('');
   };
 
@@ -111,7 +180,7 @@ export const AdminOrders: React.FC = () => {
           reason: `Changed order #${updated.orderNumber} status to ${newStatus}`
         });
 
-        success(`Order #${updated.orderNumber} status updated to ${newStatus.toUpperCase()}`);
+        success(`Order #${updated.orderNumber} status transitioned to ${newStatus.replace(/_/g, ' ').toUpperCase()}`);
         setStatusNote('');
       }
     } catch (err: any) {
@@ -145,7 +214,7 @@ export const AdminOrders: React.FC = () => {
           reason: `Updated shipping courier (${courier}) and tracking number (${trackingNumber})`
         });
 
-        success(`Updated shipping tracking details for Order #${selectedOrder.orderNumber}`);
+        success(`Logistics & tracking details updated for Order #${selectedOrder.orderNumber}`);
       }
     } catch (err: any) {
       error(err?.message || 'Failed to update tracking info.');
@@ -178,6 +247,71 @@ export const AdminOrders: React.FC = () => {
       success(`Order #${orderNum} successfully removed from records.`);
     } catch (err: any) {
       error(err?.message || 'Failed to delete order.');
+    }
+  };
+
+  const handleCreateSampleOrder = async () => {
+    setIsCreatingSample(true);
+    try {
+      const products = storageService.getProducts();
+      const sampleProd = products.find(p => (p.stock ?? 1) > 0) || products[0] || {
+        id: 'saree-kanchi-01',
+        name: 'Kanchipuram Pure Mulberry Silk Saree',
+        sku: 'KD-01',
+        price: 24500,
+        category: 'Pure Silk Sarees',
+        images: ['/saree_model_individual.jpg']
+      };
+
+      const unitPrice = sampleProd.price || 24500;
+      const discountVal = Math.round(unitPrice * 0.1);
+      const taxVal = Math.round((unitPrice - discountVal) * 0.05);
+      const grandTotal = unitPrice - discountVal + taxVal;
+
+      const newOrder = await orderService.createOrder({
+        customerId: user?.uid || 'patron-vip-001',
+        customerName: user?.displayName || 'MUETY Patron VIP',
+        customerEmail: user?.email || 'patron@muety.in',
+        customerPhone: '+91 98401 23456',
+        shippingAddress: {
+          id: 'addr-sample',
+          fullName: user?.displayName || 'MUETY Patron VIP',
+          streetAddress: '42, Silk Weavers Enclave, Temple Road',
+          apartment: 'Villa 7, Heritage Square',
+          city: 'Kanchipuram',
+          state: 'Tamil Nadu',
+          postalCode: '631501',
+          country: 'India',
+          phone: '+91 98401 23456',
+          isDefault: true
+        },
+        items: [
+          {
+            product: sampleProd as any,
+            quantity: 1,
+            selectedColor: 'Peacock Royal Blue & Pure Gold Zari'
+          }
+        ],
+        subtotal: unitPrice,
+        discount: discountVal,
+        appliedCoupon: 'ROYALTY10',
+        tax: taxVal,
+        shippingFee: 0,
+        total: grandTotal,
+        paymentMethod: 'razorpay' as any,
+        paymentStatus: 'paid' as any,
+        razorpayPaymentId: 'pay_MUETY_' + Math.random().toString(36).substring(2, 9).toUpperCase()
+      });
+
+      if (newOrder) {
+        setOrders(prev => [newOrder, ...prev.filter(o => o.id !== newOrder.id)]);
+        setSelectedOrderId(newOrder.id);
+        success(`Sample demonstration Order #${newOrder.orderNumber} created successfully!`);
+      }
+    } catch (err: any) {
+      error(err?.message || 'Failed to create sample order.');
+    } finally {
+      setIsCreatingSample(false);
     }
   };
 
@@ -219,19 +353,83 @@ export const AdminOrders: React.FC = () => {
     return matchesStatus && matchesSearch;
   });
 
+  // Calculate lifecycle stepper index
+  const getLifecycleStepIndex = (status: OrderStatus): number => {
+    switch (status) {
+      case 'pending_payment':
+      case 'confirmed':
+        return 0;
+      case 'processing':
+        return 1;
+      case 'packed':
+        return 2;
+      case 'shipped':
+      case 'out_for_delivery':
+        return 3;
+      case 'delivered':
+        return 4;
+      default:
+        return 0;
+    }
+  };
+
+  const LIFECYCLE_STAGES = [
+    { key: 'confirmed', label: 'Confirmed', desc: 'Paid & Captured' },
+    { key: 'processing', label: 'QC & Prep', desc: 'Silk Atelier Check' },
+    { key: 'packed', label: 'Packed', desc: 'Luxury Box Sealed' },
+    { key: 'shipped', label: 'In Transit', desc: 'Handed to Courier' },
+    { key: 'delivered', label: 'Delivered', desc: 'Received by Patron' },
+  ];
+
   return (
-    <div className="admin-orders animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem', paddingBottom: '4rem' }}>
+    <div className="admin-orders animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem', paddingBottom: '4rem' }}>
       
+      {/* Scoped Print Stylesheet */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #admin-printable-order-invoice,
+          #admin-printable-order-invoice * {
+            visibility: visible !important;
+          }
+          #admin-printable-order-invoice {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            background: #ffffff !important;
+            color: #0f172a !important;
+            padding: 32px !important;
+            margin: 0 !important;
+            z-index: 9999999 !important;
+          }
+        }
+      `}</style>
+
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--brand-primary)', margin: 0, fontFamily: 'var(--font-heading)' }}>
-            Fulfillment & Order ERP Operations
+            Fulfillment &amp; Order ERP Operations
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '4px 0 0' }}>
             Dispatch tracking, order status lifecycle management, and customer delivery snapshots.
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={handleCreateSampleOrder}
+          disabled={isCreatingSample}
+          className="btn btn-secondary btn-sm"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 700, padding: '8px 16px' }}
+        >
+          {isCreatingSample ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} color="var(--brand-accent)" />}
+          <span>Create Sample Saree Order</span>
+        </button>
       </div>
 
       {/* Automated / Test Orders Notice */}
@@ -338,7 +536,7 @@ export const AdminOrders: React.FC = () => {
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Order #</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Customer Patron</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Date</th>
-                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Items Count & SKU</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700 }}>Items Count &amp; SKU</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Total (₹)</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700 }}>Status</th>
                 <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
@@ -362,9 +560,24 @@ export const AdminOrders: React.FC = () => {
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-                    <Truck size={36} color="#cbd5e1" style={{ margin: '0 auto 0.75rem', display: 'block' }} />
-                    <p style={{ margin: 0, fontWeight: 600 }}>No client orders found matching current filters.</p>
+                  <td colSpan={7} style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#64748b' }}>
+                    <Truck size={42} color="#cbd5e1" style={{ margin: '0 auto 0.75rem', display: 'block' }} />
+                    <p style={{ margin: '0 0 0.5rem', fontWeight: 700, fontSize: '1rem', color: '#334155' }}>
+                      No client orders found matching current filters.
+                    </p>
+                    <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>
+                      You can generate a sample pure silk saree demonstration order to test fulfillment and inspect the View Order modal.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCreateSampleOrder}
+                      disabled={isCreatingSample}
+                      className="btn btn-primary btn-sm"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}
+                    >
+                      {isCreatingSample ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                      Create Sample Saree Order
+                    </button>
                   </td>
                 </tr>
               ) : (
@@ -451,290 +664,807 @@ export const AdminOrders: React.FC = () => {
         </div>
       </div>
 
-      {/* ORDER DETAIL & FULFILLMENT MODAL */}
+      {/* ========================================================================= */}
+      {/* UPGRADED LUXURY VIEW ORDER MODAL & FULFILLMENT COMMAND CENTER             */}
+      {/* ========================================================================= */}
       {selectedOrder && (
-        <div className="admin-modal-overlay" onClick={() => setSelectedOrderId(null)}>
-          <div className="admin-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '850px' }}>
-            {/* Modal Header */}
+        <AdminModal
+          isOpen={!!selectedOrder}
+          onClose={() => setSelectedOrderId(null)}
+          title={`Order #${selectedOrder.orderNumber}`}
+          subtitle={`Placed on ${new Date(selectedOrder.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} at ${new Date(selectedOrder.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} • Patron: ${selectedOrder.customerName}`}
+          headerIcon={<ShoppingBag size={20} />}
+          maxWidth="min(980px, calc(100vw - 32px))"
+        >
+          {/* Scrollable Modal Body */}
+          <div className="admin-modal-body" style={{
+            padding: '1.5rem',
+            overflowY: 'auto',
+            maxHeight: 'calc(88dvh - 120px)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+            backgroundColor: '#f8fafc'
+          }}>
+            
+            {/* 1. LIFECYCLE PROGRESS STEPPER & STAGE ADVANCER */}
             <div style={{
-              padding: '1.25rem 1.75rem',
-              backgroundColor: '#090d16',
-              color: '#ffffff',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexShrink: 0
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              padding: '1.25rem 1.5rem',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
             }}>
-              <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', margin: 0, fontFamily: 'var(--font-heading)' }}>
-                  Order #{selectedOrder.orderNumber}
-                </h2>
-                <span style={{ fontSize: '0.8rem', color: '#d4af37' }}>
-                  Placed on {new Date(selectedOrder.createdAt).toLocaleString()}
-                </span>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => setSelectedOrderId(null)}
-                style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer' }}
-                aria-label="Close Order Details"
-              >
-                <X size={22} />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div style={{ padding: '1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              
-              {/* Order Status & Quick Change */}
-              <div className="card" style={{ padding: '1.25rem', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '1.25rem' }}>
                 <div>
-                  <span style={{ fontSize: '0.78rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Current Fulfillment Status</span>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--brand-primary)', marginTop: '2px' }}>
-                    {selectedOrder.orderStatus.replace('_', ' ').toUpperCase()}
+                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--brand-accent)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Order Fulfillment Progression
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--brand-primary)' }}>
+                      Current Status: <span style={{ color: selectedOrder.orderStatus === 'delivered' ? '#16a34a' : selectedOrder.orderStatus === 'cancelled' ? '#dc2626' : 'var(--brand-accent)' }}>
+                        {selectedOrder.orderStatus.replace(/_/g, ' ').toUpperCase()}
+                      </span>
+                    </h3>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                {/* Quick Status Transition Dropdown */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Advance Stage:</label>
                   <select
                     value={selectedOrder.orderStatus}
                     onChange={(e) => handleUpdateStatus(selectedOrder.id, e.target.value as OrderStatus)}
                     className="form-input"
-                    style={{ margin: 0, width: '200px' }}
+                    style={{ margin: 0, width: '190px', fontWeight: 700, padding: '7px 12px', fontSize: '0.85rem', borderColor: '#cbd5e1' }}
                   >
-                    <option value="pending_payment">Pending Payment</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="processing">Processing</option>
-                    <option value="packed">Packed</option>
-                    <option value="shipped">Shipped</option>
-                    <option value="out_for_delivery">Out For Delivery</option>
-                    <option value="delivered">Delivered</option>
+                    <option value="pending_payment">1. Pending Payment</option>
+                    <option value="confirmed">2. Confirmed (Captured)</option>
+                    <option value="processing">3. Atelier QC &amp; Prep</option>
+                    <option value="packed">4. Packed &amp; Sealed</option>
+                    <option value="shipped">5. Shipped (In Transit)</option>
+                    <option value="out_for_delivery">6. Out For Delivery</option>
+                    <option value="delivered">7. Delivered to Patron</option>
                     <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
               </div>
 
-              {/* Courier & Tracking Form */}
-              <form onSubmit={handleSaveTracking} className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--brand-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Truck size={18} color="var(--brand-accent)" /> Dispatch Courier & Tracking Details
-                </h4>
-
-                <div className="grid-2" style={{ gap: '1rem' }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Courier Carrier Name</label>
-                    <input 
-                      type="text" 
-                      value={courier} 
-                      onChange={e => setCourier(e.target.value)} 
-                      placeholder="e.g. Bluedart / DTDC / India Post" 
-                      className="form-input" 
-                    />
+              {/* Cancellation Warning if Cancelled */}
+              {selectedOrder.orderStatus === 'cancelled' ? (
+                <div style={{ padding: '12px 16px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px', color: '#991b1b' }}>
+                  <XCircle size={20} color="#dc2626" />
+                  <div style={{ fontSize: '0.88rem' }}>
+                    <strong>This order has been cancelled.</strong> {selectedOrder.cancellationReason ? `Reason: ${selectedOrder.cancellationReason}` : 'No further automated delivery dispatches are scheduled.'}
                   </div>
+                </div>
+              ) : (
+                /* Visual Horizontal Stepper */
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', marginTop: '0.5rem' }}>
+                  {LIFECYCLE_STAGES.map((st, idx) => {
+                    const currentIdx = getLifecycleStepIndex(selectedOrder.orderStatus);
+                    const isPassed = idx < currentIdx;
+                    const isCurrent = idx === currentIdx;
 
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Waybill / Tracking Reference #</label>
-                    <input 
-                      type="text" 
-                      value={trackingNumber} 
-                      onChange={e => setTrackingNumber(e.target.value)} 
-                      placeholder="e.g. BD-9940182741" 
-                      className="form-input" 
-                    />
+                    return (
+                      <React.Fragment key={st.key}>
+                        {/* Connecting Line */}
+                        {idx > 0 && (
+                          <div style={{
+                            flex: 1,
+                            height: '3px',
+                            backgroundColor: isPassed || isCurrent ? '#d4af37' : '#e2e8f0',
+                            transition: 'background-color 0.3s ease',
+                            margin: '0 4px',
+                            position: 'relative',
+                            top: '-12px'
+                          }} />
+                        )}
+
+                        {/* Step Node */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', minWidth: '70px', zIndex: 2 }}>
+                          <div style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: isPassed ? '#10b981' : isCurrent ? '#090d16' : '#ffffff',
+                            color: isPassed ? '#ffffff' : isCurrent ? '#fbbf24' : '#94a3b8',
+                            border: isPassed ? '2px solid #10b981' : isCurrent ? '2px solid #fbbf24' : '2px solid #cbd5e1',
+                            boxShadow: isCurrent ? '0 0 0 4px rgba(251, 191, 36, 0.2)' : 'none',
+                            fontWeight: 800,
+                            fontSize: '0.8rem',
+                            transition: 'all 0.3s ease'
+                          }}>
+                            {isPassed ? <Check size={16} /> : (idx + 1)}
+                          </div>
+                          <span style={{ fontSize: '0.78rem', fontWeight: isCurrent ? 800 : 600, color: isCurrent ? 'var(--brand-primary)' : isPassed ? '#0f172a' : '#94a3b8', marginTop: '6px' }}>
+                            {st.label}
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'none' }}>
+                            {st.desc}
+                          </span>
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 2. CONSIGNMENT LOGISTICS & LIVE COURIER TRACKING HUB */}
+            <form onSubmit={handleSaveTracking} style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              padding: '1.25rem 1.5rem',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: 'rgba(212, 175, 55, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b45309' }}>
+                    <Truck size={18} />
+                  </div>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 800 }}>
+                      Consignment Logistics &amp; Courier Tracking
+                    </h4>
+                    <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                      Carrier allocation, airway bill number (AWB), and tracking coordinates.
+                    </span>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button type="submit" className="btn btn-secondary btn-sm" disabled={isUpdatingTracking}>
-                    {isUpdatingTracking ? 'Saving...' : 'Update Tracking Details'}
-                  </button>
-                </div>
-              </form>
+                {trackingNumber && (
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(trackingNumber, 'awb', 'AWB Tracking Number copied!')}
+                      className="btn btn-outline btn-sm"
+                      style={{ fontSize: '0.76rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                    >
+                      {copiedField === 'awb' ? <Check size={13} color="#16a34a" /> : <Copy size={13} />}
+                      <span>{copiedField === 'awb' ? 'Copied' : 'Copy AWB'}</span>
+                    </button>
 
-              {/* Client & Address Snapshot */}
-              <div className="grid-2" style={{ gap: '1rem' }}>
-                <div className="card" style={{ padding: '1.25rem' }}>
-                  <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <User size={16} color="var(--brand-accent)" /> Patron Profile Snapshot
-                  </h4>
-                  <div style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>
-                    <strong>Name:</strong> {selectedOrder.customerName}<br />
-                    <strong>Email:</strong> {selectedOrder.customerEmail}<br />
-                    {selectedOrder.customerPhone && <><strong>Phone:</strong> {selectedOrder.customerPhone}<br /></>}
-                    <strong>Payment Method:</strong> {(selectedOrder.paymentMethod || 'Razorpay').toUpperCase()}<br />
-                    <strong>Payment Status:</strong> <span style={{ color: selectedOrder.paymentStatus === 'paid' ? '#10b981' : '#f59e0b', fontWeight: 700 }}>{(selectedOrder.paymentStatus || 'paid').toUpperCase()}</span>
+                    <a
+                      href={getTrackingUrl(courier, trackingNumber)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-outline btn-sm"
+                      style={{ fontSize: '0.76rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#0369a1' }}
+                    >
+                      <ExternalLink size={13} />
+                      <span>Track Online</span>
+                    </a>
                   </div>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>Courier Carrier Partner</label>
+                  <input 
+                    type="text" 
+                    value={courier} 
+                    onChange={e => setCourier(e.target.value)} 
+                    placeholder="e.g. Blue Dart, DTDC, Delhivery, India Post" 
+                    list="couriers-datalist"
+                    className="form-input" 
+                    style={{ fontSize: '0.88rem', borderColor: '#cbd5e1' }}
+                  />
+                  <datalist id="couriers-datalist">
+                    {POPULAR_COURIERS.map(c => <option key={c} value={c} />)}
+                  </datalist>
                 </div>
 
-                <div className="card" style={{ padding: '1.25rem' }}>
-                  <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Truck size={16} color="var(--brand-accent)" /> Shipping Address Snapshot
-                  </h4>
-                  <div style={{ fontSize: '0.88rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                    {selectedOrder.shippingAddress ? (
-                      <>
-                        <strong>{selectedOrder.shippingAddress.fullName}</strong><br />
-                        {selectedOrder.shippingAddress.streetAddress}{selectedOrder.shippingAddress.apartment ? `, ${selectedOrder.shippingAddress.apartment}` : ''}<br />
-                        {selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} – {selectedOrder.shippingAddress.postalCode}<br />
-                        Phone: {selectedOrder.shippingAddress.phone}
-                      </>
-                    ) : 'Standard Registered Atelier Address'}
-                  </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>Waybill / Tracking Reference # (AWB)</label>
+                  <input 
+                    type="text" 
+                    value={trackingNumber} 
+                    onChange={e => setTrackingNumber(e.target.value)} 
+                    placeholder="e.g. BD-9940182741" 
+                    className="form-input" 
+                    style={{ fontSize: '0.88rem', fontFamily: 'monospace', fontWeight: 700, borderColor: '#cbd5e1' }}
+                  />
                 </div>
               </div>
 
-              {/* Order Items Breakdown with SKU details */}
-              <div className="card" style={{ padding: '1.25rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--brand-primary)' }}>
-                    Order Line Items & Saree SKU Specifications ({selectedOrder.items?.length || 0})
-                  </h4>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                    Official Master Catalog Verified
-                  </span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b' }}>Fulfillment Remark / Dispatch Note (Optional)</label>
+                  <input
+                    type="text"
+                    value={statusNote}
+                    onChange={e => setStatusNote(e.target.value)}
+                    placeholder="e.g. Handed to Blue Dart pickup associate at 04:30 PM with tamper-proof seal"
+                    className="form-input"
+                    style={{ fontSize: '0.82rem', borderColor: '#cbd5e1' }}
+                  />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {(selectedOrder.items || []).map((item, idx) => {
-                    const sku = getProductSku(item);
-                    const prodName = item.product?.name || (item as any).name || 'MUETY Luxury Silk Saree';
-                    const prodImage = item.product?.images?.[0] || (item as any).image || '/saree_model_individual.jpg';
-                    const unitPrice = item.product?.price || (item as any).price || 0;
-                    const lineTotal = unitPrice * (item.quantity || 1);
-                    const categoryName = item.product?.category || 'Festive Silk Sarees';
+                <button 
+                  type="submit" 
+                  className="btn btn-secondary btn-sm" 
+                  disabled={isUpdatingTracking}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700, height: '40px', padding: '0 16px' }}
+                >
+                  {isUpdatingTracking && <RefreshCw size={14} className="animate-spin" />}
+                  {isUpdatingTracking ? 'Saving...' : 'Save Logistics Info'}
+                </button>
+              </div>
+            </form>
 
-                    return (
-                      <div key={idx} style={{ 
+            {/* 3. PATRON IDENTITY & DELIVERY DESTINATION COMMAND GRID */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
+              
+              {/* Patron Card */}
+              <div style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                padding: '1.25rem',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.85rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <User size={16} color="var(--brand-accent)" />
+                    <h4 style={{ margin: 0, fontSize: '0.92rem', color: 'var(--brand-primary)', fontWeight: 800 }}>
+                      Patron Profile Snapshot
+                    </h4>
+                  </div>
+                  <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
+                    Verified Customer
+                  </span>
+                </div>
+                
+                {/* Avatar & Name */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '50%',
+                    backgroundColor: '#090d16',
+                    color: '#fbbf24',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 800,
+                    fontSize: '1.15rem',
+                    border: '2px solid rgba(251, 191, 36, 0.4)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    flexShrink: 0
+                  }}>
+                    {(selectedOrder.customerName || 'P').charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--brand-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedOrder.customerName}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                      Patron UID: <code style={{ fontSize: '0.72rem', backgroundColor: '#f1f5f9', padding: '1px 5px', borderRadius: '3px', color: '#334155' }}>
+                        {selectedOrder.customerId ? selectedOrder.customerId.slice(0, 14) + '...' : 'Guest Checkout'}
+                      </code>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Direct Action Chips */}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+                  <a
+                    href={`mailto:${selectedOrder.customerEmail}`}
+                    className="btn btn-outline btn-sm"
+                    style={{ fontSize: '0.74rem', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Mail size={12} color="var(--brand-accent)" /> Email Patron
+                  </a>
+
+                  {selectedOrder.customerPhone && (
+                    <>
+                      <a
+                        href={`tel:${getCleanPhone(selectedOrder.customerPhone)}`}
+                        className="btn btn-outline btn-sm"
+                        style={{ fontSize: '0.74rem', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <Phone size={12} color="#16a34a" /> Call
+                      </a>
+                      <a
+                        href={`https://wa.me/${getCleanPhone(selectedOrder.customerPhone)}?text=${encodeURIComponent(`Hello ${selectedOrder.customerName}, regarding your MUETY order #${selectedOrder.orderNumber}:`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-outline btn-sm"
+                        style={{ fontSize: '0.74rem', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#047857' }}
+                      >
+                        <MessageCircle size={12} /> WhatsApp
+                      </a>
+                    </>
+                  )}
+                </div>
+
+                {/* Details Key-Value List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.84rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#64748b' }}>Email:</span>
+                    <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedOrder.customerEmail}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#64748b' }}>Phone:</span>
+                    <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedOrder.customerPhone || 'Not provided'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#64748b' }}>Payment Mode:</span>
+                    <span style={{
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      fontSize: '0.76rem',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: selectedOrder.paymentMethod === 'cash_on_delivery' ? '#fffbeb' : '#f0fdf4',
+                      color: selectedOrder.paymentMethod === 'cash_on_delivery' ? '#b45309' : '#166534',
+                      border: `1px solid ${selectedOrder.paymentMethod === 'cash_on_delivery' ? '#fde68a' : '#bbf7d0'}`
+                    }}>
+                      {selectedOrder.paymentMethod === 'cash_on_delivery' ? 'Cash on Delivery' : 'Razorpay Gateway'}
+                    </span>
+                  </div>
+                  {selectedOrder.razorpayPaymentId && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#64748b' }}>Gateway Ref:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(selectedOrder.razorpayPaymentId!, 'pg_id', 'Payment ID copied!')}
+                        style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <code style={{ fontSize: '0.74rem', color: '#1e293b', backgroundColor: '#f1f5f9', padding: '1px 5px', borderRadius: '3px' }}>
+                          {selectedOrder.razorpayPaymentId}
+                        </code>
+                        {copiedField === 'pg_id' ? <Check size={11} color="#16a34a" /> : <Copy size={11} color="#94a3b8" />}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Shipping Address Card */}
+              <div style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                padding: '1.25rem',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.85rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <MapPin size={16} color="var(--brand-accent)" />
+                    <h4 style={{ margin: 0, fontSize: '0.92rem', color: 'var(--brand-primary)', fontWeight: 800 }}>
+                      Delivery Destination &amp; Consignee
+                    </h4>
+                  </div>
+                  {selectedOrder.shippingAddress && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const addr = selectedOrder.shippingAddress;
+                        const label = `${addr.fullName || selectedOrder.customerName}\n${addr.streetAddress}${addr.apartment ? '\n' + addr.apartment : ''}\n${addr.city}, ${addr.state} - ${addr.postalCode}\nPhone: ${addr.phone || selectedOrder.customerPhone || ''}`;
+                        handleCopy(label, 'shipping_label', 'Complete shipping label copied!');
+                      }}
+                      className="btn btn-outline btn-sm"
+                      style={{ fontSize: '0.72rem', padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      {copiedField === 'shipping_label' ? <Check size={12} color="#16a34a" /> : <Copy size={12} />}
+                      <span>{copiedField === 'shipping_label' ? 'Copied' : 'Copy Shipping Label'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {selectedOrder.shippingAddress ? (
+                  <div style={{ fontSize: '0.86rem', lineHeight: 1.6, color: '#334155', backgroundColor: '#fbfcfd', padding: '12px', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
+                    <div style={{ fontWeight: 800, fontSize: '0.94rem', color: 'var(--brand-primary)', marginBottom: '2px' }}>
+                      {selectedOrder.shippingAddress.fullName || selectedOrder.customerName}
+                    </div>
+                    <div>{selectedOrder.shippingAddress.streetAddress}</div>
+                    {selectedOrder.shippingAddress.apartment && (
+                      <div>{selectedOrder.shippingAddress.apartment}</div>
+                    )}
+                    <div style={{ marginTop: '2px' }}>
+                      <strong style={{ color: '#0f172a' }}>{selectedOrder.shippingAddress.city}</strong>, {selectedOrder.shippingAddress.state} – <span style={{ fontWeight: 800, color: 'var(--brand-primary)', backgroundColor: '#f1f5f9', padding: '1px 6px', borderRadius: '4px' }}>{selectedOrder.shippingAddress.postalCode}</span>
+                    </div>
+                    <div style={{ color: '#64748b', marginTop: '6px', fontSize: '0.82rem' }}>
+                      Contact Phone: <strong style={{ color: '#0f172a' }}>{selectedOrder.shippingAddress.phone || selectedOrder.customerPhone || 'N/A'}</strong>
+                    </div>
+                    <div style={{ marginTop: '6px' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#090d16', color: '#fbbf24', fontWeight: 700 }}>
+                        {selectedOrder.shippingAddress.country || 'India'}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ color: '#64748b', fontSize: '0.85rem', fontStyle: 'italic', padding: '1.5rem 0', textAlign: 'center' }}>
+                    No physical delivery address recorded for this order snapshot.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 4. ORDERED SAREE ITEMS & MASTER SKU SPECIFICATIONS */}
+            <div style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              padding: '1.25rem 1.5rem',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <PackageCheck size={18} color="var(--brand-accent)" />
+                  <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 800 }}>
+                    Ordered Saree Items &amp; Master SKU Specifications ({selectedOrder.items?.length || 0})
+                  </h4>
+                </div>
+                <span style={{ fontSize: '0.74rem', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#f0fdf4', color: '#166534', fontWeight: 700, border: '1px solid #bbf7d0' }}>
+                  MUETY Master Catalog Verified
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {(selectedOrder.items || []).map((item, idx) => {
+                  const sku = getProductSku(item);
+                  const prodName = item.product?.name || (item as any).name || 'MUETY Luxury Silk Saree';
+                  const prodImage = item.product?.images?.[0] || (item as any).image || '/saree_model_individual.jpg';
+                  const unitPrice = item.product?.price || (item as any).price || 0;
+                  const lineTotal = unitPrice * (item.quantity || 1);
+                  const categoryName = item.product?.category || 'Festive Pure Silk Sarees';
+
+                  return (
+                    <div 
+                      key={idx} 
+                      style={{ 
                         display: 'flex', 
                         justifyContent: 'space-between', 
                         alignItems: 'center', 
                         border: '1px solid #e2e8f0', 
                         borderRadius: '8px',
                         padding: '12px 14px',
-                        backgroundColor: '#ffffff'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
-                          <img 
-                            src={prodImage} 
-                            alt={prodName} 
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/saree_model_individual.jpg'; }}
-                            style={{ width: '56px', height: '56px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e2e8f0', flexShrink: 0 }} 
-                          />
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                              <strong style={{ fontSize: '0.95rem', color: 'var(--brand-primary)' }}>{prodName}</strong>
-                              <span style={{ 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                gap: '4px',
-                                padding: '2px 8px', 
-                                borderRadius: '4px', 
-                                backgroundColor: '#090d16', 
-                                color: '#fbbf24', 
-                                fontFamily: 'monospace', 
-                                fontSize: '0.8rem', 
-                                fontWeight: 700,
-                                letterSpacing: '0.04em'
-                              }}>
-                                SKU: {sku}
-                              </span>
-                            </div>
-                            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                              <span><strong>Category:</strong> {categoryName}</span>
-                              <span><strong>Qty:</strong> {item.quantity} × ₹{unitPrice.toLocaleString('en-IN')}</span>
-                              {item.selectedColor && (
-                                <span><strong>Shade:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{item.selectedColor}</span></span>
-                              )}
-                            </div>
+                        backgroundColor: '#fafbfc'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+                        <img 
+                          src={prodImage} 
+                          alt={prodName} 
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/saree_model_individual.jpg'; }}
+                          style={{ 
+                            width: '64px', 
+                            height: '64px', 
+                            objectFit: 'cover', 
+                            borderRadius: '8px', 
+                            border: '1px solid #cbd5e1', 
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
+                            flexShrink: 0 
+                          }} 
+                        />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: '0.95rem', color: 'var(--brand-primary)' }}>{prodName}</strong>
+                            <span style={{ 
+                              display: 'inline-flex', 
+                              alignItems: 'center', 
+                              gap: '4px',
+                              padding: '2px 8px', 
+                              borderRadius: '4px', 
+                              backgroundColor: '#090d16', 
+                              color: '#fbbf24', 
+                              fontFamily: 'monospace', 
+                              fontSize: '0.78rem', 
+                              fontWeight: 800,
+                              letterSpacing: '0.04em'
+                            }}>
+                              SKU: {sku}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px', display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+                            <span><strong>Collection:</strong> {categoryName}</span>
+                            <span><strong>Quantity:</strong> {item.quantity} × ₹{unitPrice.toLocaleString('en-IN')}</span>
+                            {item.selectedColor && (
+                              <span><strong>Shade:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{item.selectedColor}</span></span>
+                            )}
                           </div>
                         </div>
-                        <div style={{ fontWeight: 800, color: 'var(--brand-primary)', fontSize: '1rem', flexShrink: 0, paddingLeft: '12px' }}>
-                          ₹{lineTotal.toLocaleString('en-IN')}
-                        </div>
                       </div>
+                      <div style={{ fontWeight: 800, color: 'var(--brand-primary)', fontSize: '1.1rem', flexShrink: 0, paddingLeft: '14px' }}>
+                        ₹{lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 5. FINANCIAL LEDGER & BREAKDOWN */}
+              <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '2px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.88rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+                  <span>Items Subtotal</span>
+                  <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                    ₹{(selectedOrder.subtotal || selectedOrder.total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                {selectedOrder.discount ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a', fontWeight: 600 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Tag size={14} /> Privilege Coupon Discount ({selectedOrder.appliedCoupon || 'PROMO'})
+                    </span>
+                    <span>-₹{selectedOrder.discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                ) : null}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+                  <span>Tracked Courier Delivery (Pan-India)</span>
+                  <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                    {selectedOrder.shippingFee === 0 
+                      ? 'FREE (₹0.00)' 
+                      : `₹${(selectedOrder.shippingFee !== undefined ? selectedOrder.shippingFee : (selectedOrder.paymentMethod === 'cash_on_delivery' ? 89 : 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                  </span>
+                </div>
+
+                {selectedOrder.tax ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+                    <span>GST (5% Integrated Silk Saree Goods Tax)</span>
+                    <span style={{ fontWeight: 600, color: '#0f172a' }}>₹{selectedOrder.tax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                ) : null}
+
+                {/* Grand Total */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: '1.25rem',
+                  fontWeight: 800,
+                  color: 'var(--brand-primary)',
+                  paddingTop: '10px',
+                  borderTop: '2px dashed #cbd5e1',
+                  marginTop: '4px'
+                }}>
+                  <span>Net Order Total</span>
+                  <span style={{ fontFamily: 'var(--font-heading)', color: 'var(--brand-primary)', fontSize: '1.35rem' }}>
+                    ₹{selectedOrder.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                {/* COD Specific Ledger */}
+                {selectedOrder.paymentMethod === 'cash_on_delivery' && (
+                  <div style={{ marginTop: '10px', padding: '12px 14px', backgroundColor: '#fffdf5', border: '1px solid #fde68a', borderRadius: '8px', fontSize: '0.84rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#92400e', fontWeight: 600 }}>
+                      <span>COD Courier Advance Authorized Online:</span>
+                      <span>₹{(selectedOrder.codAdvanceAmount || 89).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#78350f', fontWeight: 800, fontSize: '0.95rem', marginTop: '4px', paddingTop: '4px', borderTop: '1px dashed #fde68a' }}>
+                      <span>Remaining Cash Balance Due upon Delivery:</span>
+                      <span>₹{(selectedOrder.codBalanceDue ?? (selectedOrder.total - 89)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 6. ORDER LIFECYCLE TIMELINE AUDIT */}
+            {selectedOrder.timeline && selectedOrder.timeline.length > 0 && (
+              <div style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                padding: '1.25rem 1.5rem',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.85rem' }}>
+                  <Clock size={16} color="var(--brand-accent)" />
+                  <h4 style={{ margin: 0, fontSize: '0.92rem', color: 'var(--brand-primary)', fontWeight: 800 }}>
+                    Order Status &amp; Fulfillment Audit Trail
+                  </h4>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingLeft: '8px' }}>
+                  {selectedOrder.timeline.map((event, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', position: 'relative' }}>
+                      <div style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        backgroundColor: idx === selectedOrder.timeline.length - 1 ? '#10b981' : '#cbd5e1',
+                        marginTop: '5px',
+                        flexShrink: 0
+                      }} />
+                      <div style={{ fontSize: '0.84rem', flex: 1 }}>
+                        <div style={{ fontWeight: 700, color: 'var(--brand-primary)' }}>{event.label || event.status}</div>
+                        {event.description && <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '1px' }}>{event.description}</div>}
+                        <div style={{ color: '#94a3b8', fontSize: '0.74rem', marginTop: '2px' }}>{event.timestamp}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 7. DEDICATED PRINTABLE TAX INVOICE & DISPATCH SLIP (Hidden on Screen, Visible on Print) */}
+            <div id="admin-printable-order-invoice" style={{ display: 'none' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #090d16', paddingBottom: '16px', marginBottom: '20px' }}>
+                <div>
+                  <h1 style={{ fontSize: '24px', fontWeight: 900, margin: '0 0 4px', color: '#090d16', letterSpacing: '0.05em' }}>
+                    MUETY LUXURY ATELIER
+                  </h1>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#475569', lineHeight: 1.4 }}>
+                    Pure Handloom Silk &amp; Heritage Sarees<br />
+                    Temple Road, Kanchipuram, Tamil Nadu - 631501<br />
+                    GSTIN: 33AAAAA0000A1Z5 • Email: concierge@muety.in
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: '#090d16' }}>TAX INVOICE</div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '4px' }}>Invoice #: INV-{selectedOrder.orderNumber}</div>
+                  <div style={{ fontSize: '12px', color: '#475569' }}>Date: {new Date(selectedOrder.createdAt).toLocaleDateString('en-IN')}</div>
+                  <div style={{ fontSize: '12px', color: '#475569' }}>Payment Mode: {selectedOrder.paymentMethod === 'cash_on_delivery' ? 'Cash on Delivery (Advance Paid)' : 'Razorpay Prepaid'}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px', fontSize: '12px', lineHeight: 1.5 }}>
+                <div style={{ border: '1px solid #cbd5e1', padding: '12px', borderRadius: '4px' }}>
+                  <strong style={{ display: 'block', marginBottom: '4px', textTransform: 'uppercase', color: '#090d16' }}>Billed To:</strong>
+                  <div>{selectedOrder.customerName}</div>
+                  <div>Email: {selectedOrder.customerEmail}</div>
+                  <div>Phone: {selectedOrder.customerPhone || 'N/A'}</div>
+                </div>
+
+                <div style={{ border: '1px solid #cbd5e1', padding: '12px', borderRadius: '4px' }}>
+                  <strong style={{ display: 'block', marginBottom: '4px', textTransform: 'uppercase', color: '#090d16' }}>Shipped / Consigned To:</strong>
+                  {selectedOrder.shippingAddress ? (
+                    <>
+                      <div>{selectedOrder.shippingAddress.fullName || selectedOrder.customerName}</div>
+                      <div>{selectedOrder.shippingAddress.streetAddress} {selectedOrder.shippingAddress.apartment || ''}</div>
+                      <div>{selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} - {selectedOrder.shippingAddress.postalCode}</div>
+                      <div>Phone: {selectedOrder.shippingAddress.phone || selectedOrder.customerPhone || ''}</div>
+                    </>
+                  ) : (
+                    <div>Same as patron billing address.</div>
+                  )}
+                </div>
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '20px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #090d16', textAlign: 'left' }}>
+                    <th style={{ padding: '8px' }}>#</th>
+                    <th style={{ padding: '8px' }}>Item &amp; Description</th>
+                    <th style={{ padding: '8px' }}>SKU</th>
+                    <th style={{ padding: '8px' }}>HSN Code</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Qty</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Unit Rate (₹)</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Total (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(selectedOrder.items || []).map((i: any, idx: number) => {
+                    const price = i.product?.price || i.price || 0;
+                    return (
+                      <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <td style={{ padding: '8px' }}>{idx + 1}</td>
+                        <td style={{ padding: '8px' }}>
+                          <strong>{i.product?.name || i.name || 'Pure Silk Saree'}</strong>
+                          {i.selectedColor && <div style={{ fontSize: '11px', color: '#64748b' }}>Color: {i.selectedColor}</div>}
+                        </td>
+                        <td style={{ padding: '8px', fontFamily: 'monospace' }}>{getProductSku(i)}</td>
+                        <td style={{ padding: '8px' }}>5007 (Silk Sarees)</td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>{i.quantity}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>₹{price.toLocaleString('en-IN')}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>₹{(price * i.quantity).toLocaleString('en-IN')}</td>
+                      </tr>
                     );
                   })}
+                </tbody>
+              </table>
 
-                  <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '2px solid var(--brand-border)', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.9rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Subtotal</span>
-                      <span>₹{(selectedOrder.subtotal || selectedOrder.total).toLocaleString('en-IN')}</span>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '30px', fontSize: '12px' }}>
+                <div style={{ width: '280px', lineHeight: 1.8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Subtotal:</span>
+                    <span>₹{(selectedOrder.subtotal || selectedOrder.total).toLocaleString('en-IN')}</span>
+                  </div>
+                  {selectedOrder.discount ? (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
+                      <span>Discount ({selectedOrder.appliedCoupon || 'PROMO'}):</span>
+                      <span>-₹{selectedOrder.discount.toLocaleString('en-IN')}</span>
                     </div>
-                    {selectedOrder.discount ? (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#10b981' }}>
-                        <span>Discount ({selectedOrder.appliedCoupon || 'Coupon'})</span>
-                        <span>-₹{selectedOrder.discount.toLocaleString('en-IN')}</span>
-                      </div>
-                    ) : null}
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Shipping (Pan-India Tracked Courier)</span>
-                      <span>
-                        {selectedOrder.shippingFee === 0 
-                          ? 'FREE (₹0.00)' 
-                          : `₹${(selectedOrder.shippingFee !== undefined ? selectedOrder.shippingFee : (selectedOrder.paymentMethod === 'cash_on_delivery' ? 89 : 0)).toLocaleString('en-IN')}`}
-                      </span>
-                    </div>
-                    {selectedOrder.tax ? (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Tax (GST)</span>
-                        <span>₹{selectedOrder.tax.toLocaleString('en-IN')}</span>
-                      </div>
-                    ) : null}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 800, color: 'var(--brand-primary)', paddingTop: '6px', borderTop: '1px solid #e2e8f0' }}>
-                      <span>Grand Total</span>
-                      <span>₹{selectedOrder.total.toLocaleString('en-IN')}</span>
-                    </div>
-
-                    {selectedOrder.paymentMethod === 'cash_on_delivery' && (
-                      <div style={{ marginTop: '8px', padding: '10px', backgroundColor: '#fef3c7', borderRadius: '6px', fontSize: '0.85rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#92400e', fontWeight: 600 }}>
-                          <span>COD Online Courier Advance:</span>
-                          <span>₹{(selectedOrder.codAdvanceAmount || 89).toLocaleString('en-IN')}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#78350f', fontWeight: 800, marginTop: '2px' }}>
-                          <span>Balance Due from Customer on Delivery:</span>
-                          <span>₹{(selectedOrder.codBalanceDue ?? (selectedOrder.total - 89)).toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {selectedOrder.cancellationRequested && (
-                      <div style={{ marginTop: '8px', padding: '10px', backgroundColor: '#fee2e2', borderRadius: '6px', border: '1px solid #fca5a5', fontSize: '0.85rem' }}>
-                        <strong style={{ color: '#991b1b', display: 'block' }}>⚠️ Patron Requested Cancellation</strong>
-                        <span style={{ color: '#7f1d1d' }}>Reason: {selectedOrder.cancellationReason || 'Patron requested order cancellation prior to dispatch.'}</span>
-                      </div>
-                    )}
+                  ) : null}
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Courier Delivery:</span>
+                    <span>{selectedOrder.shippingFee === 0 ? 'FREE' : `₹${selectedOrder.shippingFee}`}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Integrated GST (5%):</span>
+                    <span>₹{selectedOrder.tax ? selectedOrder.tax.toLocaleString('en-IN') : 'Included'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #090d16', paddingTop: '6px', fontSize: '14px', fontWeight: 900 }}>
+                    <span>Net Amount:</span>
+                    <span>₹{selectedOrder.total.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>
 
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: '11px', color: '#64748b' }}>
+                <div>
+                  <p style={{ margin: 0 }}>This is a computer-generated tax invoice and requires no physical seal.</p>
+                  <p style={{ margin: '2px 0 0' }}>Thank you for honoring MUETY heritage craftsmanship.</p>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ borderBottom: '1px solid #090d16', width: '160px', marginBottom: '4px' }}></div>
+                  <span>Authorized Signatory</span>
+                </div>
+              </div>
             </div>
 
-            {/* Modal Footer */}
-            <div style={{ padding: '1rem 1.75rem', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          </div>
+
+          {/* Modal Fixed Footer */}
+          <div style={{
+            padding: '1rem 1.75rem',
+            backgroundColor: '#ffffff',
+            borderTop: '1px solid #e2e8f0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '10px',
+            flexShrink: 0
+          }}>
+            <button 
+              type="button" 
+              onClick={() => handleDeleteOrder(selectedOrder.id, selectedOrder.orderNumber)} 
+              className="btn btn-sm"
+              style={{
+                backgroundColor: '#fee2e2',
+                color: '#b91c1c',
+                border: '1px solid #fecaca',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              <Trash2 size={14} /> Delete Order Record
+            </button>
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <button 
                 type="button" 
-                onClick={() => handleDeleteOrder(selectedOrder.id, selectedOrder.orderNumber)} 
-                className="btn btn-sm"
-                style={{
-                  backgroundColor: '#fee2e2',
-                  color: '#b91c1c',
-                  border: '1px solid #fecaca',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  cursor: 'pointer'
-                }}
+                onClick={() => window.print()} 
+                className="btn btn-outline btn-sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}
               >
-                <Trash2 size={14} /> Delete Order Record
+                <Printer size={14} /> Print Invoice &amp; Slip
               </button>
-              <button type="button" onClick={() => setSelectedOrderId(null)} className="btn btn-outline">
-                Close Order View
+              <button 
+                type="button" 
+                onClick={() => setSelectedOrderId(null)} 
+                className="btn btn-primary btn-sm"
+                style={{ fontWeight: 700, minWidth: '95px' }}
+              >
+                Close View
               </button>
             </div>
           </div>
-        </div>
+        </AdminModal>
       )}
     </div>
   );
 };
+

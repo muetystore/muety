@@ -261,7 +261,7 @@ export const orderService = {
     let updated = storageService.updateOrderStatus(orderId, status, customNote);
 
     // 2. If not found in local storage, check Firestore
-    let firestoreTarget = await this.findFirestoreOrderRef(orderId);
+    const firestoreTarget = await this.findFirestoreOrderRef(orderId);
     if (!updated && firestoreTarget?.data) {
       const fromCloud = { ...firestoreTarget.data, id: firestoreTarget.data.id || firestoreTarget.docId };
       storageService.createOrder(fromCloud);
@@ -301,7 +301,7 @@ export const orderService = {
     });
 
     // 2. If not found in local storage, look up in Firestore first
-    let firestoreTarget = await this.findFirestoreOrderRef(orderId);
+    const firestoreTarget = await this.findFirestoreOrderRef(orderId);
     if (!updated && firestoreTarget?.data) {
       const fromCloud = { ...firestoreTarget.data, id: firestoreTarget.data.id || firestoreTarget.docId };
       storageService.createOrder(fromCloud);
@@ -464,8 +464,10 @@ export const orderService = {
   },
 
   subscribeToAllOrders(callback: (orders: Order[]) => void, onError?: (err: Error) => void): () => void {
-    // 1. Immediately provide cached orders so UI renders instantly without waiting for network
-    callback(storageService.getOrders());
+    // Only emit immediate local cache in offline or test environments to prevent UI flickering on refresh
+    if (!db || !this.isLiveCloud()) {
+      callback(storageService.getOrders());
+    }
 
     let firestoreUnsub: Unsubscribe | null = null;
 
@@ -510,12 +512,13 @@ export const orderService = {
             }
           });
 
-          // Also preserve any locally created orders that haven't been synced or deleted
+          // Only preserve genuine pending offline-created orders (never resurrect deleted cloud orders)
           localOrders.forEach(l => {
+            const isOfflinePending = (l as any).isOfflinePending === true || (l.id && l.id.startsWith('offline-'));
             const alreadyPresent = Array.from(mergedMap.values()).some(
               m => (m.id && m.id === l.id) || (m.orderNumber && m.orderNumber === l.orderNumber)
             );
-            if (!alreadyPresent) {
+            if (!alreadyPresent && isOfflinePending) {
               mergedMap.set(l.id, l);
             }
           });

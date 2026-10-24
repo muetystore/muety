@@ -24,7 +24,9 @@ import {
   ChevronDown,
   Megaphone,
   Sparkles,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Mail,
+  Settings2
 } from 'lucide-react';
 import { hasPermission, getUserRoles, ROLE_LABELS, Permission } from '@/shared/utils/permissions';
 import { getCanonicalStoreUrl } from '@/shared/utils/domainRouting';
@@ -97,9 +99,11 @@ export const AdminLayout: React.FC = () => {
       ]
     },
     {
-      title: 'CUSTOMERS',
+      title: 'MARKETING & PATRONS',
       items: [
-        { to: '/admin/customers', label: 'Customers CRM', icon: Users, permission: 'customers.read' },
+        { to: '/admin/campaigns', label: 'Email Marketing', icon: Mail, permission: 'campaigns.read' },
+        { to: '/admin/email-settings', label: 'Email Settings', icon: Settings2, permission: 'email_settings.manage' },
+        { to: '/admin/customers', label: 'Patron CRM', icon: Users, permission: 'customers.read' },
         { to: '/admin/inquiries', label: 'Inquiries', icon: MessageSquare, permission: 'inquiries.manage' },
         { to: '/admin/reviews', label: 'Reviews', icon: Star, permission: 'reviews.manage' }
       ]

@@ -55,7 +55,10 @@ export type Permission =
   | 'audit.read'
   | 'settings.view'
   | 'settings.edit'
-  | 'settings.manage';
+  | 'settings.manage'
+  | 'campaigns.read'
+  | 'campaigns.manage'
+  | 'email_settings.manage';
 
 const ALL_PERMISSIONS: Permission[] = [
   'dashboard.view',
@@ -68,13 +71,14 @@ const ALL_PERMISSIONS: Permission[] = [
   'coupons.view', 'coupons.create', 'coupons.edit', 'coupons.manage',
   'admin_users.view', 'admin_users.create', 'admin_users.edit', 'admin_users.disable', 'roles.manage',
   'audit_logs.view', 'audit.read',
-  'settings.view', 'settings.edit', 'settings.manage'
+  'settings.view', 'settings.edit', 'settings.manage',
+  'campaigns.read', 'campaigns.manage', 'email_settings.manage'
 ];
 
 export const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
   superadmin: ALL_PERMISSIONS,
   super_admin: ALL_PERMISSIONS,
-  admin: ALL_PERMISSIONS.filter(p => !p.startsWith('admin_users.') && p !== 'roles.manage'),
+  admin: ALL_PERMISSIONS.filter(p => !p.startsWith('admin_users.') && p !== 'roles.manage' && p !== 'email_settings.manage'),
   support_manager: [
     'dashboard.view',
     'customers.view',

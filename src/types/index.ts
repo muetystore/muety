@@ -6,3 +6,4 @@ export * from '@/features/orders/types';
 export * from '@/features/reviews/types';
 export * from '@/features/inquiries/types';
 export * from '@/features/announcements/types';
+export * from '@/features/email/types';

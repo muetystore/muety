@@ -756,6 +756,33 @@ export const CheckoutPage: React.FC = () => {
                   </label>
                 </div>
 
+                {/* Razorpay Sandbox Guidance */}
+                {razorpayService.getKeyId().startsWith('rzp_test_') && (
+                  <div style={{
+                    marginTop: '1rem',
+                    marginBottom: '1rem',
+                    padding: '0.85rem 1.15rem',
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: 'var(--radius-lg)',
+                    fontSize: '0.82rem',
+                    color: '#92400e',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px'
+                  }}>
+                    <Zap size={18} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <div style={{ lineHeight: 1.5 }}>
+                      <strong style={{ color: '#78350f' }}>Razorpay Test Sandbox Active:</strong>
+                      <div style={{ marginTop: '2px' }}>
+                        • <strong>UPI:</strong> Use test VPA <code style={{ backgroundColor: '#fef3c7', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>success@razorpay</code> (entering personal/real UPI IDs returns 400 Bad Request in Razorpay test mode).<br />
+                        • <strong>NetBanking:</strong> Select any bank (e.g. HDFC, SBI) and click <strong>Success</strong> on the Razorpay mock simulator.<br />
+                        • <strong>Card:</strong> Use test card <code style={{ backgroundColor: '#fef3c7', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>4111 1111 1111 1111</code> (any future date &amp; CVV).
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Gateway Trust Details */}
                 <div style={{
                   backgroundColor: 'var(--bg-main)',

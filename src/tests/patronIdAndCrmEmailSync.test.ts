@@ -15,7 +15,7 @@ vi.mock('../lib/firebase/firebase', () => ({
   firebaseConfig: {}
 }));
 
-import { customerService, mergeCustomerProfiles } from '@/features/customers/services/customerService';
+import { customerService, mergeCustomerProfiles, normalizePhoneNumber } from '@/features/customers/services/customerService';
 import { storageService } from '@/lib/storage/storageService';
 import { authService } from '@/features/auth/services/authService';
 import { UserProfile, Address } from '@/shared/types';
@@ -345,9 +345,6 @@ describe('MUETY — Patron ID Privacy & CRM Email Synchronization Suite', () => 
 
   // Scenario 11: Product SKU ID is hidden in store product view but preserved for admin views
   it('Scenario 11: Product SKU ID is hidden in store product view, but preserved for admin management', () => {
-    const fs = require('fs');
-    const path = require('path');
-
     const pdpContent = fs.readFileSync(
       path.join(process.cwd(), 'src/features/catalog/pages/ProductDetailPage.tsx'),
       'utf-8'
@@ -371,4 +368,66 @@ describe('MUETY — Patron ID Privacy & CRM Email Synchronization Suite', () => 
     );
     expect(adminOrdersContent).toContain('SKU: {sku}');
   });
+
+  // Scenario 12: Phone-auth patron without email correctly matches orders by normalized mobile phone number
+  it('Scenario 12: Matches orders placed with mobile phone number to phone-auth patron profiles without email', () => {
+    const phonePatron: UserProfile = {
+      uid: '2LV607oVA2XlW8MNzBv89iVYAxh1',
+      email: '',
+      displayName: 'mohan',
+      fullName: 'mohan',
+      phone: '+919385791540',
+      phoneNumber: '+919385791540',
+      role: 'customer',
+      createdAt: '2026-10-21T11:44:37.678Z'
+    };
+
+    const orderWithLeadingZeroPhone: Order = {
+      id: 'ord-1792389431669-389',
+      orderNumber: 'MT-974125',
+      customerId: '2LV607oVA2XlW8MNzBv89iVYAxh1',
+      customerName: 'Mohan',
+      customerPhone: '09385791540',
+      customerEmail: 'kalvimohan03@gmail.com',
+      total: 2187.95,
+      subtotal: 2088,
+      discount: 0,
+      tax: 99.95,
+      shippingFee: 0,
+      items: [],
+      orderStatus: 'delivered',
+      paymentMethod: 'cash_on_delivery',
+      paymentStatus: 'paid',
+      shippingAddress: {
+        fullName: 'Mohan',
+        phone: '09385791540',
+        streetAddress: '12 Gandhi Street',
+        city: 'Chennai',
+        state: 'Tamil Nadu',
+        postalCode: '600001',
+        country: 'India',
+        isDefault: true
+      },
+      timeline: [],
+      createdAt: '2026-10-19T05:57:11.667Z',
+      updatedAt: '2026-10-19T05:57:11.667Z'
+    };
+
+    // Calculate customer metrics for phonePatron with the order
+    const metrics = customerService.calculateCustomerMetrics(phonePatron, [orderWithLeadingZeroPhone]);
+    expect(metrics.totalValidOrders).toBe(1);
+    expect(metrics.paidOrdersCount).toBe(1);
+    expect(metrics.netLifetimeSpend).toBe(2187.95);
+    expect(metrics.eligibleOrders.length).toBe(1);
+    expect(metrics.eligibleOrders[0].orderNumber).toBe('MT-974125');
+  });
+
+  // Scenario 13: Phone number normalization handles standard formats
+  it('Scenario 13: Normalizes phone numbers with country codes, spaces, and leading zeros to E.164', () => {
+    expect(normalizePhoneNumber('+919385791540')).toBe('+919385791540');
+    expect(normalizePhoneNumber('09385791540')).toBe('+919385791540');
+    expect(normalizePhoneNumber('+91 93857 91540')).toBe('+919385791540');
+    expect(normalizePhoneNumber('9385791540')).toBe('+919385791540');
+  });
 });
+

@@ -26,12 +26,12 @@ service cloud.firestore {
                                           ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
                                           : (('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role is string && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role.size() > 0)
                                               ? [get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role]
-                                              : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in', 'kalvimohan03@gmail.com'])
+                                              : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in'])
                                                   ? ['superadmin', 'admin', 'catalog_manager']
                                                   : [])
                                             )
                                       )
-                                    : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in', 'kalvimohan03@gmail.com'])
+                                    : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in'])
                                         ? ['superadmin', 'admin', 'catalog_manager']
                                         : [])
                                   )
@@ -43,12 +43,12 @@ service cloud.firestore {
                                 ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
                                 : (('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role is string && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role.size() > 0)
                                     ? [get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role]
-                                    : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in', 'kalvimohan03@gmail.com'])
+                                    : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in'])
                                         ? ['superadmin', 'admin', 'catalog_manager']
                                         : [])
                                   )
                             )
-                          : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in', 'kalvimohan03@gmail.com'])
+                          : (('email' in request.auth.token && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in'])
                               ? ['superadmin', 'admin', 'catalog_manager']
                               : [])
                         )
@@ -93,7 +93,16 @@ service cloud.firestore {
     // --- USERS COLLECTION ---
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin() || isSupportManager() || isOrderManager();
-      allow create: if isSignedIn() && (!request.resource.data.keys().hasAny(['roles', 'role', 'isBlocked', 'customerStatus']) || isAdmin());
+      allow create: if (
+        isOwner(userId) &&
+        (!('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid) &&
+        !request.resource.data.keys().hasAny([
+          'roles', 'role', 'roleId', 'roleSlug', 'roleName', 
+          'departmentId', 'departmentName', 'department', 
+          'permissions', 'status', 'invitationStatus', 'isBlocked', 'customerStatus',
+          'ordersCount', 'totalSpent'
+        ])
+      ) || isAdmin();
       allow update: if isOwner(userId) 
         ? (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'roles', 'role', 'roleId', 'roleSlug', 'roleName', 
@@ -126,7 +135,15 @@ service cloud.firestore {
     // --- CUSTOMERS CRM COLLECTION ---
     match /customers/{customerId} {
       allow read: if isOwner(customerId) || isSupportManager() || isOrderManager() || isAdmin();
-      allow create: if isSignedIn() || isSupportManager() || isAdmin();
+      allow create: if (
+        isOwner(customerId) &&
+        (!('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid) &&
+        !request.resource.data.keys().hasAny([
+          'customerStatus', 'isBlocked', 'internalNotes', 'totalSpend', 'orderCount', 
+          'ordersCount', 'totalSpent', 'roles', 'role', 'roleId', 'roleSlug', 'roleName',
+          'departmentId', 'departmentName'
+        ])
+      ) || isSupportManager() || isAdmin();
       allow update: if isOwner(customerId)
         ? (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'customerStatus', 'isBlocked', 'internalNotes', 'totalSpend', 'orderCount', 
@@ -299,6 +316,32 @@ service cloud.firestore {
       allow read: if isSupportManager() || isAdmin();
       allow create: if isSupportManager() || isAdmin();
       allow update, delete: if false;
+    }
+
+    // --- EMAIL SETTINGS, CAMPAIGNS & SUPPRESSION ---
+    match /emailSettings/{settingId} {
+      allow read: if isAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    match /emailCampaigns/{campaignId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /emailSuppressionList/{email} {
+      allow read: if isAdmin();
+      allow write: if true; // Public unsubscribe allowed to record suppression
+    }
+
+    match /emailTransactionalJobs/{jobId} {
+      allow read: if isAdmin();
+      allow write: if false; // Immutable server-only write via Admin SDK
+    }
+
+    match /emailDeliveryLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false; // Immutable server-only write via Admin SDK
     }
   }
 }

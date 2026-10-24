@@ -6,6 +6,10 @@ import { orderService } from '@/features/orders/services/orderService';
 import { productService } from '@/features/catalog/services/productService';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { 
+  calculateOrdersSummary, 
+  isVerifiedOrder 
+} from '@/shared/utils/orderMetrics';
+import { 
   DollarSign, 
   ShoppingBag, 
   Package, 
@@ -13,7 +17,8 @@ import {
   TrendingUp, 
   ArrowRight, 
   Plus,
-  CloudUpload
+  CloudUpload,
+  RefreshCw
 } from 'lucide-react';
 import { Order, Product } from '@/types';
 
@@ -24,10 +29,12 @@ export const AdminDashboard: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>(storageService.getOrders());
   const [products, setProducts] = useState<Product[]>(storageService.getProducts());
   const [, setUsers] = useState(storageService.getUsers());
+  const [ordersLoaded, setOrdersLoaded] = useState(false);
 
   useEffect(() => {
     const unsubOrders = orderService.subscribeToAllOrders((liveOrders) => {
       setOrders(liveOrders);
+      setOrdersLoaded(true);
     });
 
     const unsubProducts = productService.subscribeToProducts((liveProducts) => {
@@ -41,14 +48,14 @@ export const AdminDashboard: React.FC = () => {
     };
   }, []);
 
-  // Compute Accurate ERP & CRM Metrics from real Firestore / order store
-  const totalRevenue = orders.reduce((sum, o) => o.orderStatus !== 'cancelled' ? sum + o.total : sum, 0);
-  const totalOrders = orders.length;
-  const nonCancelledOrders = orders.filter(o => o.orderStatus !== 'cancelled');
-  const aov = nonCancelledOrders.length > 0 ? totalRevenue / nonCancelledOrders.length : 0;
+  // Compute Accurate ERP & CRM Metrics using canonical accounting policies
+  const ordersSummary = calculateOrdersSummary(orders);
+  const totalRevenue = ordersSummary.cumulativeSpend;
+  const verifiedOrdersCount = ordersSummary.verifiedOrdersCount;
+  const aov = ordersSummary.averageOrderValue;
   const lowStockProducts = products.filter(p => (p.stock || 0) <= (p.lowStockThreshold || 5));
   const pendingOrders = orders.filter(o => ['pending', 'pending_payment', 'confirmed', 'processing'].includes(o.orderStatus));
-  const uniqueCustomersCount = new Set(orders.map(o => o.customerEmail || o.customerId)).size;
+  const uniqueCustomersCount = new Set(orders.filter(isVerifiedOrder).map(o => o.customerEmail || o.customerId)).size;
 
   const handleQuickStatusUpdate = async (orderId: string, newStatus: Order['orderStatus']) => {
     await orderService.updateOrderStatus(orderId, newStatus);
@@ -93,25 +100,25 @@ export const AdminDashboard: React.FC = () => {
             ₹{totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '8px' }}>
-            {nonCancelledOrders.length === 0 ? 'Waiting for first order' : `AOV: ₹${aov.toFixed(2)} (${nonCancelledOrders.length} order${nonCancelledOrders.length > 1 ? 's' : ''})`}
+            {verifiedOrdersCount === 0 ? 'Waiting for first verified order' : `AOV: ₹${aov.toFixed(2)} (${verifiedOrdersCount} verified order${verifiedOrdersCount > 1 ? 's' : ''})`}
           </div>
         </div>
 
-        {/* Metric 2: Completed / Total Orders */}
+        {/* Metric 2: Verified Orders */}
         <div className="card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Total Orders
+              Verified Orders
             </span>
             <div style={{ padding: '8px', borderRadius: '50%', backgroundColor: 'var(--bg-main)', color: 'var(--brand-accent-hover)' }}>
               <ShoppingBag size={18} />
             </div>
           </div>
           <div style={{ fontSize: '1.9rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
-            {totalOrders}
+            {verifiedOrdersCount}
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '8px' }}>
-            {pendingOrders.length} pending fulfillment
+            {ordersSummary.completedOrdersCount} completed &bull; {ordersSummary.pendingOrdersCount} in-progress
           </div>
         </div>
 

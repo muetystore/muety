@@ -60,6 +60,9 @@ const AdminBanners = lazy(() => import('@/features/admin/pages/AdminBanners').th
 const AdminProfile = lazy(() => import('@/features/admin/pages/AdminProfile').then(m => ({ default: m.AdminProfile })));
 const AdminProductEditor = lazy(() => import('@/features/admin/pages/AdminProductEditor').then(m => ({ default: m.AdminProductEditor })));
 const AdminSetupPassword = lazy(() => import('@/features/admin/pages/AdminSetupPassword').then(m => ({ default: m.AdminSetupPassword })));
+const AdminCampaigns = lazy(() => import('@/features/admin/pages/AdminCampaigns').then(m => ({ default: m.AdminCampaigns })));
+const AdminEmailSettings = lazy(() => import('@/features/admin/pages/AdminEmailSettings').then(m => ({ default: m.AdminEmailSettings })));
+const UnsubscribePage = lazy(() => import('@/features/customers/pages/UnsubscribePage').then(m => ({ default: m.UnsubscribePage })));
 
 const LoadingFallback: React.FC = () => (
   <div style={{
@@ -235,6 +238,8 @@ export const AppRouter: React.FC = () => {
             <Route path="coupons" element={<AdminCoupons />} />
             <Route path="announcements" element={<AdminAnnouncements />} />
             <Route path="banners" element={<AdminBanners />} />
+            <Route path="campaigns" element={<AdminCampaigns />} />
+            <Route path="email-settings" element={<AdminEmailSettings />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="admins" element={<ProtectedRoute requiredRoles={['superadmin', 'super_admin']}><AdminUsers /></ProtectedRoute>} />
             <Route path="audit-logs" element={<ProtectedRoute requiredRoles={['superadmin', 'super_admin', 'admin']}><AdminAuditLogs /></ProtectedRoute>} />
@@ -268,6 +273,7 @@ export const AppRouter: React.FC = () => {
             <Route path="/cancellation-policy" element={<Navigate to="/return-refund-policy" replace />} />
             <Route path="/support" element={<SupportPage />} />
             <Route path="/customer-support" element={<Navigate to="/contact" replace />} />
+            <Route path="/unsubscribe" element={<UnsubscribePage />} />
 
             {/* 404 Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,4 +1,4 @@
-import { getAdminDb, getAdminStorage } from './admin-init.mjs';
+import { getAdminDb } from './admin-init.mjs';
 import fs from 'fs';
 import path from 'path';
 
@@ -50,32 +50,17 @@ export async function runFirestoreSeed() {
     for (const prod of catalog.products) {
       if (!prod.id) continue;
 
-      // Check if any product images require Firebase Storage upload
+      // Resolve product image paths as valid HTTPS URLs or static web paths
       const resolvedImages = [];
       if (Array.isArray(prod.images)) {
         for (const imgPath of prod.images) {
           if (imgPath.startsWith('http://') || imgPath.startsWith('https://') || imgPath.startsWith('/')) {
             resolvedImages.push(imgPath);
           } else {
-            // Local file upload to Firebase Storage
-            const localFile = path.resolve(process.cwd(), imgPath);
-            if (fs.existsSync(localFile)) {
-              try {
-                const storage = getAdminStorage();
-                const bucket = storage.bucket();
-                const destPath = `products/${prod.id}/${path.basename(localFile)}`;
-                const [file] = await bucket.upload(localFile, { destination: destPath, public: true });
-                const publicUrl = file.publicUrl();
-                resolvedImages.push(publicUrl);
-                storageImagesHandled++;
-                console.log(`   ✓ Uploaded local image to Firebase Storage: ${destPath}`);
-              } catch (sErr) {
-                console.warn(`   ⚠️ Firebase Storage upload warning for ${imgPath}:`, sErr.message);
-                resolvedImages.push(imgPath);
-              }
-            } else {
-              resolvedImages.push(imgPath);
-            }
+            // Normalize relative asset reference to absolute web asset path
+            const webPath = imgPath.startsWith('./') ? imgPath.slice(1) : `/${imgPath}`;
+            resolvedImages.push(webPath);
+            storageImagesHandled++;
           }
         }
       }

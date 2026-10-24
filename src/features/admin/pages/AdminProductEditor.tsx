@@ -9,6 +9,7 @@ import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { Product, Category, SareeCollection } from '@/types';
 import { collectionService } from '@/features/catalog/services/collectionService';
+import { categoryService, normalizeCategorySlug } from '@/features/catalog/services/categoryService';
 import { getUserRoles } from '@/shared/utils/permissions';
 import { compressImageFile } from '@/shared/utils/imageCompressor';
 import { 
@@ -58,7 +59,7 @@ export const AdminProductEditor: React.FC = () => {
   const { user } = useAuth();
   const { success, warning, error } = useNotification();
 
-  const [categories, setCategories] = useState<Category[]>(storageService.getCategories());
+  const [categories, setCategories] = useState<Category[]>(() => categoryService.getCategories());
   const [collections, setCollections] = useState<SareeCollection[]>(() => collectionService.getCollections());
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
   const [primaryCollectionId, setPrimaryCollectionId] = useState<string>('');
@@ -162,10 +163,30 @@ export const AdminProductEditor: React.FC = () => {
   const [bestseller, setBestseller] = useState(false);
   const [mostWanted, setMostWanted] = useState(false);
 
-  // Load existing categories and product if editing
+  // Subscribe to live categories and collections
   useEffect(() => {
-    const cats = storageService.getCategories();
-    setCategories(cats);
+    const unsubCats = categoryService.subscribeToCategories((liveCats) => {
+      if (liveCats && liveCats.length > 0) {
+        setCategories(liveCats);
+      }
+    });
+
+    const unsubCols = collectionService.subscribeToCollections((cols) => {
+      setCollections(cols || []);
+    });
+
+    return () => {
+      if (typeof unsubCats === 'function') unsubCats();
+      if (typeof unsubCols === 'function') unsubCols();
+    };
+  }, []);
+
+  // Load product if editing
+  useEffect(() => {
+    const cats = categoryService.getCategories();
+    if (cats.length > 0) {
+      setCategories(cats);
+    }
 
     if (isEditMode && id) {
       setIsLoadingProduct(true);
@@ -187,6 +208,16 @@ export const AdminProductEditor: React.FC = () => {
           ? prod.categoryIds 
           : (prod.categoryId ? [prod.categoryId] : []);
 
+        // Normalize any slugs/names in catIds to real category IDs
+        catIds = catIds.map(cid => {
+          const matched = cats.find(c => 
+            c.id === cid || 
+            (c.slug && c.slug.toLowerCase() === cid.toLowerCase()) || 
+            (c.name && c.name.toLowerCase() === cid.toLowerCase())
+          );
+          return matched ? matched.id : cid;
+        });
+
         if (catIds.length === 0) {
           const match = cats.find(c => 
             (c.slug || '').toLowerCase() === (prod.categorySlug || '').toLowerCase() ||
@@ -196,9 +227,22 @@ export const AdminProductEditor: React.FC = () => {
           else if (cats[0]) catIds = [cats[0].id];
         }
 
-        const primId = prod.primaryCategoryId && catIds.includes(prod.primaryCategoryId)
+        catIds = Array.from(new Set(catIds));
+
+        let primId = prod.primaryCategoryId && catIds.includes(prod.primaryCategoryId)
           ? prod.primaryCategoryId
-          : catIds[0] || '';
+          : (prod.categoryId && catIds.includes(prod.categoryId) ? prod.categoryId : catIds[0] || '');
+
+        if (primId && !cats.some(c => c.id === primId)) {
+          const match = cats.find(c => 
+            (c.slug || '').toLowerCase() === (prod.categorySlug || '').toLowerCase() ||
+            (c.name || '').toLowerCase() === (prod.category || '').toLowerCase()
+          );
+          if (match) {
+            primId = match.id;
+            if (!catIds.includes(match.id)) catIds.push(match.id);
+          }
+        }
 
         setSelectedCategoryIds(catIds);
         setPrimaryCategoryId(primId);
@@ -247,16 +291,6 @@ export const AdminProductEditor: React.FC = () => {
       }
     }
   }, [id, isEditMode]);
-
-  // Subscribe to live collections
-  useEffect(() => {
-    const unsub = collectionService.subscribeToCollections((cols) => {
-      setCollections(cols || []);
-    });
-    return () => {
-      if (typeof unsub === 'function') unsub();
-    };
-  }, []);
 
   // Handle Category toggles and auto SKU preview for creation mode
   const handleToggleCategory = async (catId: string) => {
@@ -439,9 +473,16 @@ export const AdminProductEditor: React.FC = () => {
         }
       }
 
-      const primaryCat = categories.find(c => c.id === primaryCategoryId) || categories[0];
-      const finalCategoryName = primaryCat ? primaryCat.name : 'Festive Silk Sarees';
-      const finalCategorySlug = primaryCat ? primaryCat.slug : 'sarees';
+      const primaryCat = categories.find(c => c.id === primaryCategoryId);
+      if (!primaryCat) {
+        warning('Please select a valid active primary category from the list.');
+        scrollToSection('basic');
+        setIsSaving(false);
+        return;
+      }
+
+      const finalCategoryName = primaryCat.name;
+      const finalCategorySlug = primaryCat.slug;
 
       const colors = colorsText.split(',').map(s => s.trim()).filter(Boolean);
       const sizes = sizesText.split(',').map(s => s.trim()).filter(Boolean);
@@ -453,10 +494,14 @@ export const AdminProductEditor: React.FC = () => {
       
       const isPublished = overrideStatus === 'draft' ? false : (overrideStatus === 'active' ? true : published);
 
+      // Preserve existing valid SKU on edit
+      const existingSku = editingProduct?.sku?.trim();
+      const finalSku = existingSku || sku.trim();
+
       const payload: Product = {
         id: productId,
         productId,
-        sku: sku.trim(),
+        sku: finalSku,
         slug: name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-'),
         name: name.trim(),
         title: name.trim(),

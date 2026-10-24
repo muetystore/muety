@@ -92,7 +92,7 @@ export async function sendAdminInvitationEmail(
     return { success: true };
   }
 
-  const fromSender = process.env.RESEND_FROM_EMAIL || '';
+  const fromSender = process.env.RESEND_ADMIN_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || 'MUETY Admin <admin@muety.in>';
   const replyTo = inviterEmail || 'superadmin@muety.in';
   const adminAppUrl = getAdminAppUrl();
 

@@ -59,7 +59,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       <div
         className="admin-modal-content animate-scale-in"
         onClick={e => e.stopPropagation()}
-        style={{ maxWidth }}
+        style={{
+          width: '100%',
+          maxWidth: maxWidth || '640px',
+          maxHeight: 'calc(100dvh - 32px)',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
       >
         {/* Modal Header */}
         {showHeader && (

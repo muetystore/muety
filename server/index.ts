@@ -44,6 +44,24 @@ import {
 import { handleCreateServerOrder } from './orderApi';
 import { handleGetAnnouncements, handleSaveAnnouncements } from './announcementApi';
 import { handleVerifyPayment } from './paymentApi';
+import {
+  handleGetEmailSettings,
+  handleUpdateEmailSettings,
+  handleTestEmailConnection,
+  handleListCampaigns,
+  handleGetAudienceEstimate,
+  handleSaveCampaign,
+  handleDuplicateCampaign,
+  handleSendCampaignTest,
+  handleDispatchCampaign,
+  handlePublicUnsubscribe,
+  handleListTransactionalJobs
+} from './email/emailApi';
+import {
+  handleListCustomers,
+  handleUpdateCustomerServer,
+  handleDeleteCustomerServer
+} from './customerApi';
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
@@ -334,6 +352,83 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
   // ROUTE 3.5: POST /api/payments/verify & POST /api/payments/verify-payment
   if (urlPath === '/api/payments/verify' || urlPath === '/api/payments/verify-payment') {
     await dispatchRouteHandler(handleVerifyPayment, authHeader, body, res, 'Failed to verify payment signature.');
+    return true;
+  }
+
+  // EMAIL MARKETING & NOTIFICATIONS ROUTES
+  if (urlPath === '/api/email/settings/get') {
+    await dispatchRouteHandler(handleGetEmailSettings, authHeader, body, res, 'Failed to fetch email settings.');
+    return true;
+  }
+
+  if (urlPath === '/api/email/settings/update') {
+    await dispatchRouteHandler(handleUpdateEmailSettings, authHeader, body, res, 'Failed to update email settings.');
+    return true;
+  }
+
+  if (urlPath === '/api/email/test-connection') {
+    await dispatchRouteHandler(handleTestEmailConnection, authHeader, body, res, 'Failed to send test email.');
+    return true;
+  }
+
+  if (urlPath === '/api/email/campaigns/list') {
+    await dispatchRouteHandler(handleListCampaigns, authHeader, body, res, 'Failed to list campaigns.');
+    return true;
+  }
+
+  if (urlPath === '/api/email/campaigns/audience-estimate') {
+    await dispatchRouteHandler(handleGetAudienceEstimate, authHeader, body, res, 'Failed to estimate audience.');
+    return true;
+  }
+
+  if (urlPath === '/api/email/campaigns/save') {
+    await dispatchRouteHandler(handleSaveCampaign, authHeader, body, res, 'Failed to save campaign.');
+    return true;
+  }
+
+  if (urlPath === '/api/email/campaigns/duplicate') {
+    await dispatchRouteHandler(handleDuplicateCampaign, authHeader, body, res, 'Failed to duplicate campaign.');
+    return true;
+  }
+
+  if (urlPath === '/api/email/campaigns/test-send') {
+    await dispatchRouteHandler(handleSendCampaignTest, authHeader, body, res, 'Failed to send campaign test.');
+    return true;
+  }
+
+  if (urlPath === '/api/email/campaigns/dispatch') {
+    await dispatchRouteHandler(handleDispatchCampaign, authHeader, body, res, 'Failed to dispatch promotional campaign.');
+    return true;
+  }
+
+  if (urlPath === '/api/email/unsubscribe') {
+    try {
+      const unsubRes = await handlePublicUnsubscribe(body);
+      sendJsonResponse(res, 200, unsubRes);
+    } catch (unsubErr: any) {
+      sendErrorResponse(res, 400, 'INVALID_ARGUMENT', unsubErr?.message || 'Failed to process unsubscribe.');
+    }
+    return true;
+  }
+
+  if (urlPath === '/api/email/transactional-jobs') {
+    await dispatchRouteHandler(handleListTransactionalJobs, authHeader, body, res, 'Failed to list transactional jobs.');
+    return true;
+  }
+
+  // PATRON CRM ROUTES (Server-authoritative customer registry)
+  if (urlPath === '/api/customers/list') {
+    await dispatchRouteHandler(handleListCustomers, authHeader, body, res, 'Failed to list patrons.');
+    return true;
+  }
+
+  if (urlPath === '/api/customers/update') {
+    await dispatchRouteHandler(handleUpdateCustomerServer, authHeader, body, res, 'Failed to update patron.');
+    return true;
+  }
+
+  if (urlPath === '/api/customers/delete') {
+    await dispatchRouteHandler(handleDeleteCustomerServer, authHeader, body, res, 'Failed to delete patron.');
     return true;
   }
 

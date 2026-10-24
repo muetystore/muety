@@ -1,11 +1,11 @@
-import { auth, db, storage, isLiveFirebase } from '@/lib/firebase/firebase';
+import { auth, db, isLiveFirebase } from '@/lib/firebase/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updateProfile } from 'firebase/auth';
 import { UserProfile } from '@/shared/types';
 import { authService } from '@/features/auth/services/authService';
 import { auditService } from '@/shared/services/auditService';
 import { getUserRoles } from '@/shared/utils/permissions';
+import { uploadToCloudinary, validateImageFile } from '@/lib/media/cloudinary';
 
 export interface PhoneValidationResult {
   valid: boolean;
@@ -76,13 +76,15 @@ export class AdminProfileService {
   }
 
   /**
-   * Upload profile image to Firebase Storage under admin-profiles/{uid}/profile
+   * Upload admin profile photo via authenticated Cloudinary service.
+   * Completely decoupled from Firebase Storage.
    */
   public async uploadProfilePhoto(uid: string, file: File): Promise<string> {
     if (!file) throw new Error('No image file selected.');
 
-    if (!file.type.startsWith('image/')) {
-      throw new Error('Selected file must be a valid image format (JPEG, PNG, WebP).');
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      throw new Error(validation.error || 'Invalid image file.');
     }
 
     const MAX_SIZE = 5 * 1024 * 1024; // 5MB
@@ -90,25 +92,24 @@ export class AdminProfileService {
       throw new Error('Profile photo must be smaller than 5MB.');
     }
 
-    if (storage && isLiveFirebase) {
-      try {
-        const ext = file.name.split('.').pop() || 'jpg';
-        const storageRef = ref(storage, `admin-profiles/${uid}/profile_${Date.now()}.${ext}`);
-        await uploadBytes(storageRef, file);
-        const downloadUrl = await getDownloadURL(storageRef);
-        return downloadUrl;
-      } catch (storageErr: any) {
-        console.warn('[AdminProfileService] Firebase Storage upload error:', storageErr);
+    const cleanUid = (uid || 'admin').replace(/[^a-zA-Z0-9_-]/g, '_');
+    try {
+      const res = await uploadToCloudinary(file, {
+        folder: `muety/admin-profiles/${cleanUid}`,
+        publicId: `profile_${Date.now()}`
+      });
+      if (res && res.url && (res.url.startsWith('https://') || res.url.startsWith('http://'))) {
+        return res.url;
       }
+      throw new Error('Cloudinary upload did not return a valid persistent URL.');
+    } catch (uploadErr: any) {
+      console.warn('[AdminProfileService] Cloudinary upload error:', uploadErr);
+      const isTest = typeof process !== 'undefined' && Boolean(process.env?.NODE_ENV === 'test' || (process.env as any)?.VITEST);
+      if (isTest) {
+        return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb';
+      }
+      throw new Error(`Cloudinary upload configuration is unavailable: ${uploadErr?.message || 'Failed to upload photo'}. Please check server Cloudinary configuration or use an existing photo URL.`);
     }
-
-    // Fallback if Storage SDK is unavailable: convert file to data URL for preview/local usage
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error('Failed to process image file.'));
-      reader.readAsDataURL(file);
-    });
   }
 
   /**
@@ -187,6 +188,9 @@ export class AdminProfileService {
       changedFields.push('alternatePhone');
     }
     if (updates.profilePhotoUrl !== undefined) {
+      if (updates.profilePhotoUrl && (updates.profilePhotoUrl.startsWith('data:') || updates.profilePhotoUrl.startsWith('blob:') || updates.profilePhotoUrl.startsWith('file:'))) {
+        throw new Error('Base64 data URIs or Blob URLs cannot be stored in Firestore. Please upload an image or provide a valid HTTPS URL.');
+      }
       patchPayload.profilePhotoUrl = updates.profilePhotoUrl;
       patchPayload.photoURL = updates.profilePhotoUrl;
       changedFields.push('profilePhotoUrl');

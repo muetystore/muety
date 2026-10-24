@@ -283,7 +283,7 @@ export const AdminCollections: React.FC = () => {
 
         if (isNowAssigned !== wasAssigned) {
           let newColIds = Array.isArray(product.collectionIds) ? [...product.collectionIds] : (product.collectionId ? [product.collectionId] : []);
-          let newTags = Array.isArray(product.tags) ? [...product.tags] : [];
+          const newTags = Array.isArray(product.tags) ? [...product.tags] : [];
 
           if (isNowAssigned) {
             if (!newColIds.includes(managingCol.id)) newColIds.push(managingCol.id);

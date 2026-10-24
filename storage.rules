@@ -18,6 +18,10 @@ service firebase.storage {
       return getRoles().hasAny(['super_admin', 'superadmin', 'admin', 'catalog_manager']);
     }
 
+    function isSupportManager() {
+      return getRoles().hasAny(['super_admin', 'superadmin', 'admin', 'support_manager']);
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -52,6 +56,12 @@ service firebase.storage {
     match /admin-profiles/{userId}/{allPaths=**} {
       allow read: if true;
       allow write: if (isOwner(userId) || isCatalogManager()) && isImage() && isValidSize();
+    }
+
+    // Customer private media & documents: owner or support read, owner write with MIME & size validation
+    match /customers/{customerId}/{allPaths=**} {
+      allow read: if isOwner(customerId) || isCatalogManager() || isSupportManager();
+      allow write: if isOwner(customerId) && isImage() && isValidSize();
     }
 
     // Default catch-all: strict default-deny

@@ -6,6 +6,8 @@ import { storageService } from '@/lib/storage/storageService';
 import { Category, Product } from '@/types';
 import { ArrowRight, ChevronRight, Sparkles } from 'lucide-react';
 
+import { computeCategoryProductCount } from '@/features/catalog/services/categoryService';
+
 export const CategoriesPage: React.FC = () => {
   useDocumentTitle('Categories');
 
@@ -30,11 +32,10 @@ export const CategoriesPage: React.FC = () => {
   }, []);
 
   const getCategoryCount = (slug: string, id: string) => {
-    return allProducts.filter(p => 
-      (p.categorySlug || '').toLowerCase() === (slug || '').toLowerCase() ||
-      (p.category || '').toLowerCase() === (slug || '').toLowerCase() ||
-      (p.categoryIds || []).includes(id)
-    ).length;
+    // Only count active/published products on storefront
+    const countById = computeCategoryProductCount(id, allProducts, true);
+    if (countById > 0) return countById;
+    return computeCategoryProductCount(slug, allProducts, true);
   };
 
   return (
