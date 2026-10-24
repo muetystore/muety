@@ -604,18 +604,22 @@ export const customerService = {
     uid: string, 
     contactData: { 
       displayName: string; 
+      email?: string;
       phoneNumber?: string; 
       alternatePhone?: string; 
       whatsappPhone?: string; 
     }
   ): Promise<UserProfile> {
-    const existing = storageService.getUserById(uid);
+    const existing = storageService.getUserById(uid) || this.getOnlyCustomers().find(c => c.uid === uid);
     if (!existing) throw new Error('Customer record not found.');
+
+    const cleanEmail = contactData.email ? contactData.email.trim().toLowerCase() : existing.email;
 
     const updated: UserProfile = {
       ...existing,
       displayName: contactData.displayName.trim(),
       fullName: contactData.displayName.trim(),
+      email: cleanEmail || existing.email,
       phoneNumber: contactData.phoneNumber?.trim() || undefined,
       phone: contactData.phoneNumber?.trim() || undefined,
       alternatePhone: contactData.alternatePhone?.trim() || undefined,
@@ -659,6 +663,7 @@ export const customerService = {
     const updated: UserProfile = {
       ...user,
       patronCircleMember: optIn,
+      marketingConsent: optIn,
       patronCircleJoinedAt: optIn ? (user.patronCircleJoinedAt || new Date().toISOString()) : undefined,
       patronCircleConsentText: optIn ? (user.patronCircleConsentText || 'Enrolled in MUETY Patron Circle VIP Experience') : undefined,
       updatedAt: new Date().toISOString()

@@ -67,6 +67,7 @@ export const AdminCustomers: React.FC = () => {
 
   // Contact Form State
   const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editAltPhone, setEditAltPhone] = useState('');
   const [editWhatsapp, setEditWhatsapp] = useState('');
@@ -274,6 +275,7 @@ export const AdminCustomers: React.FC = () => {
     setSelectedCustomer(customer);
     setActiveTab(tab);
     setEditName(customer.displayName || customer.fullName || '');
+    setEditEmail(customer.email || '');
     setEditPhone(customer.phoneNumber || customer.phone || '');
     setEditAltPhone(customer.alternatePhone || '');
     setEditWhatsapp(customer.whatsappPhone || customer.phoneNumber || '');
@@ -303,6 +305,7 @@ export const AdminCustomers: React.FC = () => {
 
       const updated = await customerService.updateCustomerContact(selectedCustomer.uid, {
         displayName: editName,
+        email: editEmail.trim(),
         phoneNumber: editPhone,
         alternatePhone: editAltPhone,
         whatsappPhone: editWhatsapp
@@ -1222,16 +1225,16 @@ export const AdminCustomers: React.FC = () => {
                 </div>
 
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontWeight: 700 }}>Storefront Authentication Email (Read-Only)</label>
+                  <label className="form-label" style={{ fontWeight: 700 }}>Patron Contact / Campaign Email</label>
                   <input
-                    type="text"
-                    disabled
-                    value={selectedCustomer.email || 'Not connected'}
+                    type="email"
+                    value={editEmail}
+                    onChange={e => setEditEmail(e.target.value)}
+                    placeholder="e.g. patron@gmail.com"
                     className="form-input"
-                    style={{ backgroundColor: '#f1f5f9', color: selectedCustomer.email ? '#334155' : '#94a3b8', cursor: 'not-allowed', fontStyle: selectedCustomer.email ? 'normal' : 'italic' }}
                   />
                   <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                    Email modification requires a verified account credentials flow.
+                    Primary email address used for promotional campaigns, order updates, and atelier communications.
                   </span>
                 </div>
 

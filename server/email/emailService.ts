@@ -216,9 +216,48 @@ export async function handleUnsubscribe(
 // 3. AUDIENCE ESTIMATION (Module A.3)
 // ==========================================
 
+const STAFF_ROLES = [
+  'superadmin', 'super_admin', 'admin',
+  'catalog_manager', 'product_executive',
+  'order_manager', 'order_executive',
+  'support_manager', 'support_executive', 'support_agent'
+];
+
+const KNOWN_ADMIN_EMAILS = [
+  'superadmin@muety.in',
+  'admin@muety.in',
+  'catalog@muety.in',
+  'kalvi@muety.in',
+  'vignesh.admin@muety.in',
+  'mohan.admin@muety.in'
+];
+
+function isStaffData(data: any): boolean {
+  if (!data) return false;
+  const role = (data.roleSlug || data.role || '').toLowerCase();
+  if (STAFF_ROLES.includes(role)) return true;
+  if (Array.isArray(data.roles) && data.roles.some((r: string) => STAFF_ROLES.includes(r.toLowerCase()))) return true;
+  const email = (data.email || data.muetyEmail || '').toLowerCase().trim();
+  if (KNOWN_ADMIN_EMAILS.includes(email)) return true;
+  if (email.endsWith('@muety.in') || email.endsWith('@muetystore.com')) {
+    if (email !== 'patron@muety.in' && data.role !== 'customer') return true;
+  }
+  return false;
+}
+
+function normalizeE164Phone(p?: string | null): string {
+  if (!p) return '';
+  const digits = String(p).replace(/[^\d+]/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('+')) return digits;
+  const noZero = digits.replace(/^0+/, '');
+  return noZero.length === 10 ? `+91${noZero}` : `+${noZero}`;
+}
+
 export interface PatronCandidate {
   uid: string;
   email: string;
+  phone?: string;
   name?: string;
   marketingConsent?: boolean;
   patronCircleMember?: boolean;
@@ -232,73 +271,93 @@ export async function fetchEligibleAudience(
   filter: AudienceFilter | AudienceFilter[] | string
 ): Promise<{ eligible: PatronCandidate[]; excludedNoConsent: number; suppressedCount: number }> {
   const db = getDb();
-  const rawPatrons: PatronCandidate[] = [];
+  const candidateMap = new Map<string, PatronCandidate>();
+  const phoneToEmail = new Map<string, string>();
 
   if (db) {
     try {
-      // 1. Load candidates from users collection
-      const usersSnap = await db.collection('users').get();
+      const [usersSnap, customersSnap, ordersSnap] = await Promise.all([
+        db.collection('users').get(),
+        db.collection('customers').get(),
+        db.collection('orders').get().catch(() => ({ forEach: () => {} } as any))
+      ]);
+
+      // 1. Build contact phone-to-email fallback lookup for phone-authenticated patrons
       usersSnap.forEach(d => {
         const u = d.data();
-        if (u.email) {
-          // Strictly evaluate explicit marketing opt-in:
-          // Never infer marketing consent from account registration, an order,
-          // Google sign-in, phone verification, or Patron Circle membership!
-          const rawConsent = u.marketingConsent;
-          const isExplicitConsent = rawConsent === true || 
-            (typeof rawConsent === 'object' && rawConsent !== null && (rawConsent as any).optedIn === true) ||
-            u.emailConsent === true;
-
-          rawPatrons.push({
-            uid: d.id,
-            email: normalizeEmail(u.email),
-            name: u.displayName || u.fullName || u.name,
-            marketingConsent: isExplicitConsent === true,
-            patronCircleMember: u.patronCircleMember === true || u.isPatronCircle === true,
-            createdAt: u.createdAt,
-            customerStatus: u.customerStatus,
-            completedOrdersCount: u.completedOrdersCount || 0,
-            totalSpent: u.totalSpent || 0
-          });
+        if (!isStaffData(u)) {
+          const em = (u.email || '').trim().toLowerCase();
+          const ph = normalizeE164Phone(u.phoneNumber || u.phone);
+          if (em && ph && !phoneToEmail.has(ph)) {
+            phoneToEmail.set(ph, em);
+          }
         }
       });
 
-      // 2. Also check customers collection to ensure complete coverage of registered patrons
-      const customersSnap = await db.collection('customers').get();
-      customersSnap.forEach(d => {
-        const c = d.data();
-        if (c.email) {
-          const rawConsent = c.marketingConsent;
-          const isExplicitConsent = rawConsent === true || 
-            (typeof rawConsent === 'object' && rawConsent !== null && (rawConsent as any).optedIn === true) ||
-            c.emailConsent === true;
-
-          rawPatrons.push({
-            uid: c.uid || d.id,
-            email: normalizeEmail(c.email),
-            name: c.displayName || c.fullName || c.name,
-            marketingConsent: isExplicitConsent === true,
-            patronCircleMember: c.patronCircleMember === true || c.isPatronCircle === true,
-            createdAt: c.createdAt,
-            customerStatus: c.customerStatus,
-            completedOrdersCount: c.completedOrdersCount || 0,
-            totalSpent: c.totalSpent || 0
-          });
+      ordersSnap.forEach((d: any) => {
+        const o = d.data();
+        const em = (o.customerEmail || o.shippingAddress?.email || '').trim().toLowerCase();
+        const ph = normalizeE164Phone(o.customerPhone || o.shippingAddress?.phone || o.phone);
+        if (em && ph && !phoneToEmail.has(ph)) {
+          phoneToEmail.set(ph, em);
         }
       });
+
+      // 2. Ingest customers and users collections
+      const processDoc = (docId: string, data: any) => {
+        if (isStaffData(data)) return;
+
+        const uid = data.uid || docId;
+        let email = (data.email || '').trim().toLowerCase();
+        const phone = normalizeE164Phone(data.phoneNumber || data.phone);
+
+        // Fallback resolve email if patron authenticated via mobile OTP
+        if (!email && phone && phoneToEmail.has(phone)) {
+          email = phoneToEmail.get(phone)!;
+        }
+
+        // MUETY Business Rule: Patron Circle is the explicit consent.
+        // Patrons outside Patron Circle are without consent from patron.
+        const isCircle = Boolean(data.patronCircleMember || data.isPatronCircle || data.tier === 'patron_circle');
+        const isConsented = isCircle || Boolean(data.marketingConsent || data.emailConsent);
+
+        const existing = candidateMap.get(uid) || {
+          uid,
+          email: email || '',
+          phone: phone || '',
+          name: data.displayName || data.fullName || data.name || '',
+          patronCircleMember: false,
+          marketingConsent: false,
+          createdAt: data.createdAt,
+          customerStatus: data.customerStatus,
+          completedOrdersCount: Number(data.completedOrdersCount) || Number(data.ordersCount) || 0,
+          totalSpent: Number(data.totalSpent) || 0
+        };
+
+        if (email && !existing.email) existing.email = email;
+        if (phone && !existing.phone) existing.phone = phone;
+        if (isCircle) existing.patronCircleMember = true;
+        if (isConsented) existing.marketingConsent = true;
+        if (data.displayName && (!existing.name || existing.name.startsWith('Patron ('))) {
+          existing.name = data.displayName;
+        }
+        if (data.createdAt && !existing.createdAt) existing.createdAt = data.createdAt;
+        if (data.customerStatus && !existing.customerStatus) existing.customerStatus = data.customerStatus;
+        if (data.completedOrdersCount) existing.completedOrdersCount = Math.max(existing.completedOrdersCount || 0, Number(data.completedOrdersCount));
+        if (data.totalSpent) existing.totalSpent = Math.max(existing.totalSpent || 0, Number(data.totalSpent));
+
+        candidateMap.set(uid, existing);
+      };
+
+      customersSnap.forEach(d => processDoc(d.id, d.data()));
+      usersSnap.forEach(d => processDoc(d.id, d.data()));
     } catch (err) {
       console.warn('[EmailService] Firestore audience fetch note:', err);
     }
   }
 
-  // Deduplicate by email
-  const uniquePatronsMap = new Map<string, PatronCandidate>();
-  for (const p of rawPatrons) {
-    if (!uniquePatronsMap.has(p.email)) {
-      uniquePatronsMap.set(p.email, p);
-    }
-  }
-
+  // Deduplicate candidates by email when email is present
+  const byEmail = new Map<string, PatronCandidate>();
   let excludedNoConsent = 0;
   let suppressedCount = 0;
   const eligible: PatronCandidate[] = [];
@@ -313,16 +372,15 @@ export async function fetchEligibleAudience(
 
   const hasAll = filterList.includes('all_consented') || filterList.length === 0;
 
-  for (const patron of uniquePatronsMap.values()) {
-    // 1. Verifiable marketing consent check:
-    // Registration alone or order completion is NOT consent. Must have explicit flag.
-    if (!patron.marketingConsent) {
+  for (const patron of candidateMap.values()) {
+    // 1. Consent verification: In MUETY, Patron Circle is the explicit marketing consent
+    if (!patron.marketingConsent && !patron.patronCircleMember) {
       excludedNoConsent++;
       continue;
     }
 
-    // 2. Check suppression list
-    if (await isEmailSuppressed(patron.email)) {
+    // 2. Check suppression list (if email is present)
+    if (patron.email && (await isEmailSuppressed(patron.email))) {
       suppressedCount++;
       continue;
     }
@@ -339,12 +397,12 @@ export async function fetchEligibleAudience(
           matches = true;
           break;
         }
-        if (f === 'completed_orders' && patron.completedOrdersCount && patron.completedOrdersCount >= 1) {
+        if (f === 'completed_orders' && (patron.completedOrdersCount || 0) >= 1) {
           matches = true;
           break;
         }
         if (f === 'vip_patrons') {
-          const isVip = patron.customerStatus === 'VIP' || (patron.totalSpent && patron.totalSpent >= 5000);
+          const isVip = patron.customerStatus === 'VIP' || (patron.totalSpent && patron.totalSpent >= 50000);
           if (isVip) {
             matches = true;
             break;
@@ -360,7 +418,16 @@ export async function fetchEligibleAudience(
       }
     }
 
-    eligible.push(patron);
+    // Deduplicate by normalized email
+    if (patron.email) {
+      const normEmail = normalizeEmail(patron.email);
+      if (!byEmail.has(normEmail)) {
+        byEmail.set(normEmail, patron);
+        eligible.push(patron);
+      }
+    } else {
+      eligible.push(patron);
+    }
   }
 
   return { eligible, excludedNoConsent, suppressedCount };
@@ -578,6 +645,10 @@ export async function dispatchCampaign(
 
   // 2. Dispatch individually to ensure complete privacy (never expose one patron's email to another)
   for (const patron of eligible) {
+    if (!patron.email || !patron.email.includes('@')) {
+      console.warn(`[EmailService] Skipping recipient UID ${patron.uid} (${patron.name || 'Patron'}): No valid email address configured.`);
+      continue;
+    }
     try {
       const token = generateUnsubscribeToken(patron.email);
       const unsubscribeUrl = `${storeUrl}/unsubscribe?email=${encodeURIComponent(patron.email)}&token=${token}`;
