@@ -53,4 +53,12 @@ describe('Phone Authentication & reCAPTCHA Resilience Suite', () => {
     expect(content).toContain("container.innerHTML = ''");
     expect(content).toContain('recaptchaVerifierRef.current.clear()');
   });
+
+  it('6. Verifies authService handles billing-not-enabled gracefully with user-friendly message', () => {
+    const authServiceFilePath = path.resolve(__dirname, '../features/auth/services/authService.ts');
+    const content = fs.readFileSync(authServiceFilePath, 'utf8');
+
+    expect(content).toContain("err?.code === 'auth/billing-not-enabled'");
+    expect(content).toContain('billing activation');
+  });
 });

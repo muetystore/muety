@@ -641,6 +641,13 @@ export class AuthService {
         if (err?.code === 'auth/captcha-check-failed') {
           throw new Error('Security verification (reCAPTCHA) could not be completed. Please refresh and try again.');
         }
+        if (
+          err?.code === 'auth/billing-not-enabled' ||
+          err?.message?.includes('billing-not-enabled') ||
+          err?.message?.includes('BILLING_NOT_ENABLED')
+        ) {
+          throw new Error('SMS verification gateway is currently completing billing activation or temporarily restricted. Please sign in with Google or use your patron account.');
+        }
         throw new Error(err?.message || 'Failed to send OTP verification code via SMS. Please try again.');
       }
     }
