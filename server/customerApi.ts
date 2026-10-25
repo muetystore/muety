@@ -75,6 +75,16 @@ function normalizePhone(p?: string | null, defaultCountryCode: string = '+91'): 
   return `+${noLeadingZero}`;
 }
 
+function isGeneratedPatronName(name?: string | null): boolean {
+  if (!name) return true;
+  const clean = name.trim();
+  if (!clean) return true;
+  if (/^Patron(\s*\(?\d+\)?)?$/i.test(clean)) return true;
+  if (/^MUETY Patron/i.test(clean)) return true;
+  if (/^Valued Patron/i.test(clean)) return true;
+  return false;
+}
+
 /**
  * Normalizes raw Firestore document data into a consistent UserProfile structure
  */
@@ -86,7 +96,10 @@ function normalizeDocToUserProfile(docId: string, data: any): any {
   const rawPhone = data.phoneNumber || data.phone || '';
   const phone = rawPhone ? normalizePhone(String(rawPhone)) : '';
 
-  const displayName = data.displayName?.trim() || data.fullName?.trim() || (cleanEmail ? cleanEmail.split('@')[0] : (phone ? `Patron (${phone.slice(-4)})` : 'Patron'));
+  const rawName = data.displayName?.trim() || data.fullName?.trim() || '';
+  const displayName = (!rawName || isGeneratedPatronName(rawName))
+    ? (phone ? `Patron (${phone.slice(-4)})` : (cleanEmail ? cleanEmail.split('@')[0] : 'Patron'))
+    : rawName;
 
   return {
     uid,

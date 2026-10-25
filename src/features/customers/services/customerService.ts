@@ -3,6 +3,7 @@ import { Order } from '@/features/orders/types';
 import { storageService } from '@/lib/storage/storageService';
 import { getUserRoles } from '@/shared/utils/permissions';
 import { getAuthHeaders } from '@/shared/utils/authHeader';
+import { isGeneratedPatronName } from '@/features/auth/services/authService';
 import { 
   isVerifiedOrder, 
   isCompletedOrder, 
@@ -146,13 +147,17 @@ export function mergeCustomerProfiles(primary: UserProfile, secondary: Partial<U
   const secondaryUpdated = secondary.updatedAt ? new Date(secondary.updatedAt).getTime() : 0;
   const preferSecondary = secondaryUpdated > primaryUpdated && secondaryUpdated > 0;
 
-  const displayName = preferSecondary
-    ? (secondary.displayName?.trim() || secondary.fullName?.trim() || primary.displayName?.trim() || primary.fullName?.trim() || mergedEmail.split('@')[0] || 'Patron')
-    : (primary.displayName?.trim() || primary.fullName?.trim() || secondary.displayName?.trim() || secondary.fullName?.trim() || mergedEmail.split('@')[0] || 'Patron');
+  const name1 = primary.displayName?.trim() || primary.fullName?.trim() || '';
+  const name2 = secondary.displayName?.trim() || secondary.fullName?.trim() || '';
+  const cleanName1 = name1 && !isGeneratedPatronName(name1) ? name1 : '';
+  const cleanName2 = name2 && !isGeneratedPatronName(name2) ? name2 : '';
 
   const phoneNumber = preferSecondary
     ? (secondary.phoneNumber?.trim() || secondary.phone?.trim() || primary.phoneNumber?.trim() || primary.phone?.trim() || undefined)
     : (primary.phoneNumber?.trim() || primary.phone?.trim() || secondary.phoneNumber?.trim() || secondary.phone?.trim() || undefined);
+
+  const cleanChosen = preferSecondary ? (cleanName2 || cleanName1) : (cleanName1 || cleanName2);
+  const displayName = cleanChosen || (phoneNumber ? `Patron (${phoneNumber.slice(-4)})` : (mergedEmail ? mergedEmail.split('@')[0] : 'Patron'));
 
   const whatsappPhone = preferSecondary
     ? (secondary.whatsappPhone?.trim() || primary.whatsappPhone?.trim() || phoneNumber)
@@ -918,18 +923,42 @@ export const customerService = {
                   ? raw.email.trim()
                   : '';
 
+                // Look up any existing cached data for this customer to preserve known phone numbers and details
+                const existing = customerMap.get(uid) || storageService.getUserById(uid);
+                const rawPhone = raw.phoneNumber || raw.phone || '';
+                const incomingPhone = rawPhone || existing?.phoneNumber || existing?.phone || '';
+
+                const rawDisplayName = raw.displayName || raw.fullName || '';
+                const existingDisplayName = existing?.displayName || existing?.fullName || '';
+
+                let resolvedName = '';
+                if (rawDisplayName && !isGeneratedPatronName(rawDisplayName)) {
+                  resolvedName = rawDisplayName.trim();
+                } else if (existingDisplayName && !isGeneratedPatronName(existingDisplayName)) {
+                  resolvedName = existingDisplayName.trim();
+                } else if (incomingPhone) {
+                  resolvedName = `Patron (${incomingPhone.slice(-4)})`;
+                } else if (incomingEmail) {
+                  resolvedName = incomingEmail.split('@')[0];
+                } else {
+                  resolvedName = 'Patron';
+                }
+
                 const incoming: UserProfile = {
                   ...raw,
                   uid,
                   email: incomingEmail,
-                  displayName: raw.displayName || raw.fullName || 'MUETY Patron',
+                  phoneNumber: incomingPhone || undefined,
+                  phone: incomingPhone || undefined,
+                  displayName: resolvedName,
+                  fullName: resolvedName,
                   role: raw.role || 'customer',
                   customerStatus: raw.customerStatus || (raw.isBlocked ? 'blocked' : 'active'),
-                  ordersCount: Number(raw.ordersCount) || 0,
-                  totalSpent: Number(raw.totalSpent) || 0,
-                  patronCircleMember: Boolean(raw.patronCircleMember || raw.joinCircle || raw.isPatronCircle),
-                  addresses: Array.isArray(raw.addresses) ? raw.addresses : [],
-                  createdAt: raw.createdAt || new Date().toISOString()
+                  ordersCount: Number(raw.ordersCount) || Number(existing?.ordersCount) || 0,
+                  totalSpent: Number(raw.totalSpent) || Number(existing?.totalSpent) || 0,
+                  patronCircleMember: Boolean(raw.patronCircleMember || raw.joinCircle || raw.isPatronCircle || existing?.patronCircleMember),
+                  addresses: Array.isArray(raw.addresses) ? raw.addresses : (existing?.addresses || []),
+                  createdAt: raw.createdAt || existing?.createdAt || new Date().toISOString()
                 };
 
                 customerMap.set(uid, incoming);

@@ -13,29 +13,11 @@ describe('PDP Enhancements — Top Left Back Arrow, Swipe Transitions & Full Pro
   );
 
   // =========================================================================
-  // 1. TOP-LEFT BACK ARROW BUTTON
+  // 1. BREADCRUMB BACK NAVIGATION & CLEAN PRODUCT IMAGE DISPLAY
   // =========================================================================
-  describe('1. Top-Left Corner Back Arrow (UI & UX)', () => {
-    it('implements a floating circular back arrow button in the top-left corner of the product gallery', () => {
-      expect(pdpCode).toContain('className="pdp-floating-back-btn"');
-      expect(pdpCode).toContain('aria-label="Go back to previous page"');
-      expect(pdpCode).toContain('<ArrowLeft');
-      expect(cssCode).toContain('.pdp-floating-back-btn');
-      expect(cssCode).toContain('position: absolute');
-      expect(cssCode).toContain('top: 14px');
-      expect(cssCode).toContain('left: 14px');
-      expect(cssCode).toContain('border-radius: 50%');
-    });
-
-    it('enforces min 44x44px touch target on floating back button for mobile ergonomics', () => {
-      expect(cssCode).toContain('min-width: 44px');
-      expect(cssCode).toContain('min-height: 44px');
-    });
-
-    it('provides frosted glass luxury aesthetics with gold hover feedback', () => {
-      expect(cssCode).toContain('backdrop-filter: blur(8px)');
-      expect(cssCode).toContain('.pdp-floating-back-btn:hover');
-      expect(cssCode).toContain('color: #C99A16');
+  describe('1. Breadcrumb Back Navigation & Clean Product Image (UI & UX)', () => {
+    it('removes floating back button from product image for an unobstructed drape view', () => {
+      expect(pdpCode).not.toContain('className="pdp-floating-back-btn"');
     });
 
     it('implements handleGoBack navigating to previous page or falling back to /products', () => {
@@ -45,9 +27,16 @@ describe('PDP Enhancements — Top Left Back Arrow, Swipe Transitions & Full Pro
       expect(pdpCode).toContain("navigate('/products')");
     });
 
-    it('also renders a clean back arrow action in the breadcrumb bar', () => {
+    it('renders a clean back arrow action in the breadcrumb bar', () => {
       expect(pdpCode).toContain('className="pdp-breadcrumb-back-btn"');
       expect(cssCode).toContain('.pdp-breadcrumb-back-btn');
+    });
+
+    it('implements mobile pinch-to-zoom and zoom controls on product image', () => {
+      expect(pdpCode).toContain('pdp-gallery-zoom-controls');
+      expect(pdpCode).toContain('handleZoomIn');
+      expect(pdpCode).toContain('handleZoomOut');
+      expect(cssCode).toContain('.pdp-gallery-zoom-controls');
     });
   });
 

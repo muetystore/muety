@@ -12,6 +12,29 @@ import {
 } from 'lucide-react';
 import { Logo } from '@/shared/components/ui/Logo';
 
+const formatOrderTimelineDate = (timestampOrIso: string | undefined, fallbackIso?: string): string => {
+  if (!timestampOrIso && !fallbackIso) return '';
+  const dateToParse = (timestampOrIso && (timestampOrIso.includes('T') || timestampOrIso.endsWith('Z')))
+    ? timestampOrIso
+    : (fallbackIso || timestampOrIso);
+
+  try {
+    const d = new Date(dateToParse!);
+    if (isNaN(d.getTime())) return timestampOrIso || '';
+    return d.toLocaleString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
+    });
+  } catch {
+    return timestampOrIso || '';
+  }
+};
+
 export const OrderConfirmationPage: React.FC = () => {
   useDocumentTitle('Order Confirmation');
   const { orderId } = useParams<{ orderId: string }>();
@@ -47,7 +70,7 @@ export const OrderConfirmationPage: React.FC = () => {
           fetch('/api/orders/send-confirmation', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderId: liveOrder.id, order: liveOrder })
+            body: JSON.stringify({ action: 'send-confirmation', orderId: liveOrder.id, order: liveOrder })
           }).catch(() => {});
         }
       }
@@ -204,7 +227,9 @@ export const OrderConfirmationPage: React.FC = () => {
                 }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <h5 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--brand-primary)' }}>{event.label}</h5>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--brand-muted)' }}>{event.timestamp}</span>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--brand-muted)' }}>
+                    {formatOrderTimelineDate(event.timestamp, order.createdAt)}
+                  </span>
                 </div>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>{event.description}</p>
               </div>
@@ -226,7 +251,7 @@ export const OrderConfirmationPage: React.FC = () => {
               <h3 style={{ fontSize: '1.4rem', color: 'var(--brand-primary)' }}>COMMERCIAL INVOICE</h3>
               <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
                 Order #{order.orderNumber}<br />
-                Date: {new Date(order.createdAt).toLocaleDateString()}<br />
+                Date: {new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })}<br />
                 Status: <strong style={{ color: order.paymentMethod === 'cash_on_delivery' ? '#b45309' : '#10b981' }}>
                   {order.paymentMethod === 'cash_on_delivery' 
                     ? 'COD (₹89 Advance Received)' 

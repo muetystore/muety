@@ -48,6 +48,29 @@ const POPULAR_COURIERS = [
   'MUETY Global Express'
 ];
 
+const formatOrderTimelineDate = (timestampOrIso: string | undefined, fallbackIso?: string): string => {
+  if (!timestampOrIso && !fallbackIso) return '';
+  const dateToParse = (timestampOrIso && (timestampOrIso.includes('T') || timestampOrIso.endsWith('Z')))
+    ? timestampOrIso
+    : (fallbackIso || timestampOrIso);
+
+  try {
+    const d = new Date(dateToParse!);
+    if (isNaN(d.getTime())) return timestampOrIso || '';
+    return d.toLocaleString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
+    });
+  } catch {
+    return timestampOrIso || '';
+  }
+};
+
 export const AdminOrders: React.FC = () => {
   useDocumentTitle('Orders ERP & Fulfillment');
   const { user } = useAuth();
@@ -593,7 +616,7 @@ export const AdminOrders: React.FC = () => {
                     </td>
 
                     <td style={{ padding: '14px 18px', color: '#64748b', fontSize: '0.82rem' }}>
-                      {new Date(ord.createdAt).toLocaleDateString()}
+                      {new Date(ord.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })}
                     </td>
 
                     <td style={{ padding: '14px 18px', color: 'var(--text-secondary)' }}>
@@ -1287,7 +1310,9 @@ export const AdminOrders: React.FC = () => {
                       <div style={{ fontSize: '0.84rem', flex: 1 }}>
                         <div style={{ fontWeight: 700, color: 'var(--brand-primary)' }}>{event.label || event.status}</div>
                         {event.description && <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '1px' }}>{event.description}</div>}
-                        <div style={{ color: '#94a3b8', fontSize: '0.74rem', marginTop: '2px' }}>{event.timestamp}</div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.74rem', marginTop: '2px' }}>
+                          {formatOrderTimelineDate(event.timestamp, selectedOrder.createdAt)}
+                        </div>
                       </div>
                     </div>
                   ))}

@@ -5,7 +5,7 @@ import { customerService, isStaffOrAdminUser, CustomerMetrics, normalizePhoneNum
 import { storageService } from '@/lib/storage/storageService';
 import { orderService } from '@/features/orders/services/orderService';
 import { auditService } from '@/shared/services/auditService';
-import { authService } from '@/features/auth/services/authService';
+import { authService, isGeneratedPatronName } from '@/features/auth/services/authService';
 import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { UserProfile, CustomerStatus, Address } from '@/shared/types';
@@ -216,6 +216,19 @@ export const AdminCustomers: React.FC = () => {
   const suspendedAccountsCount = customers.filter(u => !!u.isBlocked).length;
   const totalLTV = ordersSummary.cumulativeSpend;
 
+  const thirtyDaysAgo = useMemo(() => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), []);
+
+  const newPatronsCount = useMemo(() => {
+    return customers.filter(u => Boolean(u.createdAt && u.createdAt >= thirtyDaysAgo)).length;
+  }, [customers, thirtyDaysAgo]);
+
+  const verifiedPatronsCount = useMemo(() => {
+    return customers.filter(u => {
+      const m = customerMetricsMap.get(u.uid);
+      return Boolean((m && (m.verifiedOrdersCount > 0 || m.totalValidOrders > 0)) || Number(u.ordersCount) > 0);
+    }).length;
+  }, [customers, customerMetricsMap]);
+
   // Filtered customer directory
   const filteredCustomers = useMemo(() => {
     return customers.filter(u => {
@@ -231,16 +244,20 @@ export const AdminCustomers: React.FC = () => {
       const m = customerMetricsMap.get(u.uid);
       const isVip = u.customerStatus === 'VIP' || (m && m.isVip);
       const isPatronCircle = Boolean(u.patronCircleMember || (u as any).joinCircle || (u as any).isPatronCircle);
+      const isNew = Boolean(u.createdAt && u.createdAt >= thirtyDaysAgo);
+      const isVerifiedPatron = Boolean((m && (m.verifiedOrdersCount > 0 || m.totalValidOrders > 0)) || Number(u.ordersCount) > 0);
 
       let matchesStatus = true;
       if (statusFilter === 'active') matchesStatus = !u.isBlocked;
       else if (statusFilter === 'patron_circle') matchesStatus = isPatronCircle;
+      else if (statusFilter === 'new') matchesStatus = isNew;
       else if (statusFilter === 'VIP') matchesStatus = !!isVip;
+      else if (statusFilter === 'verified_patrons') matchesStatus = isVerifiedPatron;
       else if (statusFilter === 'blocked') matchesStatus = !!u.isBlocked;
 
       return matchesQuery && matchesStatus;
     });
-  }, [customers, search, statusFilter, customerMetricsMap]);
+  }, [customers, search, statusFilter, customerMetricsMap, thirtyDaysAgo]);
 
   // Toggle Patron Circle membership
   const handleTogglePatronCircle = async () => {
@@ -272,13 +289,24 @@ export const AdminCustomers: React.FC = () => {
 
   // Open Workspace Modal
   const handleOpenCustomer = (customer: UserProfile, tab: 'overview' | 'contact' | 'addresses' | 'orders' | 'account' = 'overview') => {
-    setSelectedCustomer(customer);
+    const rawPhone = customer.phoneNumber || customer.phone || '';
+    const orderWithPhone = !rawPhone ? orders.find(o => (o.customerId === customer.uid || (o as any).userId === customer.uid || (o as any).customerUid === customer.uid) && (o.customerPhone || o.shippingAddress?.phone)) : null;
+    const ph = rawPhone || orderWithPhone?.customerPhone || orderWithPhone?.shippingAddress?.phone || '';
+
+    const rawName = customer.displayName || customer.fullName || '';
+    const cleanName = (!rawName || isGeneratedPatronName(rawName)) ? (ph ? `Patron (${ph.slice(-4)})` : '') : rawName;
+
+    setSelectedCustomer({
+      ...customer,
+      phoneNumber: ph,
+      phone: ph
+    });
     setActiveTab(tab);
-    setEditName(customer.displayName || customer.fullName || '');
+    setEditName(cleanName);
     setEditEmail(customer.email || '');
-    setEditPhone(customer.phoneNumber || customer.phone || '');
+    setEditPhone(ph);
     setEditAltPhone(customer.alternatePhone || '');
-    setEditWhatsapp(customer.whatsappPhone || customer.phoneNumber || '');
+    setEditWhatsapp(customer.whatsappPhone || ph || '');
   };
 
   // Close Workspace Modal
@@ -603,100 +631,214 @@ export const AdminCustomers: React.FC = () => {
       </div>
 
       {/* CRM KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
         
         {/* Total Customers */}
-        <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase' }}>Total Patrons</span>
-            <Users size={18} color="var(--brand-primary)" />
+        <div 
+          onClick={() => setStatusFilter('all')}
+          className="card" 
+          style={{ padding: '1.15rem', display: 'flex', flexDirection: 'column', cursor: 'pointer', borderColor: statusFilter === 'all' ? 'var(--brand-accent)' : undefined, transition: 'all 0.15s ease' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase' }}>All Patrons</span>
+            <Users size={17} color="var(--brand-primary)" />
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
             {totalCustomers}
           </div>
-          <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 'auto', paddingTop: '6px' }}>{activeAccounts} active patron accounts</span>
+          <span style={{ fontSize: '0.74rem', color: '#64748b', marginTop: 'auto', paddingTop: '4px' }}>{activeAccounts} active patron accounts</span>
         </div>
 
         {/* Patron Circle Members */}
-        <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', backgroundColor: '#fffdf5', borderColor: '#fde68a' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Sparkles size={14} color="#d4af37" /> Patron Circle
+        <div 
+          onClick={() => setStatusFilter('patron_circle')}
+          className="card" 
+          style={{ padding: '1.15rem', display: 'flex', flexDirection: 'column', backgroundColor: '#fffdf5', borderColor: statusFilter === 'patron_circle' ? '#d4af37' : '#fde68a', cursor: 'pointer', transition: 'all 0.15s ease' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Sparkles size={13} color="#d4af37" /> Patron Circle
             </span>
-            <Award size={18} color="#d4af37" />
+            <Award size={17} color="#d4af37" />
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#92400e', fontFamily: 'var(--font-heading)' }}>
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#92400e', fontFamily: 'var(--font-heading)' }}>
             {patronCircleCount}
           </div>
-          <span style={{ fontSize: '0.78rem', color: '#b45309', marginTop: 'auto', paddingTop: '6px' }}>Enrolled VIP Circle Members</span>
+          <span style={{ fontSize: '0.74rem', color: '#b45309', marginTop: 'auto', paddingTop: '4px' }}>Consented Circle Members</span>
+        </div>
+
+        {/* New Patrons */}
+        <div 
+          onClick={() => setStatusFilter('new')}
+          className="card" 
+          style={{ padding: '1.15rem', display: 'flex', flexDirection: 'column', backgroundColor: '#f0fdf4', borderColor: statusFilter === 'new' ? '#16a34a' : '#bbf7d0', cursor: 'pointer', transition: 'all 0.15s ease' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Sparkles size={13} color="#16a34a" /> New Patrons
+            </span>
+            <Calendar size={17} color="#16a34a" />
+          </div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#166534', fontFamily: 'var(--font-heading)' }}>
+            {newPatronsCount}
+          </div>
+          <span style={{ fontSize: '0.74rem', color: '#15803d', marginTop: 'auto', paddingTop: '4px' }}>Registered in last 30 days</span>
         </div>
 
         {/* VIP Patrons */}
-        <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase' }}>VIP Clients</span>
-            <Award size={18} color="#d4af37" />
+        <div 
+          onClick={() => setStatusFilter('VIP')}
+          className="card" 
+          style={{ padding: '1.15rem', display: 'flex', flexDirection: 'column', cursor: 'pointer', borderColor: statusFilter === 'VIP' ? 'var(--brand-accent)' : undefined, transition: 'all 0.15s ease' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase' }}>VIP Clients</span>
+            <Award size={17} color="#d4af37" />
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
             {vipCustomersCount}
           </div>
-          <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 'auto', paddingTop: '6px' }}>Spend volume &ge; ₹50,000</span>
+          <span style={{ fontSize: '0.74rem', color: '#64748b', marginTop: 'auto', paddingTop: '4px' }}>Spend volume &ge; ₹50,000</span>
         </div>
 
-        {/* Total Orders Volume */}
-        <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase' }}>Verified Orders</span>
-            <ShoppingBag size={18} color="#10b981" />
+        {/* Verified Order Patrons */}
+        <div 
+          onClick={() => setStatusFilter('verified_patrons')}
+          className="card" 
+          style={{ padding: '1.15rem', display: 'flex', flexDirection: 'column', cursor: 'pointer', borderColor: statusFilter === 'verified_patrons' ? '#10b981' : undefined, transition: 'all 0.15s ease' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase' }}>Verified Orders</span>
+            <ShoppingBag size={17} color="#10b981" />
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
-            {ordersSummary.verifiedOrdersCount}
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
+            {verifiedPatronsCount}
           </div>
-          <span style={{ fontSize: '0.78rem', color: '#10b981', marginTop: 'auto', paddingTop: '6px' }}>
-            {ordersSummary.completedOrdersCount} completed &bull; {ordersSummary.pendingOrdersCount} in-progress
+          <span style={{ fontSize: '0.74rem', color: '#10b981', marginTop: 'auto', paddingTop: '4px' }}>
+            {ordersSummary.verifiedOrdersCount} total verified orders
           </span>
         </div>
 
         {/* Customer Total LTV */}
-        <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase' }}>Cumulative Spend</span>
-            <DollarSign size={18} color="#0284c7" />
+        <div className="card" style={{ padding: '1.15rem', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase' }}>Cumulative Spend</span>
+            <DollarSign size={17} color="#0284c7" />
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--brand-primary)', fontFamily: 'var(--font-heading)' }}>
             ₹{ordersSummary.cumulativeSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 'auto', paddingTop: '6px' }}>Net completed order revenue</span>
+          <span style={{ fontSize: '0.74rem', color: '#64748b', marginTop: 'auto', paddingTop: '4px' }}>Net completed order revenue</span>
         </div>
       </div>
 
-      {/* Search & Filter Bar */}
-      <div className="card" style={{ padding: '1.25rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ position: 'relative', flex: '1 1 280px', maxWidth: '420px' }}>
-          <Search size={18} color="var(--brand-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-          <input 
-            type="text" 
-            placeholder="Search patron by name, email, or phone number..." 
-            value={search} 
-            onChange={e => setSearch(e.target.value)} 
-            className="form-input" 
-            style={{ paddingLeft: '2.5rem' }} 
-          />
+      {/* Search & Filter Bar with Quick Segment Pills and Target Campaign Execution */}
+      <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        
+        {/* Quick Segment Filter Pills */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--brand-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: '4px' }}>
+            Segments:
+          </span>
+          {[
+            { id: 'all', label: 'All Patrons', count: totalCustomers, icon: Users },
+            { id: 'patron_circle', label: 'Patron Circle', count: patronCircleCount, icon: Sparkles },
+            { id: 'new', label: 'New (30d)', count: newPatronsCount, icon: Sparkles },
+            { id: 'VIP', label: 'VIP Clients', count: vipCustomersCount, icon: Award },
+            { id: 'verified_patrons', label: 'Verified Buyers', count: verifiedPatronsCount, icon: ShoppingBag },
+            { id: 'active', label: 'Active', count: activeAccounts, icon: CheckCircle2 },
+            { id: 'blocked', label: 'Suspended', count: suspendedAccountsCount, icon: UserX }
+          ].map(tab => {
+            const isActive = statusFilter === tab.id;
+            const TabIcon = tab.icon;
+            return (
+              <button
+                type="button"
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '5px 12px',
+                  borderRadius: '20px',
+                  fontSize: '0.8rem',
+                  fontWeight: isActive ? 700 : 500,
+                  border: isActive ? '1.5px solid var(--brand-accent)' : '1px solid var(--brand-border)',
+                  backgroundColor: isActive ? 'rgba(201, 162, 39, 0.12)' : '#ffffff',
+                  color: isActive ? 'var(--brand-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <TabIcon size={13} color={isActive ? 'var(--brand-accent)' : '#94a3b8'} />
+                {tab.label}
+                <span style={{
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  backgroundColor: isActive ? 'var(--brand-accent)' : '#f1f5f9',
+                  color: isActive ? '#ffffff' : '#64748b'
+                }}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="form-input"
-            style={{ width: '270px', margin: 0, fontWeight: 600 }}
-          >
-            <option value="all">All Patron Categories ({totalCustomers})</option>
-            <option value="active">Active Accounts ({activeAccounts})</option>
-            <option value="patron_circle">✨ Join Circle / Patron Circle ({patronCircleCount})</option>
-            <option value="VIP">VIP Clients (&ge;₹50k spend) ({vipCustomersCount})</option>
-            <option value="blocked">Suspended Accounts ({suspendedAccountsCount})</option>
-          </select>
+        {/* Search, Dropdown & Execution Action */}
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ position: 'relative', flex: '1 1 280px', maxWidth: '420px' }}>
+            <Search size={18} color="var(--brand-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            <input 
+              type="text" 
+              placeholder="Search patron by name, email, or phone number..." 
+              value={search} 
+              onChange={e => setSearch(e.target.value)} 
+              className="form-input" 
+              style={{ paddingLeft: '2.5rem' }} 
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="form-input"
+              style={{ width: '260px', margin: 0, fontWeight: 600 }}
+            >
+              <option value="all">All Patron Categories ({totalCustomers})</option>
+              <option value="patron_circle">✨ Join Circle / Patron Circle ({patronCircleCount})</option>
+              <option value="new">🌱 New Atelier Patrons (Last 30 Days) ({newPatronsCount})</option>
+              <option value="VIP">⭐ VIP Clients (≥₹50k spend) ({vipCustomersCount})</option>
+              <option value="verified_patrons">📦 Verified Order Patrons ({verifiedPatronsCount})</option>
+              <option value="active">Active Accounts ({activeAccounts})</option>
+              <option value="blocked">Suspended Accounts ({suspendedAccountsCount})</option>
+            </select>
+
+            <button
+              type="button"
+              onClick={() => {
+                const segMap: Record<string, string> = {
+                  patron_circle: 'all_consented',
+                  new: 'new_patrons',
+                  VIP: 'vip_patrons',
+                  verified_patrons: 'completed_orders',
+                  all: 'all_consented'
+                };
+                const target = segMap[statusFilter] || 'all_consented';
+                navigate(`/admin/campaigns?create=true&segment=${target}`);
+              }}
+              className="btn btn-primary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', padding: '8px 16px', fontWeight: 700 }}
+              title="Create and target an email campaign for this patron segment"
+            >
+              <Send size={14} />
+              Target Segment in Campaign &rarr;
+            </button>
+          </div>
         </div>
       </div>
 
@@ -742,7 +884,14 @@ export const AdminCustomers: React.FC = () => {
                   const metrics = customerMetricsMap.get(customer.uid) || customerService.calculateCustomerMetrics(customer, orders);
                   const isBlocked = !!customer.isBlocked;
                   const isVip = metrics.isVip || customer.customerStatus === 'VIP';
-                  const displayName = customer.displayName || customer.fullName || 'Patron';
+                  const rawPhone = customer.phoneNumber || customer.phone || '';
+                  const orderWithPhone = !rawPhone ? orders.find(o => (o.customerId === customer.uid || (o as any).userId === customer.uid || (o as any).customerUid === customer.uid) && (o.customerPhone || o.shippingAddress?.phone)) : null;
+                  const customerPhone = rawPhone || orderWithPhone?.customerPhone || orderWithPhone?.shippingAddress?.phone || '';
+                  const isPhoneOnlyPatron = !customer.email && !!customerPhone;
+                  const rawDisplayName = customer.displayName || customer.fullName || '';
+                  const displayName = (!rawDisplayName || isGeneratedPatronName(rawDisplayName))
+                    ? (customerPhone ? `Patron (${customerPhone.slice(-4)})` : 'Patron')
+                    : rawDisplayName;
 
                   return (
                     <tr 
@@ -786,16 +935,38 @@ export const AdminCustomers: React.FC = () => {
                       {/* Contact Info */}
                       <td style={{ padding: '14px 18px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {customer.email ? (
+                            <span style={{ 
+                              color: 'var(--text-primary)', 
+                              fontWeight: 500, 
+                              fontSize: '0.85rem'
+                            }}>
+                              {customer.email}
+                            </span>
+                          ) : (
+                            <span style={{ 
+                              display: 'inline-flex', alignItems: 'center', gap: '5px',
+                              color: 'var(--brand-accent)', 
+                              fontWeight: 600, 
+                              fontSize: '0.85rem'
+                            }}>
+                              <Phone size={13} color="var(--brand-accent)" />
+                              Phone Verified Patron
+                            </span>
+                          )}
                           <span style={{ 
-                            color: customer.email ? 'var(--text-primary)' : 'var(--brand-accent)', 
-                            fontWeight: customer.email ? 500 : 600, 
-                            fontStyle: 'normal',
-                            fontSize: '0.85rem'
+                            fontSize: '0.82rem', 
+                            color: customerPhone ? 'var(--brand-primary)' : '#94a3b8', 
+                            fontWeight: customerPhone ? 600 : 400,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
                           }}>
-                            {customer.email || 'Phone Verified Patron'}
-                          </span>
-                          <span style={{ fontSize: '0.82rem', color: (customer.phoneNumber || customer.phone) ? 'var(--brand-primary)' : '#94a3b8', fontWeight: (customer.phoneNumber || customer.phone) ? 600 : 400 }}>
-                            {customer.phoneNumber || customer.phone || 'No phone registered'}
+                            {customerPhone ? (
+                              <>{customerPhone}</>
+                            ) : (
+                              <span style={{ fontStyle: 'italic' }}>No phone registered</span>
+                            )}
                           </span>
                         </div>
                       </td>
@@ -803,11 +974,23 @@ export const AdminCustomers: React.FC = () => {
                       {/* Account Status & VIP Tier */}
                       <td style={{ padding: '14px 18px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-start' }}>
-                          {Boolean(customer.patronCircleMember || (customer as any).joinCircle || (customer as any).isPatronCircle) && (
-                            <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '0.74rem', fontWeight: 700, backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                              <Sparkles size={11} color="#d4af37" /> Patron Circle
-                            </span>
-                          )}
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            {Boolean(customer.patronCircleMember || (customer as any).joinCircle || (customer as any).isPatronCircle) && (
+                              <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '0.72rem', fontWeight: 700, backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                <Sparkles size={11} color="#d4af37" /> Patron Circle
+                              </span>
+                            )}
+                            {Boolean(customer.createdAt && customer.createdAt >= thirtyDaysAgo) && (
+                              <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '0.72rem', fontWeight: 700, backgroundColor: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                <Sparkles size={11} /> New (30d)
+                              </span>
+                            )}
+                            {Boolean((metrics.verifiedOrdersCount > 0 || metrics.totalValidOrders > 0) || Number(customer.ordersCount) > 0) && (
+                              <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '0.72rem', fontWeight: 700, backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                <ShoppingBag size={11} /> Verified Buyer
+                              </span>
+                            )}
+                          </div>
                           {metrics.hasIdentityConflict && (
                             <button
                               type="button"
@@ -1141,17 +1324,33 @@ export const AdminCustomers: React.FC = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.88rem' }}>
                     <div>
                       <span style={{ color: '#64748b', display: 'block', fontSize: '0.78rem' }}>Full Legal Name</span>
-                      <strong>{selectedCustomer.displayName || selectedCustomer.fullName || 'Not provided'}</strong>
+                      <strong>
+                        {(() => {
+                          const n = selectedCustomer.displayName || selectedCustomer.fullName || '';
+                          if (!n || isGeneratedPatronName(n)) {
+                            const ph = selectedCustomer.phoneNumber || selectedCustomer.phone || '';
+                            return ph ? `Phone Patron (${ph.slice(-4)})` : 'Not provided';
+                          }
+                          return n;
+                        })()}
+                      </strong>
+                      {isGeneratedPatronName(selectedCustomer.displayName || selectedCustomer.fullName) && (
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#f59e0b', marginTop: '2px', fontStyle: 'italic' }}>
+                          Auto-generated name — patron registered via phone only
+                        </span>
+                      )}
                     </div>
                     <div>
                       <span style={{ color: '#64748b', display: 'block', fontSize: '0.78rem' }}>Storefront Email</span>
                       <strong style={{ color: selectedCustomer.email ? 'var(--brand-primary)' : '#94a3b8', fontStyle: selectedCustomer.email ? 'normal' : 'italic' }}>
-                        {selectedCustomer.email || 'Not connected'}
+                        {selectedCustomer.email || 'Not connected — phone only'}
                       </strong>
                     </div>
                     <div>
                       <span style={{ color: '#64748b', display: 'block', fontSize: '0.78rem' }}>Primary Phone</span>
-                      <strong>{selectedCustomer.phoneNumber || selectedCustomer.phone || 'None registered'}</strong>
+                      <strong style={{ color: (selectedCustomer.phoneNumber || selectedCustomer.phone) ? 'var(--brand-primary)' : '#94a3b8' }}>
+                        {selectedCustomer.phoneNumber || selectedCustomer.phone || 'None registered'}
+                      </strong>
                     </div>
                     <div>
                       <span style={{ color: '#64748b', display: 'block', fontSize: '0.78rem' }}>Default Delivery City</span>

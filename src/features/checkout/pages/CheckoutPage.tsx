@@ -28,6 +28,7 @@ import { calculateOrderFinancials } from '@/shared/utils/pricingEngine';
 import { couponService } from '@/features/coupons/services/couponService';
 import { 
   customerAddressService, 
+  INDIAN_STATES,
   isValidIndianPin, 
   isValidPhone 
 } from '@/features/customers/services/customerAddressService';
@@ -131,9 +132,9 @@ export const CheckoutPage: React.FC = () => {
   const [streetAddress, setStreetAddress] = useState(
     activeInitialAddr ? (activeInitialAddr.houseFlat ? `${activeInitialAddr.houseFlat}, ${activeInitialAddr.streetAddress}` : activeInitialAddr.streetAddress) : ''
   );
-  const [city, setCity] = useState(activeInitialAddr?.city || 'Salem');
-  const [state, setState] = useState(activeInitialAddr?.state || 'Tamil Nadu');
-  const [postalCode, setPostalCode] = useState(activeInitialAddr?.postalCode || '636501');
+  const [city, setCity] = useState(activeInitialAddr?.city || '');
+  const [state, setState] = useState(activeInitialAddr?.state || '');
+  const [postalCode, setPostalCode] = useState(activeInitialAddr?.postalCode || '');
   const [country, setCountry] = useState(activeInitialAddr?.country || 'India');
 
   const handleSelectSavedAddress = (addr: Address) => {
@@ -282,7 +283,7 @@ export const CheckoutPage: React.FC = () => {
       }
     }
 
-    if (!email || !fullName || !phone || !streetAddress || !city || !postalCode) {
+    if (!email || !fullName || !phone || !streetAddress || !city || !state || !postalCode) {
       error('Please complete all required shipping and contact fields.');
       return;
     }
@@ -557,6 +558,7 @@ export const CheckoutPage: React.FC = () => {
                     <input 
                       type="text" 
                       required 
+                      placeholder="e.g. Chennai"
                       value={city} 
                       onChange={e => setCity(e.target.value)} 
                       className="form-input" 
@@ -564,13 +566,29 @@ export const CheckoutPage: React.FC = () => {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">State / Province</label>
-                    <input 
-                      type="text" 
-                      value={state} 
-                      onChange={e => setState(e.target.value)} 
-                      className="form-input" 
-                    />
+                    <label className="form-label">State / Province *</label>
+                    {country === 'India' ? (
+                      <select 
+                        required 
+                        value={state} 
+                        onChange={e => setState(e.target.value)} 
+                        className="form-select"
+                      >
+                        <option value="">Select State</option>
+                        {INDIAN_STATES.map((st) => (
+                          <option key={st} value={st}>{st}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="State / Province"
+                        value={state} 
+                        onChange={e => setState(e.target.value)} 
+                        className="form-input" 
+                      />
+                    )}
                   </div>
 
                   <div className="form-group">
@@ -578,6 +596,7 @@ export const CheckoutPage: React.FC = () => {
                     <input 
                       type="text" 
                       required 
+                      placeholder="e.g. 600001"
                       value={postalCode} 
                       onChange={e => setPostalCode(e.target.value)} 
                       className="form-input" 

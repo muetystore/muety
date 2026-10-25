@@ -62,6 +62,10 @@ export const ProductDetailPage: React.FC = () => {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const dragStartRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastTapRef = React.useRef<number>(0);
+  const pinchStartDistRef = React.useRef<number | null>(null);
+  const pinchStartScaleRef = React.useRef<number>(1);
+  const isPinchingRef = React.useRef<boolean>(false);
+  const cardRef = React.useRef<HTMLDivElement | null>(null);
 
   // Touch swipe gallery navigation
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
@@ -177,6 +181,7 @@ export const ProductDetailPage: React.FC = () => {
 
   const handleGalleryNext = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    resetZoom();
     if (selectedImage < galleryImages.length - 1) {
       setSelectedImage(prev => prev + 1);
     }
@@ -184,41 +189,160 @@ export const ProductDetailPage: React.FC = () => {
 
   const handleGalleryPrev = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    resetZoom();
     if (selectedImage > 0) {
       setSelectedImage(prev => prev - 1);
     }
   };
 
+  const handleZoomIn = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setZoomScale(prev => Math.min(3.5, Number((prev + 0.5).toFixed(1))));
+  };
+
+  const handleZoomOut = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setZoomScale(prev => {
+      const next = Number((prev - 0.5).toFixed(1));
+      if (next <= 1) {
+        resetZoom();
+        return 1;
+      }
+      return next;
+    });
+  };
+
   const handleGalleryTouchStart = (e: React.TouchEvent) => {
-    if (galleryImages.length <= 1) return;
-    const touch = e.touches[0];
-    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
-    setTouchDeltaX(0);
-    setIsSwipingGallery(false);
+    // 2-finger pinch gesture start
+    if (e.touches.length === 2) {
+      isPinchingRef.current = true;
+      setIsSwipingGallery(false);
+      setTouchDeltaX(0);
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      pinchStartDistRef.current = dist;
+      pinchStartScaleRef.current = zoomScale;
+
+      if (cardRef.current) {
+        const rect = cardRef.current.getBoundingClientRect();
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const originX = Math.max(0, Math.min(100, ((midX - rect.left) / rect.width) * 100));
+        const originY = Math.max(0, Math.min(100, ((midY - rect.top) / rect.height) * 100));
+        setZoomOrigin({ x: originX, y: originY });
+      }
+      return;
+    }
+
+    // Single touch
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const now = Date.now();
+
+      // Double-tap zoom toggle detection
+      if (now - lastTapRef.current < 320) {
+        if (zoomScale > 1) {
+          resetZoom();
+        } else {
+          if (cardRef.current) {
+            const rect = cardRef.current.getBoundingClientRect();
+            const originX = Math.max(0, Math.min(100, ((touch.clientX - rect.left) / rect.width) * 100));
+            const originY = Math.max(0, Math.min(100, ((touch.clientY - rect.top) / rect.height) * 100));
+            setZoomOrigin({ x: originX, y: originY });
+          }
+          setZoomScale(2.2);
+          setPanOffset({ x: 0, y: 0 });
+        }
+        lastTapRef.current = 0;
+        return;
+      }
+      lastTapRef.current = now;
+
+      if (zoomScale > 1) {
+        // Panning active
+        setIsDragging(true);
+        dragStartRef.current = {
+          x: touch.clientX - panOffset.x,
+          y: touch.clientY - panOffset.y
+        };
+      } else if (galleryImages.length > 1) {
+        // Slider swipe active
+        touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+        setTouchDeltaX(0);
+        setIsSwipingGallery(false);
+      }
+    }
   };
 
   const handleGalleryTouchMove = (e: React.TouchEvent) => {
-    if (!touchStartPos.current || galleryImages.length <= 1) return;
-    const touch = e.touches[0];
-    const dx = touch.clientX - touchStartPos.current.x;
-    const dy = touch.clientY - touchStartPos.current.y;
+    // 2-finger pinch gesture
+    if (e.touches.length === 2 && pinchStartDistRef.current) {
+      if (e.cancelable) e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const ratio = dist / pinchStartDistRef.current;
+      const newScale = Math.max(1, Math.min(4, Number((pinchStartScaleRef.current * ratio).toFixed(2))));
+      setZoomScale(newScale);
+      return;
+    }
 
-    if (Math.abs(dx) > Math.abs(dy)) {
-      if (Math.abs(dx) > 8) {
-        setIsSwipingGallery(true);
-        // Tactile edge resistance when attempting to swipe past first/last slide
-        const isAtStart = selectedImage === 0 && dx > 0;
-        const isAtEnd = selectedImage === galleryImages.length - 1 && dx < 0;
-        if (isAtStart || isAtEnd) {
-          setTouchDeltaX(dx * 0.28);
-        } else {
-          setTouchDeltaX(dx);
+    // 1-finger pan or swipe
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      if (zoomScale > 1 && isDragging) {
+        if (e.cancelable) e.preventDefault();
+        const maxPanX = (cardRef.current?.clientWidth || 300) * (zoomScale - 1) * 0.5;
+        const maxPanY = (cardRef.current?.clientHeight || 400) * (zoomScale - 1) * 0.5;
+        const rawDx = touch.clientX - dragStartRef.current.x;
+        const rawDy = touch.clientY - dragStartRef.current.y;
+        setPanOffset({
+          x: Math.max(-maxPanX, Math.min(maxPanX, rawDx)),
+          y: Math.max(-maxPanY, Math.min(maxPanY, rawDy))
+        });
+        return;
+      }
+
+      if (zoomScale === 1 && touchStartPos.current && galleryImages.length > 1) {
+        const dx = touch.clientX - touchStartPos.current.x;
+        const dy = touch.clientY - touchStartPos.current.y;
+
+        if (Math.abs(dx) > Math.abs(dy)) {
+          if (Math.abs(dx) > 8) {
+            setIsSwipingGallery(true);
+            const isAtStart = selectedImage === 0 && dx > 0;
+            const isAtEnd = selectedImage === galleryImages.length - 1 && dx < 0;
+            if (isAtStart || isAtEnd) {
+              setTouchDeltaX(dx * 0.28);
+            } else {
+              setTouchDeltaX(dx);
+            }
+          }
         }
       }
     }
   };
 
-  const handleGalleryTouchEnd = () => {
+  const handleGalleryTouchEnd = (e: React.TouchEvent) => {
+    if (isPinchingRef.current) {
+      if (e.touches.length < 2) {
+        isPinchingRef.current = false;
+        pinchStartDistRef.current = null;
+        if (zoomScale <= 1.08) {
+          resetZoom();
+        }
+      }
+      return;
+    }
+
+    if (zoomScale > 1) {
+      setIsDragging(false);
+      return;
+    }
+
     if (!touchStartPos.current || galleryImages.length <= 1) {
       touchStartPos.current = null;
       setTouchDeltaX(0);
@@ -298,6 +422,8 @@ export const ProductDetailPage: React.FC = () => {
     setPanOffset({ x: 0, y: 0 });
     setZoomOrigin({ x: 50, y: 50 });
     setIsDragging(false);
+    isPinchingRef.current = false;
+    pinchStartDistRef.current = null;
   };
 
   useEffect(() => {
@@ -389,12 +515,14 @@ export const ProductDetailPage: React.FC = () => {
 
   const handleImageDoubleClick = (e: React.MouseEvent<HTMLImageElement>) => {
     e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
     if (zoomScale === 1) {
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      setZoomOrigin({ x, y });
-      setZoomScale(2.3);
+      if (cardRef.current) {
+        const rect = cardRef.current.getBoundingClientRect();
+        const originX = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+        const originY = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+        setZoomOrigin({ x: originX, y: originY });
+      }
+      setZoomScale(2.2);
       setPanOffset({ x: 0, y: 0 });
     } else {
       resetZoom();
@@ -414,47 +542,18 @@ export const ProductDetailPage: React.FC = () => {
     if (isDragging && zoomScale > 1) {
       e.preventDefault();
       e.stopPropagation();
+      const maxPanX = (cardRef.current?.clientWidth || 300) * (zoomScale - 1) * 0.5;
+      const maxPanY = (cardRef.current?.clientHeight || 400) * (zoomScale - 1) * 0.5;
+      const rawDx = e.clientX - dragStartRef.current.x;
+      const rawDy = e.clientY - dragStartRef.current.y;
       setPanOffset({
-        x: e.clientX - dragStartRef.current.x,
-        y: e.clientY - dragStartRef.current.y
+        x: Math.max(-maxPanX, Math.min(maxPanX, rawDx)),
+        y: Math.max(-maxPanY, Math.min(maxPanY, rawDy))
       });
     }
   };
 
   const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleTouchStart = (e: React.TouchEvent<HTMLImageElement>) => {
-    const now = Date.now();
-    if (now - lastTapRef.current < 300) {
-      if (zoomScale === 1) {
-        setZoomScale(2.5);
-      } else {
-        resetZoom();
-      }
-    }
-    lastTapRef.current = now;
-
-    if (e.touches.length === 1 && zoomScale > 1) {
-      setIsDragging(true);
-      dragStartRef.current = {
-        x: e.touches[0].clientX - panOffset.x,
-        y: e.touches[0].clientY - panOffset.y
-      };
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent<HTMLImageElement>) => {
-    if (isDragging && e.touches.length === 1 && zoomScale > 1) {
-      setPanOffset({
-        x: e.touches[0].clientX - dragStartRef.current.x,
-        y: e.touches[0].clientY - dragStartRef.current.y
-      });
-    }
-  };
-
-  const handleTouchEnd = () => {
     setIsDragging(false);
   };
 
@@ -653,31 +752,27 @@ export const ProductDetailPage: React.FC = () => {
         <div className="pdp-grid">
           <div className="pdp-gallery-col">
             <div 
-              className="pdp-main-image-card"
+              ref={cardRef}
+              className={`pdp-main-image-card ${zoomScale > 1 ? 'is-zoomed' : ''}`}
               onTouchStart={handleGalleryTouchStart}
               onTouchMove={handleGalleryTouchMove}
               onTouchEnd={handleGalleryTouchEnd}
               onTouchCancel={handleGalleryTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
               onKeyDown={handleGalleryKeyDown}
               tabIndex={0}
               role="region"
               aria-label={`Product image gallery for ${product.name}, showing image ${selectedImage + 1} of ${galleryImages.length}`}
               style={{
                 position: 'relative',
-                touchAction: 'pan-y'
+                touchAction: 'pan-y',
+                userSelect: 'none',
+                WebkitUserSelect: 'none'
               }}
             >
-              {/* Top-Left Floating Back Arrow Button (Perfect UI & UX for mobile/desktop) */}
-              <button
-                type="button"
-                onClick={handleGoBack}
-                className="pdp-floating-back-btn"
-                aria-label="Go back to previous page"
-                title="Go back"
-              >
-                <ArrowLeft size={20} />
-              </button>
-
               {/* Ultra-Smooth Continuous Gallery Slider Viewport & Track */}
               <div className="pdp-gallery-slider-viewport">
                 <div 
@@ -690,26 +785,36 @@ export const ProductDetailPage: React.FC = () => {
                     transition: isSwipingGallery ? 'none' : 'transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)'
                   }}
                 >
-                  {galleryImages.map((img, idx) => (
-                    <div 
-                      key={idx}
-                      className="pdp-gallery-slide"
-                      aria-hidden={selectedImage !== idx}
-                    >
-                      <img 
-                        src={img} 
-                        alt={`${product.name} - drape view ${idx + 1}`}
-                        className="pdp-main-img"
-                        loading={idx === 0 ? "eager" : "lazy"}
-                        draggable={false}
-                      />
-                    </div>
-                  ))}
+                  {galleryImages.map((img, idx) => {
+                    const isCurrent = selectedImage === idx;
+                    return (
+                      <div 
+                        key={idx}
+                        className="pdp-gallery-slide"
+                        aria-hidden={selectedImage !== idx}
+                      >
+                        <img 
+                          src={img} 
+                          alt={`${product.name} - drape view ${idx + 1}`}
+                          className={`pdp-main-img ${zoomScale > 1 && isCurrent ? 'zoomed' : ''}`}
+                          loading={idx === 0 ? "eager" : "lazy"}
+                          draggable={false}
+                          onDoubleClick={handleImageDoubleClick}
+                          style={isCurrent && zoomScale > 1 ? {
+                            transform: `scale(${zoomScale}) translate(${panOffset.x / zoomScale}px, ${panOffset.y / zoomScale}px)`,
+                            transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`,
+                            transition: isDragging || isPinchingRef.current ? 'none' : 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+                            cursor: isDragging ? 'grabbing' : 'grab'
+                          } : undefined}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Accessible Prev/Next navigation controls */}
-              {galleryImages.length > 1 && (
+              {/* Accessible Prev/Next navigation controls (hidden when zoomed for unhindered exploration) */}
+              {galleryImages.length > 1 && zoomScale === 1 && (
                 <>
                   <button
                     type="button"
@@ -734,6 +839,41 @@ export const ProductDetailPage: React.FC = () => {
                 </>
               )}
 
+              {/* Floating Mobile & Desktop Zoom In / Out Controls */}
+              <div className="pdp-gallery-zoom-controls" role="group" aria-label="Image zoom controls">
+                {zoomScale > 1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); resetZoom(); }}
+                    className="pdp-zoom-btn pdp-zoom-reset"
+                    aria-label="Reset zoom to 100%"
+                    title="Reset zoom"
+                  >
+                    <span>{Math.round(zoomScale * 100)}%</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  disabled={zoomScale >= 4}
+                  className="pdp-zoom-btn"
+                  aria-label="Zoom in on creation drape"
+                  title="Zoom in"
+                >
+                  <ZoomIn size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  disabled={zoomScale <= 1}
+                  className="pdp-zoom-btn"
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                >
+                  <ZoomOut size={18} />
+                </button>
+              </div>
+
               {/* Accessible Image Counter & Pagination Indicator */}
               {galleryImages.length > 1 && (
                 <>
@@ -746,7 +886,7 @@ export const ProductDetailPage: React.FC = () => {
                       <button
                         key={idx}
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setSelectedImage(idx); }}
+                        onClick={(e) => { e.stopPropagation(); resetZoom(); setSelectedImage(idx); }}
                         className={`pdp-gallery-dot ${selectedImage === idx ? 'active' : ''}`}
                         aria-label={`Go to slide ${idx + 1}`}
                       />
@@ -762,7 +902,7 @@ export const ProductDetailPage: React.FC = () => {
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => setSelectedImage(idx)}
+                    onClick={() => { resetZoom(); setSelectedImage(idx); }}
                     className={`pdp-thumbnail-btn ${selectedImage === idx ? 'active' : ''}`}
                     aria-label={`View creation drape ${idx + 1}`}
                   >

@@ -41,7 +41,7 @@ import {
   handleGetConfigStatus,
   handleUpdateAdminProfile
 } from './adminApi';
-import { handleCreateServerOrder } from './orderApi';
+import { handleCreateServerOrder, handleSendOrderConfirmation } from './orderApi';
 import { handleGetAnnouncements, handleSaveAnnouncements } from './announcementApi';
 import { handleVerifyPayment } from './paymentApi';
 import {
@@ -346,6 +346,12 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
   // ROUTE 3: POST /api/orders/create
   if (urlPath === '/api/orders/create') {
     await dispatchRouteHandler(handleCreateServerOrder, authHeader, body, res, 'Failed to create order.');
+    return true;
+  }
+
+  // ROUTE 3.1: POST /api/orders/send-confirmation
+  if (urlPath === '/api/orders/send-confirmation') {
+    await dispatchRouteHandler(handleSendOrderConfirmation, authHeader, body, res, 'Failed to dispatch order confirmation emails.');
     return true;
   }
 

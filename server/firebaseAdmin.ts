@@ -96,6 +96,8 @@ export function getAdminAuth(): Auth | null {
   }
 }
 
+let adminFirestoreInstance: Firestore | null = null;
+
 export function getAdminFirestore(): Firestore | null {
   const isTest = typeof process !== 'undefined' && Boolean(process.env?.NODE_ENV === 'test' || Boolean((process.env as any)?.VITEST));
   const isEmulator = !!(process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST);
@@ -103,10 +105,17 @@ export function getAdminFirestore(): Firestore | null {
     return null;
   }
 
+  if (adminFirestoreInstance) return adminFirestoreInstance;
+
   const app = getFirebaseAdminApp();
   if (!app) return null;
   try {
-    return getFirestore(app);
+    const db = getFirestore(app);
+    try {
+      db.settings({ ignoreUndefinedProperties: true });
+    } catch {}
+    adminFirestoreInstance = db;
+    return adminFirestoreInstance;
   } catch {
     return null;
   }

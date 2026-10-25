@@ -281,7 +281,7 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
           {
             status: 'pending',
             label: isCod ? 'COD Order Confirmed (Advance Paid)' : 'Order Confirmed & Payment Verified',
-            timestamp: new Date().toLocaleString(),
+            timestamp: now,
             description: isCod 
               ? `Order accepted with ₹89 advance paid online. Balance ₹${codBalanceDue} due upon delivery.`
               : `Order accepted with server-verified total ₹${calculatedGrandTotal}. Stock atomically reserved.`
@@ -319,8 +319,8 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
       };
     });
 
-    // Durably trigger automated order email notifications in the background
-    processOrderConfirmationEmails(txResult.order).catch(emailErr => {
+    // Durably trigger automated order email notifications
+    await processOrderConfirmationEmails(txResult.order).catch(emailErr => {
       console.error('[OrderApi] Background email notification error:', emailErr);
     });
 
@@ -372,7 +372,7 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
       {
         status: 'pending',
         label: isCod ? 'COD Order Confirmed (Advance Paid)' : 'Order Confirmed',
-        timestamp: new Date().toLocaleString(),
+        timestamp: now,
         description: isCod
           ? `Order accepted with ₹89 advance paid online. Balance ₹${codBalanceDue} due upon delivery.`
           : `Order accepted with flat ₹89 shipping fee.`
@@ -385,7 +385,7 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
   };
 
   // Trigger email notifications for fallback path
-  processOrderConfirmationEmails(orderPayload).catch(emailErr => {
+  await processOrderConfirmationEmails(orderPayload).catch(emailErr => {
     console.error('[OrderApi] Background fallback email notification error:', emailErr);
   });
 
@@ -393,5 +393,34 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
     success: true,
     order: orderPayload,
     message: `Order ${orderNumber} created successfully.`
+  };
+}
+
+export async function handleSendOrderConfirmation(authHeader: string | undefined, body: any) {
+  const db = getAdminFirestore();
+  const orderId = body?.orderId || body?.order?.id;
+  let orderData = body?.order;
+
+  if (!orderData && orderId && db) {
+    try {
+      const snap = await db.collection('orders').doc(orderId).get();
+      if (snap.exists) {
+        orderData = snap.data();
+      }
+    } catch (e: any) {
+      console.warn('[OrderApi] Firestore order lookup note:', e?.message || e);
+    }
+  }
+
+  if (!orderData) {
+    throw new Error('NOT_FOUND: Order not found for confirmation dispatch.');
+  }
+
+  const emailResult = await processOrderConfirmationEmails(orderData);
+  return {
+    success: true,
+    orderId: orderData.id,
+    orderNumber: orderData.orderNumber,
+    ...emailResult
   };
 }

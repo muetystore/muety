@@ -539,7 +539,9 @@ export async function handler(event) {
     action === 'send_confirmation' ||
     action === 'send-confirmation' ||
     rawPath.endsWith('/send-confirmation') ||
-    rawPath.includes('/orders/send-confirmation')
+    rawPath.includes('/orders/send-confirmation') ||
+    (body.orderId && !body.items) ||
+    (body.order && !body.items)
   ) {
     const orderId = body.orderId || body.order?.id;
     let orderData = body.order;
@@ -694,7 +696,7 @@ export async function handler(event) {
         {
           status: 'pending',
           label: isCod ? 'COD Order Confirmed (Advance Paid)' : 'Order Confirmed',
-          timestamp: new Date().toLocaleString(),
+          timestamp: now,
           description: isCod
             ? `Order accepted with ₹89 advance paid online. Balance ₹${codBalanceDue} due upon delivery.`
             : `Payment authorized and order accepted.`
@@ -714,8 +716,8 @@ export async function handler(event) {
       }
     }
 
-    // Trigger automated order email notifications in the background
-    dispatchOrderConfirmationEmails(orderPayload).catch(emailErr => {
+    // Trigger automated order email notifications before returning
+    await dispatchOrderConfirmationEmails(orderPayload).catch(emailErr => {
       console.error('[OrdersAPI Netlify] Background email error:', emailErr);
     });
 

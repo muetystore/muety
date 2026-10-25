@@ -322,9 +322,9 @@ export const AccountPage: React.FC = () => {
     setAddrHouseFlat('');
     setAddrStreetAddress('');
     setAddrLandmark('');
-    setAddrCity('Salem');
-    setAddrState('Tamil Nadu');
-    setAddrPostalCode('636501');
+    setAddrCity('');
+    setAddrState('');
+    setAddrPostalCode('');
     setAddrType('home');
     setAddrIsDefault(addresses.length === 0);
     setAddressError(null);
@@ -351,7 +351,7 @@ export const AccountPage: React.FC = () => {
     e.preventDefault();
     setAddressError(null);
 
-    if (!addrFullName.trim() || !addrPhone.trim() || !addrStreetAddress.trim() || !addrCity.trim() || !addrPostalCode.trim()) {
+    if (!addrFullName.trim() || !addrPhone.trim() || !addrStreetAddress.trim() || !addrCity.trim() || !addrState.trim() || !addrPostalCode.trim()) {
       setAddressError('Please fill in all mandatory fields.');
       return;
     }
@@ -2166,6 +2166,7 @@ export const AccountPage: React.FC = () => {
                     className="form-input"
                     style={{ boxSizing: 'border-box' }}
                   >
+                    <option value="">Select State</option>
                     {INDIAN_STATES.map((st) => (
                       <option key={st} value={st}>{st}</option>
                     ))}

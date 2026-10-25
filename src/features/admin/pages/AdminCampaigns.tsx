@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
@@ -44,22 +45,23 @@ import {
   Save
 } from 'lucide-react';
 
-const AUDIENCE_FILTER_LABELS: Record<AudienceFilter, { label: string; desc: string; badge: string; icon: any }> = {
+export const TARGET_SEGMENT_KEYS: AudienceFilter[] = [
+  'all_consented',
+  'new_patrons',
+  'vip_patrons',
+  'completed_orders'
+];
+
+export const AUDIENCE_FILTER_LABELS: Record<string, { label: string; desc: string; badge: string; icon: any }> = {
   all_consented: {
     label: 'All Consented Patrons',
-    desc: 'Patrons who explicitly gave marketing consent during checkout or registration.',
-    badge: 'Universal Reach',
-    icon: Users
-  },
-  patron_circle: {
-    label: 'Patron Circle',
-    desc: 'Exclusive members of the esteemed MUETY Patron Circle & Atelier VIP tier.',
+    desc: 'All joined members of the MUETY Patron Circle with marketing consent.',
     badge: 'Patron Circle',
-    icon: Crown
+    icon: Users
   },
   new_patrons: {
     label: 'New Atelier Patrons',
-    desc: 'Consented patrons who registered or made their initial inquiry within the last 30 days.',
+    desc: 'Consented patrons who registered or made inquiries within the last 30 days.',
     badge: 'Last 30 Days',
     icon: Sparkles
   },
@@ -71,9 +73,15 @@ const AUDIENCE_FILTER_LABELS: Record<AudienceFilter, { label: string; desc: stri
   },
   completed_orders: {
     label: 'Verified Order Patrons',
-    desc: 'Consented patrons who have at least one successfully completed order.',
+    desc: 'Consented patrons who have at least one successfully placed order.',
     badge: 'Verified Orders',
     icon: ShoppingBag
+  },
+  patron_circle: {
+    label: 'All Consented Patrons',
+    desc: 'All joined members of the MUETY Patron Circle with marketing consent.',
+    badge: 'Patron Circle',
+    icon: Users
   },
   custom_segment: {
     label: 'Bespoke Curated Segment',
@@ -152,9 +160,17 @@ export const AdminCampaigns: React.FC = () => {
     }
   };
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
   useEffect(() => {
     loadCampaigns();
-  }, []);
+    if (searchParams.get('create') === 'true') {
+      const segParam = searchParams.get('segment') as AudienceFilter;
+      const initialSeg = TARGET_SEGMENT_KEYS.includes(segParam) ? segParam : 'all_consented';
+      handleOpenCreate(initialSeg);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
 
   const handleAudienceEstimate = async (filter: AudienceFilter | AudienceFilter[]) => {
     setEstimating(true);
@@ -195,7 +211,10 @@ export const AdminCampaigns: React.FC = () => {
     handleAudienceEstimate(next);
   };
 
-  const handleOpenCreate = () => {
+  const handleOpenCreate = (initialSegment?: AudienceFilter | React.MouseEvent) => {
+    const validSegment: AudienceFilter = (typeof initialSegment === 'string' && TARGET_SEGMENT_KEYS.includes(initialSegment as AudienceFilter))
+      ? (initialSegment as AudienceFilter)
+      : 'all_consented';
     const newCamp: Partial<EmailCampaign> = {
       name: '',
       subject: '',
@@ -206,18 +225,18 @@ export const AdminCampaigns: React.FC = () => {
       heroImageUrl: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c',
       ctaText: 'Explore Atelier Showcase',
       ctaUrl: 'https://store.muety.in',
-      audienceFilter: 'all_consented',
-      audienceFilters: ['all_consented'],
+      audienceFilter: validSegment,
+      audienceFilters: [validSegment],
       senderIdentity: {
         email: 'promotions@muety.in',
         name: 'MUETY Promotions'
       },
       status: 'draft'
     };
-    setSelectedAudiences(['all_consented']);
+    setSelectedAudiences([validSegment]);
     setEditingCampaign(newCamp);
     setShowEditor(true);
-    handleAudienceEstimate(['all_consented']);
+    handleAudienceEstimate([validSegment]);
   };
 
   const handleOpenEdit = (campaign: EmailCampaign) => {
@@ -308,6 +327,18 @@ export const AdminCampaigns: React.FC = () => {
       } else {
         error(`Dispatch completed with issues. Delivered: ${res.sentCount}, Failed: ${res.failedCount}`);
       }
+      setCampaigns(prev => prev.map(c => {
+        if (c.id === dispatchModalCampaign.id) {
+          return {
+            ...c,
+            status: (res.status as CampaignStatus) || (res.sentCount > 0 ? 'sent' : 'failed'),
+            deliveredCount: res.sentCount,
+            failedCount: res.failedCount,
+            sentAt: new Date().toISOString()
+          };
+        }
+        return c;
+      }));
       setDispatchModalCampaign(null);
       setConfirmSendChecked(false);
       await loadCampaigns();
@@ -822,7 +853,7 @@ export const AdminCampaigns: React.FC = () => {
 
               {/* Multi-Select Cards Grid */}
               <div className="grid-2" style={{ gap: '0.85rem' }}>
-                {(Object.keys(AUDIENCE_FILTER_LABELS) as AudienceFilter[]).map(filterKey => {
+                {TARGET_SEGMENT_KEYS.map(filterKey => {
                   const info = AUDIENCE_FILTER_LABELS[filterKey];
                   const isSelected = selectedAudiences.includes(filterKey);
                   const IconComponent = info.icon || Users;

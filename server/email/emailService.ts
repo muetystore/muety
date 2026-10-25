@@ -489,33 +489,35 @@ export async function saveCampaign(
 ): Promise<EmailCampaign> {
   const id = campaign.id || `cmp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
   const now = new Date().toISOString();
+  const existing = id ? await getCampaignById(id) : null;
 
   const fullCampaign: EmailCampaign = {
     id,
-    name: campaign.name || 'Untitled Atelier Campaign',
-    subject: campaign.subject || 'Exquisite Handlooms from MUETY Atelier',
-    headline: campaign.headline || 'A Celebration of Royal Weaves',
-    subheadline: campaign.subheadline || '',
-    previewText: campaign.previewText || '',
-    bodyContent: campaign.bodyContent || '<p>Discover our newest pure silk creations.</p>',
-    heroImageUrl: campaign.heroImageUrl || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c',
-    ctaText: campaign.ctaText || 'Explore Handlooms',
-    ctaUrl: campaign.ctaUrl || 'https://store.muety.in',
-    status: campaign.status || 'draft',
-    audienceFilter: campaign.audienceFilter || (campaign.audienceFilters?.[0]) || 'all_consented',
-    audienceFilters: campaign.audienceFilters || (campaign.audienceFilter ? [campaign.audienceFilter] : ['all_consented']),
-    senderIdentity: campaign.senderIdentity || {
+    name: campaign.name || existing?.name || 'Untitled Atelier Campaign',
+    subject: campaign.subject || existing?.subject || 'Exquisite Handlooms from MUETY Atelier',
+    headline: campaign.headline || existing?.headline || 'A Celebration of Royal Weaves',
+    subheadline: campaign.subheadline !== undefined ? campaign.subheadline : (existing?.subheadline || ''),
+    previewText: campaign.previewText !== undefined ? campaign.previewText : (existing?.previewText || ''),
+    bodyContent: campaign.bodyContent || existing?.bodyContent || '<p>Discover our newest pure silk creations.</p>',
+    heroImageUrl: campaign.heroImageUrl || existing?.heroImageUrl || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c',
+    ctaText: campaign.ctaText || existing?.ctaText || 'Explore Handlooms',
+    ctaUrl: campaign.ctaUrl || existing?.ctaUrl || 'https://store.muety.in',
+    status: campaign.status || existing?.status || 'draft',
+    audienceFilter: campaign.audienceFilter || (campaign.audienceFilters?.[0]) || existing?.audienceFilter || 'all_consented',
+    audienceFilters: campaign.audienceFilters || (campaign.audienceFilter ? [campaign.audienceFilter] : existing?.audienceFilters) || ['all_consented'],
+    senderIdentity: campaign.senderIdentity || existing?.senderIdentity || {
       email: 'promotions@muety.in',
       name: 'MUETY Promotions'
     },
-    featuredProducts: campaign.featuredProducts || [],
-    recipientCount: campaign.recipientCount || 0,
-    deliveredCount: campaign.deliveredCount || 0,
-    failedCount: campaign.failedCount || 0,
-    errorMessage: campaign.errorMessage,
-    createdAt: campaign.createdAt || now,
+    featuredProducts: campaign.featuredProducts || existing?.featuredProducts || [],
+    recipientCount: typeof campaign.recipientCount === 'number' ? campaign.recipientCount : (existing?.recipientCount || 0),
+    deliveredCount: typeof campaign.deliveredCount === 'number' ? campaign.deliveredCount : (existing?.deliveredCount || 0),
+    failedCount: typeof campaign.failedCount === 'number' ? campaign.failedCount : (existing?.failedCount || 0),
+    errorMessage: campaign.errorMessage !== undefined ? campaign.errorMessage : (existing?.errorMessage || ''),
+    sentAt: campaign.sentAt || existing?.sentAt || (campaign.status === 'sent' ? now : undefined),
+    createdAt: existing?.createdAt || campaign.createdAt || now,
     updatedAt: now,
-    createdBy: campaign.createdBy || actorEmail
+    createdBy: existing?.createdBy || campaign.createdBy || actorEmail
   };
 
   inMemoryCampaigns.set(id, fullCampaign);
@@ -523,9 +525,16 @@ export async function saveCampaign(
   const db = getDb();
   if (db) {
     try {
-      await db.collection('emailCampaigns').doc(id).set(fullCampaign, { merge: true });
+      const cleanData: Record<string, any> = {};
+      for (const [k, v] of Object.entries(fullCampaign)) {
+        if (v !== undefined) {
+          cleanData[k] = v;
+        }
+      }
+      await db.collection('emailCampaigns').doc(id).set(cleanData, { merge: true });
     } catch (err) {
       console.error('[EmailService] Failed to persist campaign to Firestore:', err);
+      throw err;
     }
   }
 
@@ -698,7 +707,7 @@ export async function dispatchCampaign(
     deliveredCount: sentCount,
     failedCount,
     sentAt: new Date().toISOString(),
-    errorMessage: errors.length > 0 ? errors.slice(0, 3).join('; ') : undefined
+    errorMessage: errors.length > 0 ? errors.slice(0, 3).join('; ') : ''
   }, actorEmail);
 
   return {

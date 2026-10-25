@@ -69,8 +69,9 @@ export function sanitizeClientFirestoreProfile(profile: Partial<UserProfile>): R
   const protectedKeys = [
     'roles', 'role', 'roleId', 'roleSlug', 'roleName',
     'departmentId', 'departmentName', 'department',
-    'permissions', 'status', 'invitationStatus', 'isBlocked', 'customerStatus',
-    'ordersCount', 'totalSpent', 'orderCount', 'totalSpend', 'internalNotes'
+    'permissions', 'status', 'invitationStatus', 'invitationSentAt', 'invitationAcceptedAt',
+    'createdBy', 'isBlocked', 'customerStatus',
+    'ordersCount', 'totalSpent', 'orderCount', 'totalSpend', 'internalNotes', 'password'
   ];
   for (const k of protectedKeys) {
     delete sanitized[k];
@@ -223,7 +224,7 @@ export class AuthService {
 
     const defaultDisplayName = fbUser.phoneNumber 
       ? `Patron (${fbUser.phoneNumber.slice(-4)})` 
-      : (fbUser.email ? fbUser.email.split('@')[0] : 'MUETY Patron');
+      : (fbUser.email ? fbUser.email.split('@')[0] : 'Patron');
 
     const localSavedUser = storageService.getUserById(fbUser.uid);
 
@@ -252,7 +253,7 @@ export class AuthService {
     }
     // Priority 5: Generated fallback default (only when no real name exists)
     else {
-      resolvedDisplayName = fbUser.displayName || firestoreProfile.displayName || localSavedUser?.displayName || defaultDisplayName;
+      resolvedDisplayName = defaultDisplayName;
     }
 
     // Synchronize Firebase Auth's displayName if it differs from the real saved name
@@ -280,6 +281,8 @@ export class AuthService {
       });
     }
 
+    const resolvedPhone = fbUser.phoneNumber || firestoreProfile.phoneNumber || (firestoreProfile as any).phone || localSavedUser?.phoneNumber || localSavedUser?.phone || '';
+
     const profile: UserProfile = {
       uid: fbUser.uid,
       email: fbUser.email || firestoreProfile.email || localSavedUser?.email || '',
@@ -288,7 +291,9 @@ export class AuthService {
       photoURL: fbUser.photoURL || firestoreProfile.photoURL || localSavedUser?.photoURL,
       roles: resolvedRoles,
       role: resolvedRoles[0] || 'customer',
-      phoneNumber: fbUser.phoneNumber || firestoreProfile.phoneNumber || (firestoreProfile as any).phone || localSavedUser?.phoneNumber || '',
+      phoneNumber: resolvedPhone,
+      phone: resolvedPhone,
+      whatsappPhone: (firestoreProfile as any).whatsappPhone || localSavedUser?.whatsappPhone || resolvedPhone,
       isBlocked: firestoreProfile.isBlocked || false,
       status: isAdmin ? (firestoreProfile.isBlocked ? 'disabled' : 'active') : (firestoreProfile.status || 'active'),
       invitationStatus: isAdmin ? 'accepted' : firestoreProfile.invitationStatus,
@@ -728,7 +733,7 @@ export class AuthService {
 
     const timestamp = new Date().toISOString();
     const consentText = "Yes, I'd like to join the MUETY Patron Circle and receive exclusive collection previews, bridal updates and invitations.";
-    const consentPayload = {
+    const consentPayload: Record<string, any> = {
       patronCircleMember: true,
       marketingConsent: true,
       patronCircleConsentText: consentText,
@@ -736,6 +741,11 @@ export class AuthService {
       patronCircleJoinedAt: timestamp,
       updatedAt: timestamp
     };
+    if (email) consentPayload.email = email;
+    if (phone) {
+      consentPayload.phoneNumber = phone;
+      consentPayload.phone = phone;
+    }
 
     // 1. Update in Firestore /users/{uid}
     if (db && isLiveFirebase) {

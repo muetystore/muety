@@ -196,7 +196,7 @@ export const orderService = {
         {
           status: 'pending',
           label: isCod ? 'COD Order Confirmed (Advance Paid)' : 'Order Confirmed',
-          timestamp: new Date().toLocaleString(),
+          timestamp: now,
           description: isCod 
             ? `Order accepted with ₹89 advance paid online. Balance ₹${codBalanceDue} due upon delivery.`
             : 'Payment authorized and order accepted.'
@@ -225,7 +225,7 @@ export const orderService = {
       fetch('/api/orders/send-confirmation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.id, order })
+        body: JSON.stringify({ action: 'send-confirmation', orderId: order.id, order })
       }).catch(err => console.warn('[OrderService] Background email dispatch note:', err?.message || err));
     }
 
@@ -363,7 +363,7 @@ export const orderService = {
         {
           status: 'cancelled',
           label: 'Cancellation Requested & Processed',
-          timestamp: new Date().toLocaleString(),
+          timestamp: new Date().toISOString(),
           description: cancellationNote
         }
       ],
