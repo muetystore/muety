@@ -37,7 +37,13 @@ import {
   Mail,
   Facebook,
   Twitter,
-  ExternalLink
+  ExternalLink,
+  RotateCcw,
+  Banknote,
+  BadgePercent,
+  MapPin,
+  Tag,
+  Award
 } from 'lucide-react';
 import { auditService } from '@/shared/services/auditService';
 import { useAuth } from '@/shared/context/AuthContext';
@@ -169,6 +175,77 @@ export const ProductDetailPage: React.FC = () => {
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isShareModalOpen]);
+
+  // Delivery Pincode & ETA state (Flipkart pattern)
+  const [pincodeInput, setPincodeInput] = useState<string>('600001');
+  const [pincodeStatus, setPincodeStatus] = useState<{
+    pincode: string;
+    estimatedDate: string;
+    isDeliverable: boolean;
+    isCodAvailable: boolean;
+  }>({
+    pincode: '600001',
+    estimatedDate: (() => {
+      const d = new Date();
+      d.setDate(d.getDate() + 4);
+      return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+    })(),
+    isDeliverable: true,
+    isCodAvailable: true
+  });
+  const [copiedCoupon, setCopiedCoupon] = useState<string | null>(null);
+
+  const handleCopyCoupon = (code: string) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(code);
+      }
+      setCopiedCoupon(code);
+      success(`Coupon code ${code} copied! Apply at checkout.`);
+      setTimeout(() => setCopiedCoupon(null), 3000);
+    } catch {
+      setCopiedCoupon(code);
+      setTimeout(() => setCopiedCoupon(null), 3000);
+    }
+  };
+
+  const handlePincodeCheck = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPin = pincodeInput.trim();
+    if (!/^\d{6}$/.test(cleanPin)) {
+      warning('Please enter a valid 6-digit Indian PIN code.', 'Invalid PIN');
+      return;
+    }
+    const d = new Date();
+    const daysToAdd = cleanPin.startsWith('6') || cleanPin.startsWith('5') ? 3 : 4;
+    d.setDate(d.getDate() + daysToAdd);
+    const est = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+    setPincodeStatus({
+      pincode: cleanPin,
+      estimatedDate: est,
+      isDeliverable: true,
+      isCodAvailable: true
+    });
+    success(`Serviceable! Estimated delivery to PIN ${cleanPin} by ${est}`);
+  };
+
+  // Mobile Sticky Bottom Action Bar
+  const actionsContainerRef = useRef<HTMLDivElement>(null);
+  const [isStickyBarVisible, setIsStickyBarVisible] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!actionsContainerRef.current) return;
+      const rect = actionsContainerRef.current.getBoundingClientRect();
+      if (rect.bottom < 60 && window.scrollY > 350) {
+        setIsStickyBarVisible(true);
+      } else {
+        setIsStickyBarVisible(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleGoBack = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -957,19 +1034,95 @@ export const ProductDetailPage: React.FC = () => {
             </div>
 
             <div className="pdp-price-row">
-              <span className="pdp-price-current">
-                ₹{product.price.toLocaleString('en-IN')}
-              </span>
-              {product.originalPrice && product.originalPrice > product.price && (
-                <>
-                  <span className="pdp-price-original">
-                    ₹{product.originalPrice.toLocaleString('en-IN')}
-                  </span>
-                  <span className="pdp-discount-badge">
-                    -{Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
-                  </span>
-                </>
-              )}
+              <div className="pdp-price-main-group">
+                <span className="pdp-price-current">
+                  ₹{product.price.toLocaleString('en-IN')}
+                </span>
+                {product.originalPrice && product.originalPrice > product.price && (
+                  <>
+                    <span className="pdp-price-original">
+                      ₹{product.originalPrice.toLocaleString('en-IN')}
+                    </span>
+                    <span className="pdp-discount-badge">
+                      -{Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Meesho-inspired Direct Weaver Price Tag */}
+              <div className="pdp-best-price-tag">
+                <Sparkles size={13} />
+                <span>Direct Weaver Price • Zero Middleman Markup</span>
+              </div>
+
+              <div className="pdp-price-tax-note">
+                Inclusive of all taxes • 5% GST • Handcrafted in Salem, India
+              </div>
+            </div>
+
+            {/* Flipkart-inspired Bank Offers / Special Savings Banner */}
+            <div className="pdp-offers-card">
+              <div className="pdp-offers-header">
+                <div className="pdp-offers-title">
+                  <BadgePercent size={17} className="pdp-offer-icon" />
+                  <span>Apply offers for maximum savings</span>
+                </div>
+                <span className="pdp-offers-badge">Special Offers</span>
+              </div>
+              <div className="pdp-offers-list">
+                <div className="pdp-offer-item">
+                  <div className="pdp-offer-info">
+                    <span className="pdp-offer-text">
+                      <strong>10% Instant Off</strong> on orders above ₹4,999. Code: <code className="pdp-coupon-code">FESTIVE10</code>
+                    </span>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => handleCopyCoupon('FESTIVE10')} 
+                    className="pdp-offer-copy-btn"
+                    title="Copy coupon code"
+                  >
+                    {copiedCoupon === 'FESTIVE10' ? (
+                      <>
+                        <Check size={13} />
+                        <span>Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={13} />
+                        <span>Apply</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="pdp-offer-item">
+                  <div className="pdp-offer-info">
+                    <span className="pdp-offer-text">
+                      <strong>Flat ₹200 OFF</strong> on first pure silk saree. Code: <code className="pdp-coupon-code">MUETYFIRST</code>
+                    </span>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => handleCopyCoupon('MUETYFIRST')} 
+                    className="pdp-offer-copy-btn"
+                    title="Copy coupon code"
+                  >
+                    {copiedCoupon === 'MUETYFIRST' ? (
+                      <>
+                        <Check size={13} />
+                        <span>Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={13} />
+                        <span>Apply</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {product.shortDescription && (
@@ -999,13 +1152,13 @@ export const ProductDetailPage: React.FC = () => {
             )}
 
             {/* Responsive Actions: Stepper + Wishlist + Cart + Buy Now */}
-            <div className="pdp-actions-container">
+            <div ref={actionsContainerRef} className="pdp-actions-container">
               <div className="pdp-qty-wishlist-row">
                 <div className="pdp-qty-wrapper">
                   <span className="pdp-qty-label">Quantity</span>
                   <div className="pdp-stepper">
                     <button 
-                      type="button"
+                      type="button" 
                       onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
                       className="pdp-stepper-btn"
                       aria-label="Decrease quantity"
@@ -1016,7 +1169,7 @@ export const ProductDetailPage: React.FC = () => {
                       {quantity}
                     </span>
                     <button 
-                      type="button"
+                      type="button" 
                       onClick={() => setQuantity(prev => Math.min(product.stock || 99, prev + 1))}
                       className="pdp-stepper-btn"
                       aria-label="Increase quantity"
@@ -1085,25 +1238,145 @@ export const ProductDetailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Value Proposition Cards */}
-            <div className="pdp-trust-grid">
-              <div className="pdp-trust-item">
-                <div className="pdp-trust-icon-box">
-                  <Truck size={19} />
+            {/* 1. THE 3-BOX DETAILS: Flipkart (return, cod, assured) & Meesho (price, cod, return) */}
+            <div className="pdp-trust-3box-strip pdp-trust-grid" role="region" aria-label="Customer trust and purchase guarantees">
+              {/* Box 1: Return */}
+              <div className="pdp-trust-box-card">
+                <div className="pdp-trust-box-icon pdp-icon-return">
+                  <RotateCcw size={21} strokeWidth={2.2} />
                 </div>
-                <div>
-                  <div className="pdp-trust-title">Pan-India Courier (₹89 Flat)</div>
-                  <div className="pdp-trust-sub">Muety Atelier dispatch • Insured transit</div>
+                <div className="pdp-trust-box-text">
+                  <div className="pdp-trust-box-title">7-Day Returns</div>
+                  <div className="pdp-trust-box-desc">Doorstep Exchange &amp; Refund</div>
                 </div>
               </div>
 
-              <div className="pdp-trust-item">
-                <div className="pdp-trust-icon-box">
-                  <ShieldCheck size={19} />
+              {/* Box 2: Cash on Delivery */}
+              <div className="pdp-trust-box-card">
+                <div className="pdp-trust-box-icon pdp-icon-cod">
+                  <Banknote size={21} strokeWidth={2.2} />
                 </div>
-                <div>
-                  <div className="pdp-trust-title">Silk Mark Certified</div>
-                  <div className="pdp-trust-sub">100% Pure Mulberry Silk Guarantee</div>
+                <div className="pdp-trust-box-text">
+                  <div className="pdp-trust-box-title">Cash on Delivery</div>
+                  <div className="pdp-trust-box-desc">Pay upon delivery pan-India</div>
+                </div>
+              </div>
+
+              {/* Box 3: MUETY Assured / Silk Mark */}
+              <div className="pdp-trust-box-card">
+                <div className="pdp-trust-box-icon pdp-icon-assured">
+                  <ShieldCheck size={21} strokeWidth={2.2} />
+                </div>
+                <div className="pdp-trust-box-text">
+                  <div className="pdp-trust-box-title">MUETY Assured</div>
+                  <div className="pdp-trust-box-desc">100% Pure Silk Mark Certified</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Flipkart-inspired Delivery Details & Pincode Checker */}
+            <div className="pdp-delivery-card">
+              <div className="pdp-delivery-header">
+                <div className="pdp-delivery-title">
+                  <MapPin size={17} className="pdp-delivery-pin-icon" />
+                  <span>Delivery Details</span>
+                </div>
+                {pincodeStatus && (
+                  <span className="pdp-delivery-loc-label">
+                    PIN: <strong>{pincodeStatus.pincode}</strong>
+                  </span>
+                )}
+              </div>
+
+              <form onSubmit={handlePincodeCheck} className="pdp-pincode-form">
+                <div className="pdp-pincode-input-wrap">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="Enter 6-digit PIN code"
+                    value={pincodeInput}
+                    onChange={(e) => setPincodeInput(e.target.value.replace(/\D/g, ''))}
+                    className="pdp-pincode-input"
+                    aria-label="Pincode for delivery estimate"
+                  />
+                  <button type="submit" className="pdp-pincode-submit-btn">
+                    Check
+                  </button>
+                </div>
+              </form>
+
+              {pincodeStatus && (
+                <div className="pdp-delivery-result">
+                  <div className="pdp-delivery-est-row">
+                    <Truck size={17} className="pdp-delivery-truck-icon" />
+                    <span>
+                      Delivery by <strong>{pincodeStatus.estimatedDate}</strong>
+                    </span>
+                    <span className="pdp-delivery-speed-tag">Pan-India Express</span>
+                  </div>
+                  <div className="pdp-delivery-bullets">
+                    <div className="pdp-delivery-bullet-item">
+                      <CheckCircle2 size={13} color="#15803d" />
+                      <span>Cash on Delivery Available for this location</span>
+                    </div>
+                    <div className="pdp-delivery-bullet-item">
+                      <CheckCircle2 size={13} color="#15803d" />
+                      <span>Pan-India Courier (₹89 Flat • Free above ₹15,000)</span>
+                    </div>
+                    <div className="pdp-delivery-bullet-item">
+                      <CheckCircle2 size={13} color="#15803d" />
+                      <span>Dispatched directly from MUETY Heritage Weaving Atelier (Salem)</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Flipkart & Meesho inspired Product Highlights Grid */}
+            <div className="pdp-highlights-card">
+              <div className="pdp-highlights-header">
+                <span className="pdp-highlights-title">Product Highlights</span>
+                <span className="pdp-highlights-badge">Handcrafted Specs</span>
+              </div>
+              <div className="pdp-highlights-grid">
+                <div className="pdp-highlight-item">
+                  <span className="pdp-highlight-label">Fabric</span>
+                  <span className="pdp-highlight-value">
+                    {product.fabric || product.material || product.specifications?.['Fabric'] || 'Pure Handloom Silk'}
+                  </span>
+                </div>
+                <div className="pdp-highlight-item">
+                  <span className="pdp-highlight-label">Silk Purity</span>
+                  <span className="pdp-highlight-value">
+                    {product.silkType || product.specifications?.['Silk Purity'] || '100% Pure Silk Mark Certified'}
+                  </span>
+                </div>
+                <div className="pdp-highlight-item">
+                  <span className="pdp-highlight-label">Zari Craft</span>
+                  <span className="pdp-highlight-value">
+                    {product.zariType || product.specifications?.['Zari Craft'] || 'Tested Gold & Silver Zari'}
+                  </span>
+                </div>
+                <div className="pdp-highlight-item">
+                  <span className="pdp-highlight-label">Blouse Piece</span>
+                  <span className="pdp-highlight-value">
+                    {product.blousePieceIncluded !== undefined 
+                      ? (product.blousePieceIncluded ? '0.8m Included (Unstitched)' : 'Not Included')
+                      : '0.8m Running Blouse Included'}
+                  </span>
+                </div>
+                <div className="pdp-highlight-item">
+                  <span className="pdp-highlight-label">Saree Length</span>
+                  <span className="pdp-highlight-value">
+                    {product.sareeLength || product.specifications?.['Length'] || '6.2 Metres (with Blouse)'}
+                  </span>
+                </div>
+                <div className="pdp-highlight-item">
+                  <span className="pdp-highlight-label">Occasion</span>
+                  <span className="pdp-highlight-value">
+                    {product.occasion || (product.occasions && product.occasions.length > 0 ? product.occasions.join(', ') : 'Bridal, Wedding & Festive')}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1936,6 +2209,67 @@ export const ProductDetailPage: React.FC = () => {
         </div>,
         document.body
       )}
+
+      {/* Mobile Sticky Bottom Action Bar (Flipkart & Meesho pattern) */}
+      <div 
+        className={`pdp-mobile-sticky-bar ${isStickyBarVisible ? 'is-visible' : ''}`}
+        role="region"
+        aria-label="Quick purchase actions"
+        aria-hidden={!isStickyBarVisible}
+      >
+        <div className="pdp-sticky-bar-info">
+          <img 
+            src={galleryImages[0]} 
+            alt={product.name} 
+            className="pdp-sticky-bar-thumb" 
+          />
+          <div className="pdp-sticky-bar-meta">
+            <span className="pdp-sticky-bar-title">{product.name}</span>
+            <div className="pdp-sticky-bar-pricing">
+              <span className="pdp-sticky-bar-price">₹{product.price.toLocaleString('en-IN')}</span>
+              {product.originalPrice && product.originalPrice > product.price && (
+                <span className="pdp-sticky-bar-mrp">₹{product.originalPrice.toLocaleString('en-IN')}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="pdp-sticky-bar-actions">
+          <button
+            type="button"
+            onClick={() => {
+              if (isSoldOut) return;
+              addToCart(product, quantity, selectedColor, selectedSize);
+            }}
+            disabled={isSoldOut}
+            className="pdp-sticky-btn pdp-sticky-cart-btn"
+            aria-label="Add to Bag"
+          >
+            <ShoppingBag size={16} />
+            <span>Bag</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (isSoldOut) return;
+              addToCart(product, quantity, selectedColor, selectedSize);
+              setIsDrawerOpen(false);
+              if (!isAuthenticated) {
+                openAuthModal({ redirectPath: '/checkout', reason: 'buy_now' });
+                return;
+              }
+              navigate('/checkout');
+            }}
+            disabled={isSoldOut}
+            className="pdp-sticky-btn pdp-sticky-buy-btn"
+            aria-label="Buy Now"
+          >
+            <Zap size={16} fill="currentColor" />
+            <span>Buy Now</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

@@ -3799,12 +3799,37 @@ textarea:focus-visible {
 
 .pdp-price-row {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 1.25rem;
   padding-bottom: 1.25rem;
   border-bottom: 1px solid var(--brand-border);
+}
+
+.pdp-price-main-group {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
   flex-wrap: wrap;
+}
+
+.pdp-best-price-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #8a640a;
+  background: linear-gradient(135deg, rgba(201, 154, 22, 0.12), rgba(201, 154, 22, 0.05));
+  border: 1px solid rgba(201, 154, 22, 0.32);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  align-self: flex-start;
+}
+
+.pdp-price-tax-note {
+  font-size: 0.76rem;
+  color: var(--brand-muted);
 }
 
 .pdp-price-current {
@@ -4325,7 +4350,218 @@ textarea:focus-visible {
   border-radius: var(--radius-md);
 }
 
-/* Trust Badges / Value Proposition */
+/* =========================================================================
+   FLIPKART & MEESHO INSPIRED LUXURY PDP ENHANCEMENTS
+   ========================================================================= */
+
+/* Bank Offers / Special Savings Banner (Flipkart pattern) */
+.pdp-offers-card {
+  background: linear-gradient(135deg, #fdfbf7 0%, #faf6ec 100%);
+  border: 1px solid rgba(201, 162, 39, 0.32);
+  border-radius: var(--radius-lg, 12px);
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.35rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+
+.pdp-offers-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px dashed rgba(201, 162, 39, 0.25);
+  padding-bottom: 0.6rem;
+}
+
+.pdp-offers-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--brand-primary);
+}
+
+.pdp-offer-icon {
+  color: var(--brand-accent, #c99a16);
+}
+
+.pdp-offers-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: var(--brand-accent, #c99a16);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pdp-offers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pdp-offer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid rgba(201, 162, 39, 0.2);
+  border-radius: var(--radius-md, 8px);
+  padding: 8px 12px;
+}
+
+.pdp-offer-text {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.pdp-coupon-code {
+  background: #faf4e4;
+  color: #8a640a;
+  border: 1px dashed #c99a16;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.pdp-offer-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--brand-accent, #c99a16);
+  background: rgba(201, 154, 22, 0.1);
+  border: 1px solid rgba(201, 154, 22, 0.3);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  flex-shrink: 0;
+}
+
+.pdp-offer-copy-btn:hover {
+  background: var(--brand-accent, #c99a16);
+  color: #ffffff;
+}
+
+/* 1. 3-BOX DETAILS: Flipkart (Return, COD, Assured) & Meesho (Price, COD, Return) */
+.pdp-trust-3box-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 1.35rem;
+  margin-bottom: 1.35rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+  .pdp-trust-3box-strip {
+    gap: 6px;
+  }
+}
+
+.pdp-trust-box-card {
+  background: linear-gradient(180deg, #ffffff 0%, #faf8f5 100%);
+  border: 1px solid rgba(201, 162, 39, 0.28);
+  border-radius: var(--radius-md, 10px);
+  padding: 12px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(17, 24, 39, 0.03);
+  min-width: 0;
+}
+
+.pdp-trust-box-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand-accent, #c99a16);
+  box-shadow: 0 6px 16px rgba(201, 154, 22, 0.12);
+  background: #ffffff;
+}
+
+.pdp-trust-box-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.pdp-trust-box-card:hover .pdp-trust-box-icon {
+  transform: scale(1.08);
+}
+
+.pdp-icon-return {
+  background: rgba(201, 154, 22, 0.12);
+  color: #b48414;
+  border: 1px solid rgba(201, 154, 22, 0.25);
+}
+
+.pdp-icon-cod {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.pdp-icon-assured {
+  background: rgba(30, 58, 138, 0.1);
+  color: #1e3a8a;
+  border: 1px solid rgba(30, 58, 138, 0.22);
+}
+
+.pdp-trust-box-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.pdp-trust-box-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--brand-primary);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.pdp-trust-box-desc {
+  font-size: 0.7rem;
+  color: var(--brand-muted);
+  line-height: 1.3;
+}
+
+@media (max-width: 380px) {
+  .pdp-trust-box-title {
+    font-size: 0.74rem;
+  }
+  .pdp-trust-box-desc {
+    font-size: 0.65rem;
+  }
+  .pdp-trust-box-icon {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Legacy PDP Trust Grid (Retained for backwards compatibility) */
 .pdp-trust-grid {
   background-color: #fbf9f5;
   border: 1px solid rgba(201, 162, 39, 0.2);
@@ -4339,12 +4575,11 @@ textarea:focus-visible {
   box-sizing: border-box;
 }
 
-@media (max-width: 540px) {
-  .pdp-trust-grid {
-    grid-template-columns: 1fr;
-    gap: 0.85rem;
-    padding: 0.9rem 1rem;
-  }
+.pdp-trust-grid.pdp-trust-3box-strip {
+  grid-template-columns: repeat(3, 1fr);
+  background: transparent;
+  padding: 0;
+  border: none;
 }
 
 .pdp-trust-item {
@@ -4378,6 +4613,223 @@ textarea:focus-visible {
   line-height: 1.3;
 }
 
+/* Flipkart-inspired Delivery Details & Pincode Checker */
+.pdp-delivery-card {
+  background: #ffffff;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius-lg, 12px);
+  padding: 1.15rem 1.25rem;
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+
+.pdp-delivery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.pdp-delivery-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--brand-primary);
+}
+
+.pdp-delivery-pin-icon {
+  color: var(--brand-accent, #c99a16);
+}
+
+.pdp-delivery-loc-label {
+  font-size: 0.76rem;
+  color: var(--brand-primary);
+  background: #faf8f5;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--brand-border);
+}
+
+.pdp-pincode-form {
+  margin-bottom: 0.85rem;
+}
+
+.pdp-pincode-input-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pdp-pincode-input {
+  flex: 1;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  background: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.pdp-pincode-input:focus {
+  border-color: var(--brand-accent, #c99a16);
+  box-shadow: 0 0 0 3px rgba(201, 154, 22, 0.15);
+  outline: none;
+}
+
+.pdp-pincode-submit-btn {
+  height: 42px;
+  padding: 0 18px;
+  background: var(--brand-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pdp-pincode-submit-btn:hover {
+  background: #000000;
+  transform: translateY(-1px);
+}
+
+.pdp-delivery-result {
+  background: #fbf9f5;
+  border: 1px solid rgba(201, 162, 39, 0.22);
+  border-radius: var(--radius-md, 8px);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fadeIn 0.2s ease;
+}
+
+.pdp-delivery-est-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: var(--brand-primary);
+  flex-wrap: wrap;
+}
+
+.pdp-delivery-truck-icon {
+  color: var(--brand-accent, #c99a16);
+}
+
+.pdp-delivery-speed-tag {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #15803d;
+  background: #dcfce7;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: auto;
+}
+
+.pdp-delivery-bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.pdp-delivery-bullet-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Flipkart & Meesho inspired Product Highlights Grid */
+.pdp-highlights-card {
+  background: #ffffff;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius-lg, 12px);
+  padding: 1.15rem 1.25rem;
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+
+.pdp-highlights-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+  border-bottom: 1px solid #f0ede8;
+  padding-bottom: 0.6rem;
+}
+
+.pdp-highlights-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--brand-primary);
+  font-family: var(--font-heading);
+}
+
+.pdp-highlights-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #8a640a;
+  background: #faf4e4;
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.pdp-highlights-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 480px) {
+  .pdp-highlights-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pdp-highlight-item {
+  background: #faf8f5;
+  border: 1px solid #f0ede8;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: border-color 0.15s ease;
+}
+
+.pdp-highlight-item:hover {
+  border-color: rgba(201, 162, 39, 0.4);
+}
+
+.pdp-highlight-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--brand-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pdp-highlight-value {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--brand-primary);
+  line-height: 1.3;
+}
+
 /* Atelier Concierge Link */
 .pdp-concierge-box {
   margin-top: 1rem;
@@ -4390,12 +4842,12 @@ textarea:focus-visible {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  padding: 9px 14px;
-  background-color: rgba(37, 211, 102, 0.08);
-  border: 1px solid rgba(37, 211, 102, 0.25);
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(37, 211, 102, 0.08), rgba(37, 211, 102, 0.03));
+  border: 1px solid rgba(37, 211, 102, 0.3);
   border-radius: var(--radius-md);
   color: #128c7e;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   font-weight: 600;
   text-decoration: none;
   transition: all 0.2s ease;
@@ -4407,6 +4859,127 @@ textarea:focus-visible {
   background-color: rgba(37, 211, 102, 0.15);
   border-color: #25d366;
   color: #075e54;
+  transform: translateY(-1px);
+}
+
+/* Mobile Sticky Bottom Action Bar (Flipkart & Meesho pattern) */
+.pdp-mobile-sticky-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--brand-border);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  transform: translateY(110%);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pdp-mobile-sticky-bar.is-visible {
+  transform: translateY(0);
+}
+
+@media (min-width: 769px) {
+  .pdp-mobile-sticky-bar {
+    display: none !important;
+  }
+}
+
+.pdp-sticky-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pdp-sticky-bar-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--brand-border);
+  flex-shrink: 0;
+}
+
+.pdp-sticky-bar-meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pdp-sticky-bar-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--brand-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.pdp-sticky-bar-pricing {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.pdp-sticky-bar-price {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--brand-primary);
+}
+
+.pdp-sticky-bar-mrp {
+  font-size: 0.72rem;
+  color: var(--brand-muted);
+  text-decoration: line-through;
+}
+
+.pdp-sticky-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pdp-sticky-btn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.pdp-sticky-cart-btn {
+  background: var(--brand-primary);
+  color: #ffffff;
+}
+
+.pdp-sticky-buy-btn {
+  background: var(--brand-accent, #c99a16);
+  color: #ffffff;
+}
+
+.pdp-sticky-btn:hover {
+  transform: translateY(-1px);
 }
 
 /* Tabs System */
