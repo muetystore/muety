@@ -33,7 +33,7 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
   });
 
   describe('1. Canonical Pricing Engine & Financial Formula', () => {
-    it('calculates Order Total: Online Payment has FREE shipping (₹0); COD has ₹89 shipping fee', () => {
+    it('calculates Order Total: Online Payment has FREE shipping (₹0); COD has ₹89 shipping fee with tax-inclusive pricing', () => {
       const subtotal = 4000;
       const discount = 400; // 10% coupon
       const taxRate = 5; // 5% GST
@@ -46,14 +46,15 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
         paymentMethod: 'razorpay'
       });
 
-      // Taxable amount = 4000 - 400 = 3600
-      expect(onlineFinancials.taxableAmount).toBe(3600);
-      // Tax = 5% of 3600 = 180
-      expect(onlineFinancials.tax).toBe(180);
+      // Net after discount = 4000 - 400 = 3600 (Tax-inclusive)
+      // Embedded Tax = (3600 * 5) / 105 = 171.43
+      expect(onlineFinancials.tax).toBe(171.43);
+      // Taxable amount = 3600 - 171.43 = 3428.57
+      expect(onlineFinancials.taxableAmount).toBe(3428.57);
       // Online payment gets FREE shipping = 0
       expect(onlineFinancials.shippingFee).toBe(0);
-      // Grand Total = 3600 + 180 + 0 = 3780
-      expect(onlineFinancials.total).toBe(3780);
+      // Grand Total = Net (3600) + 0 = 3600 (GST is NOT added on top)
+      expect(onlineFinancials.total).toBe(3600);
 
       // Cash on Delivery (COD)
       const codFinancials = calculateOrderFinancials({
@@ -63,15 +64,15 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
         paymentMethod: 'cash_on_delivery'
       });
 
-      expect(codFinancials.taxableAmount).toBe(3600);
-      expect(codFinancials.tax).toBe(180);
+      expect(codFinancials.tax).toBe(171.43);
+      expect(codFinancials.taxableAmount).toBe(3428.57);
       // COD has flat shipping fee = 89
       expect(codFinancials.shippingFee).toBe(89);
       expect(CANONICAL_SHIPPING_FEE).toBe(89);
-      // Grand Total = 3600 + 180 + 89 = 3869
-      expect(codFinancials.total).toBe(3869);
+      // Grand Total = 3600 + 89 = 3689
+      expect(codFinancials.total).toBe(3689);
       expect(codFinancials.codAdvanceAmount).toBe(89);
-      expect(codFinancials.remainingAmountDueAtDelivery).toBe(3780);
+      expect(codFinancials.remainingAmountDueAtDelivery).toBe(3600);
     });
 
     it('ensures online payment delivery fee is strictly ₹0 (FREE) and COD delivery fee is strictly ₹89', () => {
@@ -83,8 +84,9 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
       });
 
       expect(onlineFinancials.shippingFee).toBe(0);
-      // Tax = 250, Total = 5000 + 250 + 0 = 5250
-      expect(onlineFinancials.total).toBe(5250);
+      // Total = 5000 (tax-inclusive, ₹0 delivery)
+      expect(onlineFinancials.total).toBe(5000);
+      expect(onlineFinancials.tax).toBe(238.10); // 5000 * 5 / 105
 
       const codFinancials = calculateOrderFinancials({
         subtotal: 5000,
@@ -94,8 +96,8 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
       });
 
       expect(codFinancials.shippingFee).toBe(89);
-      // Tax = 250, Total = 5000 + 250 + 89 = 5339
-      expect(codFinancials.total).toBe(5339);
+      // Total = 5000 + 89 = 5089
+      expect(codFinancials.total).toBe(5089);
     });
 
     it('handles zero or empty cart gracefully', () => {
@@ -125,15 +127,16 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
         paymentMethod: 'razorpay'
       });
 
-      const expectedTotal = 6000 + (6000 * 0.05); // 6300 (₹0 shipping fee)
+      const expectedTotal = 6000; // Tax-inclusive + ₹0 shipping fee
       expect(financials.shippingFee).toBe(0);
       expect(financials.total).toBe(expectedTotal);
       expect(financials.amountDueOnline).toBe(expectedTotal);
       expect(financials.remainingAmountDueAtDelivery).toBe(0);
       expect(financials.codAdvanceAmount).toBe(0);
+      expect(financials.tax).toBe(285.71); // 6000 * 5 / 105
     });
 
-    it('Cash on Delivery (COD): collects ₹89 delivery fee online as advance, remaining (Items + Tax) at delivery', () => {
+    it('Cash on Delivery (COD): collects ₹89 delivery fee online as advance, remaining (Tax-inclusive items) at delivery', () => {
       const subtotal = 6000;
       const financials = calculateOrderFinancials({
         subtotal,
@@ -142,7 +145,7 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
         paymentMethod: 'cash_on_delivery'
       });
 
-      const expectedTotal = 6000 + (6000 * 0.05) + 89; // 6389
+      const expectedTotal = 6000 + 89; // 6089
       expect(financials.shippingFee).toBe(89);
       expect(financials.total).toBe(expectedTotal);
       // Advance due online is strictly the ₹89 delivery fee
@@ -150,11 +153,11 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
       expect(financials.codAdvanceAmount).toBe(89);
       expect(COD_ADVANCE_AMOUNT).toBe(89);
 
-      // Remaining due at delivery is Total - 89 = 6389 - 89 = 6300 (Items + Tax)
+      // Remaining due at delivery is Total - 89 = 6089 - 89 = 6000
       expect(financials.remainingAmountDueAtDelivery).toBe(expectedTotal - 89);
-      expect(financials.remainingAmountDueAtDelivery).toBe(6300);
+      expect(financials.remainingAmountDueAtDelivery).toBe(6000);
 
-      // CRITICAL CHECK: Advance (89) + Delivery balance (6300) equals EXACTLY Order Total (6389)
+      // CRITICAL CHECK: Advance (89) + Delivery balance (6000) equals EXACTLY Order Total (6089)
       expect(financials.amountDueOnline + financials.remainingAmountDueAtDelivery).toBe(financials.total);
     });
 
@@ -181,12 +184,12 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
       expect(onlineFinancials.shippingFee).toBe(0);
       expect(codFinancials.shippingFee).toBe(89);
 
-      expect(onlineFinancials.total).toBe(9000 + 450); // 9450
-      expect(codFinancials.total).toBe(9000 + 450 + 89); // 9539
+      expect(onlineFinancials.total).toBe(9000); // 10000 - 1000
+      expect(codFinancials.total).toBe(9089); // 9000 + 89
 
       // COD total exceeds online total by exactly the ₹89 delivery fee
       expect(codFinancials.total).toBe(onlineFinancials.total + 89);
-      // Customer pays the identical item+tax amount (9450) at delivery for COD
+      // Customer pays the identical item amount (9000) at delivery for COD
       expect(codFinancials.remainingAmountDueAtDelivery).toBe(onlineFinancials.total);
     });
   });
@@ -220,20 +223,20 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
         ],
         subtotal: 5000,
         discount: 0,
-        tax: 250,
+        tax: 238.10,
         shippingFee: 89,
-        total: 5339,
+        total: 5089,
         paymentMethod: 'cash_on_delivery',
         paymentStatus: 'pending',
         codAdvanceAmount: 89,
-        codBalanceDue: 5250,
+        codBalanceDue: 5000,
         razorpayPaymentId: 'pay_test_cod_advance_123'
       });
 
       expect(order.shippingFee).toBe(89);
-      expect(order.total).toBe(5339);
+      expect(order.total).toBe(5089);
       expect(order.codAdvanceAmount).toBe(89);
-      expect(order.codBalanceDue).toBe(5250);
+      expect(order.codBalanceDue).toBe(5000);
       expect(order.paymentMethod).toBe('cash_on_delivery');
     }, 30000);
 
@@ -301,18 +304,18 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
       expect(response.success).toBe(true);
       const serverOrder = response.order;
 
-      // Subtotal = 2 * 2500 = 5000
+      // Subtotal = 2 * 2500 = 5000 (Tax-inclusive)
       expect(serverOrder.subtotal).toBe(5000);
-      // Tax = 5% of 5000 = 250
-      expect(serverOrder.tax).toBe(250);
+      // Embedded Tax = 5000 * 5 / 105 = 238.10
+      expect(serverOrder.tax).toBe(238.10);
       // Canonical Shipping = 89 for COD
       expect(serverOrder.shippingFee).toBe(89);
-      // Grand Total = 5000 + 250 + 89 = 5339
-      expect(serverOrder.total).toBe(5339);
+      // Grand Total = 5000 + 89 = 5089
+      expect(serverOrder.total).toBe(5089);
 
-      // COD advance = 89, Balance due = 5339 - 89 = 5250
+      // COD advance = 89, Balance due = 5089 - 89 = 5000
       expect(serverOrder.codAdvanceAmount).toBe(89);
-      expect(serverOrder.codBalanceDue).toBe(5250);
+      expect(serverOrder.codBalanceDue).toBe(5000);
       expect(serverOrder.paymentStatus).toBe('pending');
     });
 
@@ -344,14 +347,14 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
       expect(response.success).toBe(true);
       const serverOrder = response.order;
 
-      // Subtotal = 2 * 2500 = 5000
+      // Subtotal = 2 * 2500 = 5000 (Tax-inclusive)
       expect(serverOrder.subtotal).toBe(5000);
-      // Tax = 5% of 5000 = 250
-      expect(serverOrder.tax).toBe(250);
+      // Embedded Tax = 5000 * 5 / 105 = 238.10
+      expect(serverOrder.tax).toBe(238.10);
       // Online Shipping = 0 (100% FREE)
       expect(serverOrder.shippingFee).toBe(0);
-      // Grand Total = 5000 + 250 + 0 = 5250
-      expect(serverOrder.total).toBe(5250);
+      // Grand Total = 5000 + 0 = 5000
+      expect(serverOrder.total).toBe(5000);
 
       // Online prepaid: COD advance = 0, Balance due = 0
       expect(serverOrder.codAdvanceAmount).toBe(0);
@@ -409,9 +412,9 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
         items: [{ product: { id: 'saree-p1', name: 'Silk Saree', price: 4000, images: ['/img.jpg'] } as any, quantity: 1 }],
         subtotal: 4000,
         discount: 0,
-        tax: 200,
+        tax: 190.48,
         shippingFee: 89,
-        total: 4289,
+        total: 4089,
         paymentMethod: 'cash_on_delivery',
         razorpayPaymentId: 'pay_duplicate_replay_target_001'
       });
@@ -434,9 +437,9 @@ describe('Mandatory Pricing Plan Correction — MUETY', () => {
           items: [{ product: { id: 'saree-p1', name: 'Silk Saree', price: 4000, images: ['/img.jpg'] } as any, quantity: 1 }],
           subtotal: 4000,
           discount: 0,
-          tax: 200,
+          tax: 190.48,
           shippingFee: 89,
-          total: 4289,
+          total: 4089,
           paymentMethod: 'cash_on_delivery',
           razorpayPaymentId: 'pay_duplicate_replay_target_001'
         })

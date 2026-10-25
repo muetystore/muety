@@ -4,6 +4,7 @@ import { Order } from '@/features/orders/types';
 import { PatronReview } from '@/features/reviews/types';
 import { StoreSettings, UserProfile } from '@/shared/types';
 import { ensureContactChannels } from '@/shared/utils/contactChannels';
+import { consentManager } from '@/features/privacy/services/consentManager';
 import { 
   INITIAL_PRODUCTS, 
   INITIAL_CATEGORIES, 
@@ -82,6 +83,30 @@ function safeRemoveItem(key: string): void {
 class StorageService {
   constructor() {
     this.initializeDefaults();
+
+    // Direct subscription to consent updates for robust synchronization
+    consentManager.subscribe((record) => {
+      if (!record || record.categories.preferences === false) {
+        safeRemoveItem(KEYS.RECENTLY_VIEWED);
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+          try {
+            window.dispatchEvent(new CustomEvent('muety_recently_viewed_updated', { detail: [] }));
+          } catch {}
+        }
+      }
+    });
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('muety_consent_updated', (e: Event) => {
+        try {
+          const detail = (e as CustomEvent).detail;
+          if (detail && detail.categories && detail.categories.preferences === false) {
+            safeRemoveItem(KEYS.RECENTLY_VIEWED);
+            window.dispatchEvent(new CustomEvent('muety_recently_viewed_updated', { detail: [] }));
+          }
+        } catch {}
+      });
+    }
   }
 
   private initializeDefaults() {
@@ -559,10 +584,12 @@ class StorageService {
     try {
       const data = localStorage.getItem(KEYS.USERS);
       const parsed: UserProfile[] = data ? JSON.parse(data) : [];
-      const sanitizedParsed = parsed.filter(u => !isLegacyEmail(u.email)).map(u => ({
-        ...u,
-        email: (u.email && u.email.toLowerCase().trim() !== 'customer@muety.com') ? u.email.trim() : ''
-      }));
+      const sanitizedParsed = parsed
+        .filter(u => !isLegacyEmail(u.email) && u.uid !== 'admin-muety-in-id' && u.email !== 'admin@muety.in')
+        .map(u => ({
+          ...u,
+          email: (u.email && u.email.toLowerCase().trim() !== 'customer@muety.com') ? u.email.trim() : ''
+        }));
       const combined = [...sanitizedParsed];
 
       INITIAL_USERS.forEach(initUser => {
@@ -626,6 +653,10 @@ class StorageService {
 
   addRecentlyViewed(productId: string): void {
     if (!productId) return;
+    // Preferences category gate under DPDP Act / privacy guidelines
+    if (!consentManager.hasConsent('preferences')) {
+      return;
+    }
     try {
       const current = this.getRecentlyViewed();
       const updated = [productId, ...current.filter(id => id !== productId)].slice(0, 12);

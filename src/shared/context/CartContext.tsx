@@ -15,7 +15,7 @@ interface CartContextType {
   subtotal: number;
   appliedCoupon: Coupon | null;
   discountAmount: number;
-  applyCoupon: (code: string) => { success: boolean; message: string };
+  applyCoupon: (code: string, contextSubtotal?: number) => { success: boolean; message: string };
   removeCoupon: () => void;
   shippingFee: number;
   taxAmount: number;
@@ -188,9 +188,22 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }));
   };
 
+  useEffect(() => {
+    try {
+      if (appliedCoupon) {
+        localStorage.setItem(COUPON_STORAGE_KEY, JSON.stringify(appliedCoupon));
+      } else {
+        localStorage.removeItem(COUPON_STORAGE_KEY);
+      }
+    } catch {}
+  }, [appliedCoupon]);
+
   const clearCart = () => {
     setItems([]);
     setAppliedCoupon(null);
+    try {
+      localStorage.removeItem(COUPON_STORAGE_KEY);
+    } catch {}
   };
 
   const cartCount = items.reduce((total, item) => total + item.quantity, 0);
@@ -218,8 +231,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const taxAmount = financials.tax;
   const grandTotal = financials.total;
 
-  const applyCoupon = (code: string) => {
-    const result = couponService.validateCoupon(code, subtotal);
+  const applyCoupon = (code: string, contextSubtotal?: number) => {
+    const effectiveSubtotal = (contextSubtotal !== undefined && contextSubtotal > 0) ? contextSubtotal : subtotal;
+    const result = couponService.validateCoupon(code, effectiveSubtotal);
     if (result.valid && result.coupon) {
       setAppliedCoupon(result.coupon);
       success(result.message, 'Coupon Applied');
@@ -232,6 +246,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const removeCoupon = () => {
     setAppliedCoupon(null);
+    try {
+      localStorage.removeItem(COUPON_STORAGE_KEY);
+    } catch {}
     info('Coupon code removed');
   };
 

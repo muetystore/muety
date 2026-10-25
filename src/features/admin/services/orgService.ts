@@ -306,12 +306,26 @@ export const orgService = {
   async getActiveAdminsForDepartment(departmentId: string): Promise<UserProfile[]> {
     if (!db) return [];
     try {
-      const snap = await getDocs(collection(db, 'users'));
-      if (!snap.empty) {
-        return snap.docs
-          .map(d => d.data() as UserProfile)
-          .filter(u => u.departmentId === departmentId && !u.isBlocked && u.status !== 'disabled');
+      const [userSnap, adminSnap] = await Promise.all([
+        getDocs(collection(db, 'users')).catch(() => null),
+        getDocs(collection(db, 'admins')).catch(() => null)
+      ]);
+      const map = new Map<string, UserProfile>();
+      if (adminSnap && !adminSnap.empty) {
+        adminSnap.docs.forEach(d => {
+          const u = d.data() as UserProfile;
+          if (u.uid || d.id) map.set(u.uid || d.id, { ...u, uid: u.uid || d.id });
+        });
       }
+      if (userSnap && !userSnap.empty) {
+        userSnap.docs.forEach(d => {
+          const u = d.data() as UserProfile;
+          const uid = u.uid || d.id;
+          if (!map.has(uid)) map.set(uid, { ...u, uid });
+        });
+      }
+      return Array.from(map.values())
+        .filter(u => u.departmentId === departmentId && !u.isBlocked && u.status !== 'disabled');
     } catch {}
     return [];
   }

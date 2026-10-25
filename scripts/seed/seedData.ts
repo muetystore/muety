@@ -300,12 +300,19 @@ export const INITIAL_USERS: UserProfile[] = [
     createdAt: '2026-01-01T00:00:00Z'
   },
   {
-    uid: 'admin-muety-in-id',
-    email: 'admin@muety.in',
-    displayName: 'MUETY Store Admin',
+    uid: 'rXYeoVurZqMmMSTEvgxUt7OQqhB2',
+    email: 'vignesh.admin@muety.in',
+    muetyEmail: 'vignesh.admin@muety.in',
+    personalEmail: 'vigneshlakshmanan415@gmail.com',
+    displayName: 'vignesh',
     roles: ['admin'],
     role: 'admin',
-    createdAt: '2026-01-01T00:00:00Z'
+    departmentId: 'management',
+    departmentName: 'Management',
+    status: 'active',
+    invitationStatus: 'accepted',
+    customerStatus: 'active',
+    createdAt: '2026-10-16T10:24:45.056Z'
   },
   {
     uid: 'jXKpOH42XfOMyYNZAl0JwDD8sS83',

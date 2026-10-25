@@ -20,6 +20,13 @@ export interface Review {
   createdAt: string;
 }
 
+export interface ProductHighlight {
+  id: string;
+  label: string;
+  value: string;
+  active?: boolean;
+}
+
 export interface Product {
   id: string;
   productId?: string;
@@ -28,6 +35,7 @@ export interface Product {
   name: string;
   title?: string;
   shortDescription: string;
+  highlights?: ProductHighlight[];
   description: string;
   categoryIds?: string[];
   primaryCategoryId?: string;

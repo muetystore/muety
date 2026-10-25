@@ -16,6 +16,17 @@ export const couponService = {
     return storageService.getCoupons();
   },
 
+  getActiveCoupons(): Coupon[] {
+    const now = Date.now();
+    return this.getAllCoupons().filter(c => {
+      if (!c.isActive) return false;
+      if (c.startDate && new Date(c.startDate).getTime() > now) return false;
+      if (c.expiresAt && new Date(c.expiresAt).getTime() < now) return false;
+      if (c.usageLimit && (c.usageCount || 0) >= c.usageLimit) return false;
+      return true;
+    });
+  },
+
   validateCoupon(code: string, cartSubtotal: number): { valid: boolean; coupon?: Coupon; discountAmount: number; message: string } {
     const coupons = storageService.getCoupons();
     const coupon = coupons.find(c => c.code.toUpperCase() === code.trim().toUpperCase());
@@ -28,15 +39,24 @@ export const couponService = {
       return { valid: false, discountAmount: 0, message: 'This promo code is currently inactive' };
     }
 
-    if (new Date(coupon.expiresAt).getTime() < Date.now()) {
+    const now = Date.now();
+    if (coupon.startDate && new Date(coupon.startDate).getTime() > now) {
+      return { valid: false, discountAmount: 0, message: 'This promo offer has not started yet' };
+    }
+
+    if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < now) {
       return { valid: false, discountAmount: 0, message: 'This promo code has expired' };
+    }
+
+    if (coupon.usageLimit && (coupon.usageCount || 0) >= coupon.usageLimit) {
+      return { valid: false, discountAmount: 0, message: 'This promo code has reached its maximum redemption limit' };
     }
 
     if (cartSubtotal < coupon.minSpend) {
       return { 
         valid: false, 
         discountAmount: 0, 
-        message: `Minimum spend of ₹${coupon.minSpend} required for this code` 
+        message: `Minimum spend of ₹${coupon.minSpend.toLocaleString('en-IN')} required for this code (Current: ₹${cartSubtotal.toLocaleString('en-IN')})` 
       };
     }
 
@@ -47,7 +67,7 @@ export const couponService = {
         discountAmount = coupon.maxDiscount;
       }
     } else {
-      discountAmount = coupon.discountValue;
+      discountAmount = Math.min(coupon.discountValue, cartSubtotal);
     }
 
     return {

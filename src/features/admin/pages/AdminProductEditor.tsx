@@ -7,7 +7,7 @@ import { auditService } from '@/shared/services/auditService';
 import { inventoryService } from '@/shared/services/inventoryService';
 import { useAuth } from '@/shared/context/AuthContext';
 import { useNotification } from '@/shared/context/NotificationContext';
-import { Product, Category, SareeCollection } from '@/types';
+import { Product, Category, SareeCollection, ProductHighlight } from '@/types';
 import { collectionService } from '@/features/catalog/services/collectionService';
 import { categoryService, normalizeCategorySlug } from '@/features/catalog/services/categoryService';
 import { getUserRoles } from '@/shared/utils/permissions';
@@ -29,7 +29,9 @@ import {
   Layers, 
   Globe, 
   RefreshCw,
-  Sparkles 
+  Sparkles,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 interface SectionConfig {
@@ -154,6 +156,41 @@ export const AdminProductEditor: React.FC = () => {
   const [careInstructions, setCareInstructions] = useState('');
   const [authenticityInformation, setAuthenticityInformation] = useState('');
 
+  // Structured Product Highlights state (Admin ERP managed)
+  const [highlights, setHighlights] = useState<ProductHighlight[]>([]);
+
+  const handleAddHighlight = (presetLabel?: string) => {
+    setIsDirty(true);
+    const newId = `hl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setHighlights(prev => [
+      ...prev,
+      { id: newId, label: presetLabel || '', value: '', active: true }
+    ]);
+  };
+
+  const handleUpdateHighlight = (id: string, field: 'label' | 'value' | 'active', val: any) => {
+    setIsDirty(true);
+    setHighlights(prev => prev.map(h => h.id === id ? { ...h, [field]: val } : h));
+  };
+
+  const handleRemoveHighlight = (id: string) => {
+    setIsDirty(true);
+    setHighlights(prev => prev.filter(h => h.id !== id));
+  };
+
+  const handleMoveHighlight = (index: number, direction: 'up' | 'down') => {
+    setIsDirty(true);
+    setHighlights(prev => {
+      const next = [...prev];
+      const targetIdx = direction === 'up' ? index - 1 : index + 1;
+      if (targetIdx < 0 || targetIdx >= next.length) return prev;
+      const temp = next[index];
+      next[index] = next[targetIdx];
+      next[targetIdx] = temp;
+      return next;
+    });
+  };
+
   // SEO & Visibility
   const [seoTitle, setSeoTitle] = useState('');
   const [seoDescription, setSeoDescription] = useState('');
@@ -267,6 +304,23 @@ export const AdminProductEditor: React.FC = () => {
         setCareInstructions(prod.careInstructions || '');
         setAuthenticityInformation(prod.authenticityInformation || '');
 
+        if (Array.isArray(prod.highlights) && prod.highlights.length > 0) {
+          setHighlights(prod.highlights);
+        } else {
+          // Synthesize structured highlights from existing product specifications
+          const initialHl: ProductHighlight[] = [
+            { id: 'hl-fabric', label: 'Fabric', value: prod.fabric || prod.silkType || prod.material || 'Pure Handloom Silk', active: true },
+            { id: 'hl-weave', label: 'Weave or Craft', value: prod.weaveTechnique || prod.weave || 'Traditional Handloom Weave', active: true },
+            { id: 'hl-purity', label: 'Silk Purity', value: prod.authenticityInformation || '100% Pure Silk Mark Certified', active: true },
+            { id: 'hl-zari', label: 'Zari Craft', value: prod.zariType || 'Tested Gold & Silver Zari', active: true },
+            { id: 'hl-blouse', label: 'Blouse Piece', value: prod.blousePieceIncluded !== false ? '0.8m Running Blouse Included' : 'Not Included', active: true },
+            { id: 'hl-length', label: 'Saree Length', value: prod.sareeLength || '6.2 Metres (with Blouse)', active: true },
+            { id: 'hl-occasion', label: 'Occasion', value: prod.occasion || 'Festive / Bridal', active: true },
+            { id: 'hl-care', label: 'Care Instructions', value: prod.careInstructions || 'Dry Clean Only', active: true }
+          ];
+          setHighlights(initialHl);
+        }
+
         setSeoTitle(prod.seoTitle || '');
         setSeoDescription(prod.seoDescription || '');
         setPublished(prod.published !== undefined ? prod.published : true);
@@ -281,6 +335,16 @@ export const AdminProductEditor: React.FC = () => {
       setIsLoadingProduct(false);
     } else {
       // Creation Mode Initialization
+      setHighlights([
+        { id: 'hl-fabric', label: 'Fabric', value: 'Pure Handloom Silk', active: true },
+        { id: 'hl-weave', label: 'Weave or Craft', value: 'Traditional Handloom Weave', active: true },
+        { id: 'hl-purity', label: 'Silk Purity', value: '100% Pure Silk Mark Certified', active: true },
+        { id: 'hl-zari', label: 'Zari Craft', value: 'Tested Gold & Silver Zari', active: true },
+        { id: 'hl-blouse', label: 'Blouse Piece', value: '0.8m Running Blouse Included', active: true },
+        { id: 'hl-length', label: 'Saree Length', value: '6.2 Metres (with Blouse)', active: true },
+        { id: 'hl-occasion', label: 'Occasion', value: 'Festive / Bridal', active: true },
+        { id: 'hl-care', label: 'Care Instructions', value: 'Dry Clean Only', active: true }
+      ]);
       if (cats.length > 0) {
         const firstCat = cats[0];
         setSelectedCategoryIds([firstCat.id]);
@@ -550,7 +614,22 @@ export const AdminProductEditor: React.FC = () => {
         collectionIds: selectedCollectionIds,
         rating: editingProduct?.rating || 5,
         reviewCount: editingProduct?.reviewCount || 0,
-        specifications: editingProduct?.specifications || { Fabric: silkType || 'Pure Silk', Weave: weaveTechnique || 'Handloom' },
+        highlights: highlights
+          .map(h => ({
+            id: h.id || `hl-${Math.random().toString(36).slice(2, 8)}`,
+            label: h.label.trim(),
+            value: h.value.trim(),
+            active: h.active !== false
+          }))
+          .filter(h => h.label && h.value),
+        specifications: {
+          ...(editingProduct?.specifications || {}),
+          ...Object.fromEntries(
+            highlights
+              .filter(h => h.active !== false && h.label.trim() && h.value.trim())
+              .map(h => [h.label.trim(), h.value.trim()])
+          )
+        },
         tags: Array.from(new Set([
           finalCategorySlug, 
           'silk-saree', 
@@ -1356,6 +1435,142 @@ export const AdminProductEditor: React.FC = () => {
                   className="form-input"
                 />
               </div>
+            </div>
+
+            {/* Structured Product Highlights ERP Manager */}
+            <div style={{ marginTop: '1.75rem', paddingTop: '1.25rem', borderTop: '1px solid var(--brand-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.98rem', color: 'var(--brand-primary)', fontWeight: 700 }}>
+                    Storefront Product Highlights (Flipkart-Style Fast Scan Matrix)
+                  </h4>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    Admin-managed structured specs: add, edit, reorder, activate/deactivate, and remove highlights.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleAddHighlight()}
+                  className="btn btn-primary btn-sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', fontWeight: 600 }}
+                >
+                  <Plus size={14} /> Add Highlight
+                </button>
+              </div>
+
+              {/* Quick Presets */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '1rem', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--brand-muted)', fontWeight: 600 }}>Presets:</span>
+                {[
+                  'Fabric',
+                  'Weave or Craft',
+                  'Silk Purity',
+                  'Zari Craft',
+                  'Blouse Piece',
+                  'Saree Length',
+                  'Occasion',
+                  'Care Instructions'
+                ].map(preset => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => handleAddHighlight(preset)}
+                    className="btn btn-outline btn-sm"
+                    style={{ fontSize: '0.72rem', padding: '3px 8px', borderRadius: '4px' }}
+                  >
+                    + {preset}
+                  </button>
+                ))}
+              </div>
+
+              {highlights.length === 0 ? (
+                <div style={{ padding: '1.25rem', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px dashed #cbd5e1', fontSize: '0.85rem', color: '#64748b' }}>
+                  No product highlights configured. Click "+ Add Highlight" to specify verified attributes.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {highlights.map((hl, idx) => (
+                    <div
+                      key={hl.id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'auto 1.2fr 2fr auto auto',
+                        gap: '8px',
+                        alignItems: 'center',
+                        backgroundColor: hl.active !== false ? '#ffffff' : '#f8fafc',
+                        padding: '8px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--brand-border)',
+                        opacity: hl.active !== false ? 1 : 0.6
+                      }}
+                    >
+                      {/* Reorder Buttons */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => handleMoveHighlight(idx, 'up')}
+                          style={{ background: 'none', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', padding: 0, color: idx === 0 ? '#cbd5e1' : '#64748b' }}
+                          title="Move up"
+                        >
+                          <ChevronUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === highlights.length - 1}
+                          onClick={() => handleMoveHighlight(idx, 'down')}
+                          style={{ background: 'none', border: 'none', cursor: idx === highlights.length - 1 ? 'not-allowed' : 'pointer', padding: 0, color: idx === highlights.length - 1 ? '#cbd5e1' : '#64748b' }}
+                          title="Move down"
+                        >
+                          <ChevronDown size={14} />
+                        </button>
+                      </div>
+
+                      {/* Label Input */}
+                      <input
+                        type="text"
+                        value={hl.label}
+                        onChange={e => handleUpdateHighlight(hl.id, 'label', e.target.value)}
+                        placeholder="Label (e.g. Fabric)"
+                        className="form-input"
+                        style={{ padding: '6px 10px', fontSize: '0.85rem', fontWeight: 600 }}
+                      />
+
+                      {/* Value Input */}
+                      <input
+                        type="text"
+                        value={hl.value}
+                        onChange={e => handleUpdateHighlight(hl.id, 'value', e.target.value)}
+                        placeholder="Value (e.g. Pure Handloom Silk)"
+                        className="form-input"
+                        style={{ padding: '6px 10px', fontSize: '0.85rem' }}
+                      />
+
+                      {/* Active Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateHighlight(hl.id, 'active', hl.active === false)}
+                        className={`badge badge-${hl.active !== false ? 'success' : 'danger'}`}
+                        style={{ cursor: 'pointer', padding: '4px 8px', fontSize: '0.7rem' }}
+                        title="Click to toggle highlight visibility"
+                      >
+                        {hl.active !== false ? 'Active' : 'Hidden'}
+                      </button>
+
+                      {/* Delete */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveHighlight(hl.id)}
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '6px', color: '#ef4444' }}
+                        title="Remove highlight"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

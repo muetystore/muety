@@ -40,8 +40,13 @@ export function calculateOrderFinancials(input: FinancialBreakdownInput): OrderF
   const discount = Math.min(subtotal, Math.max(0, Number(input.discount) || 0));
   const taxRate = typeof input.taxRate === 'number' && input.taxRate >= 0 ? input.taxRate : DEFAULT_TAX_RATE;
   
-  const taxableAmount = Math.max(0, Number((subtotal - discount).toFixed(2)));
-  const tax = subtotal === 0 ? 0 : Number(((taxableAmount * taxRate) / 100).toFixed(2));
+  const discountedSubtotal = Math.max(0, Number((subtotal - discount).toFixed(2)));
+  // Product prices are tax-inclusive: statutory embedded tax component is P * r / (1 + r)
+  const tax = (discountedSubtotal === 0 || taxRate === 0)
+    ? 0
+    : Number(((discountedSubtotal * (taxRate / 100)) / (1 + taxRate / 100)).toFixed(2));
+  // Net taxable base for accounting and tax invoice records
+  const taxableAmount = Number((discountedSubtotal - tax).toFixed(2));
   
   const isCod = input.paymentMethod === 'cash_on_delivery';
   const paymentMethod: 'razorpay' | 'cash_on_delivery' = isCod ? 'cash_on_delivery' : 'razorpay';
@@ -49,7 +54,8 @@ export function calculateOrderFinancials(input: FinancialBreakdownInput): OrderF
   // Online payments enjoy 100% FREE delivery (₹0). Flat ₹89 is only charged for COD.
   const shippingFee = (subtotal === 0 || !isCod) ? 0 : COD_SHIPPING_FEE;
   
-  const total = subtotal === 0 ? 0 : Number((taxableAmount + tax + shippingFee).toFixed(2));
+  // Tax-inclusive pricing: Total is discountedSubtotal + shippingFee (GST is NOT added on top)
+  const total = subtotal === 0 ? 0 : Number((discountedSubtotal + shippingFee).toFixed(2));
 
   let amountDueOnline = total;
   let remainingAmountDueAtDelivery = 0;

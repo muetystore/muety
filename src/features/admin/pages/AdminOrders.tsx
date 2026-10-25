@@ -1241,9 +1241,9 @@ export const AdminOrders: React.FC = () => {
                 </div>
 
                 {selectedOrder.tax ? (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
-                    <span>GST (5% Integrated Silk Saree Goods Tax)</span>
-                    <span style={{ fontWeight: 600, color: '#0f172a' }}>₹{selectedOrder.tax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '0.86rem' }}>
+                    <span>Embedded GST (5% Integrated Silk Saree Tax — Included in Price)</span>
+                    <span style={{ fontWeight: 600, color: '#475569' }}>₹{selectedOrder.tax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
                 ) : null}
 

@@ -199,15 +199,15 @@ describe('MUETY Storefront — 4 New Improvements Verification Suite', () => {
       expect(checkoutCode).toContain('couponService.validateCoupon(appliedCoupon.code');
     });
 
-    it('correctly calculates order financials with valid promo discount', () => {
+    it('correctly calculates order financials with valid promo discount and tax-inclusive pricing', () => {
       // Subtotal 12,000, 0 discount, online free shipping (0 fee)
       const baseFinancials = calculateOrderFinancials({ subtotal: 12000, discount: 0, paymentMethod: 'razorpay' });
       expect(baseFinancials.subtotal).toBe(12000);
       expect(baseFinancials.discount).toBe(0);
       expect(baseFinancials.shippingFee).toBe(0);
-      // Tax is 5% of 12000 = 600, Total = 12600
-      expect(baseFinancials.tax).toBe(600);
-      expect(baseFinancials.total).toBe(12600);
+      // Embedded Tax is (12000 * 5) / 105 = 571.43, Total = 12000 (tax-inclusive)
+      expect(baseFinancials.tax).toBe(571.43);
+      expect(baseFinancials.total).toBe(12000);
 
       // 1200 discount applied
       const discountedFinancials = calculateOrderFinancials({
@@ -216,10 +216,10 @@ describe('MUETY Storefront — 4 New Improvements Verification Suite', () => {
         paymentMethod: 'razorpay'
       });
       expect(discountedFinancials.discount).toBe(1200);
-      expect(discountedFinancials.taxableAmount).toBe(10800);
-      // Tax is 5% of 10800 = 540, Total = 11340
-      expect(discountedFinancials.tax).toBe(540);
-      expect(discountedFinancials.total).toBe(11340);
+      // Net amount = 10800, Embedded Tax = (10800 * 5) / 105 = 514.29
+      expect(discountedFinancials.taxableAmount).toBe(10285.71);
+      expect(discountedFinancials.tax).toBe(514.29);
+      expect(discountedFinancials.total).toBe(10800);
     });
 
     it('validates active coupons from couponService correctly', () => {

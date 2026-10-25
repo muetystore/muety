@@ -180,8 +180,8 @@ export const Footer: React.FC = () => {
                 <ShieldCheck size={24} />
               </div>
               <div>
-                <h6 style={{ color: '#ffffff', fontSize: '0.95rem', fontWeight: 600 }}>Authenticity Guaranteed</h6>
-                <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>100% verified artisan materials & movement</p>
+                <h6 style={{ color: '#ffffff', fontSize: '0.95rem', fontWeight: 600 }}>Artisanal Authenticity</h6>
+                <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Direct from master weavers in Salem, India</p>
               </div>
             </div>
 
@@ -196,8 +196,8 @@ export const Footer: React.FC = () => {
                 <Award size={24} />
               </div>
               <div>
-                <h6 style={{ color: '#ffffff', fontSize: '0.95rem', fontWeight: 600 }}>Lifetime Warranty</h6>
-                <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Master craftsmanship assurance for life</p>
+                <h6 style={{ color: '#ffffff', fontSize: '0.95rem', fontWeight: 600 }}>Heritage Atelier Quality</h6>
+                <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Handloom inspected before dispatch</p>
               </div>
             </div>
           </div>
@@ -333,6 +333,31 @@ export const Footer: React.FC = () => {
                 </Link>
               </li>
               <li>
+                <Link to="/cookie-policy" style={{ transition: 'color var(--transition-fast)' }} onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
+                  Cookie Policy
+                </Link>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent('muety_open_cookie_settings'))}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    font: 'inherit',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'color var(--transition-fast)'
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')}
+                  onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+                >
+                  Cookie Preferences
+                </button>
+              </li>
+              <li>
                 <Link to="/terms-conditions" style={{ transition: 'color var(--transition-fast)' }} onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
                   Terms & Conditions
                 </Link>
@@ -361,8 +386,25 @@ export const Footer: React.FC = () => {
           <div>
             &copy; {new Date().getFullYear()} MUETY Inc. All Rights Reserved. Luxury E-Commerce Atelier.
           </div>
-          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <Link to="/privacy-policy" style={{ color: '#94a3b8' }}>Privacy</Link>
+            <Link to="/cookie-policy" style={{ color: '#94a3b8' }}>Cookies</Link>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('muety_open_cookie_settings'))}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                font: 'inherit',
+                color: '#94a3b8',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+            >
+              Cookie Preferences
+            </button>
             <Link to="/terms-conditions" style={{ color: '#94a3b8' }}>Terms</Link>
             <Link to="/shipping-policy" style={{ color: '#94a3b8' }}>Shipping</Link>
             <Link to="/return-refund-policy" style={{ color: '#94a3b8' }}>Returns &amp; Refunds</Link>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 
 export const PrivacyPage: React.FC = () => {
@@ -92,9 +93,55 @@ export const PrivacyPage: React.FC = () => {
           <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>
             5. Cookies and Website Technologies
           </h2>
-          <p style={{ marginBottom: '1.5rem' }}>
-            The website or its service providers may use cookies or similar technologies for essential site functions, security and performance. Browser settings may allow you to control cookies, although some features may not work properly if disabled.
+          <p style={{ marginBottom: '1rem' }}>
+            The website and our service providers utilize cookies, local storage, and similar digital technologies to deliver essential boutique functions, safeguard payments, maintain your shopping bag, and—with your affirmative permission—measure website performance and tailor marketing communications.
           </p>
+          <p style={{ marginBottom: '1rem' }}>
+            Under India's Digital Personal Data Protection Act, 2023 (DPDP Act) and the Information Technology Act, 2000, we do not deploy optional tracking technologies without your informed prior consent.
+          </p>
+          <div style={{ backgroundColor: 'var(--bg-main)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <p style={{ margin: 0, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
+              For full category breakdowns (Strictly Necessary, Preferences, Analytics, and Marketing) and technical details of each technology, please consult our dedicated policy:
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <Link 
+                to="/cookie-policy" 
+                style={{ 
+                  color: 'var(--brand-accent)', 
+                  fontWeight: 700, 
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '3px'
+                }}
+              >
+                View MUETY Cookie Policy &rarr;
+              </Link>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('muety_open_cookie_settings'))}
+                style={{
+                  background: 'none',
+                  border: '1px solid var(--brand-accent)',
+                  padding: '0.35rem 0.85rem',
+                  borderRadius: '6px',
+                  color: 'var(--brand-accent)',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = 'var(--brand-accent)';
+                  e.currentTarget.style.color = '#0c121e';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = 'var(--brand-accent)';
+                }}
+              >
+                Manage Cookie Preferences
+              </button>
+            </div>
+          </div>
 
           {/* Section 6 */}
           <h2 style={{ fontSize: '1.35rem', color: 'var(--brand-primary)', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)', fontWeight: 800 }}>

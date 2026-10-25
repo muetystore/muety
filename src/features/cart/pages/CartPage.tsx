@@ -358,11 +358,6 @@ export const CartPage: React.FC = () => {
                 </span>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                <span>Applicable Tax ({settings.taxRate || 5}% GST)</span>
-                <span style={{ fontWeight: 600, color: 'var(--brand-primary)' }}>₹{taxAmount.toFixed(2)}</span>
-              </div>
-
               <div style={{
                 borderTop: '2px solid var(--brand-border)',
                 paddingTop: '1rem',
@@ -370,7 +365,10 @@ export const CartPage: React.FC = () => {
                 justifyContent: 'space-between',
                 alignItems: 'baseline'
               }}>
-                <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--brand-primary)' }}>Total Order Value</span>
+                <div>
+                  <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--brand-primary)', display: 'block' }}>Total Order Value</span>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--brand-muted)', fontWeight: 500 }}>Inclusive of all applicable taxes</span>
+                </div>
                 <span style={{ fontSize: '1.75rem', fontWeight: 800, fontFamily: 'var(--font-heading)', color: 'var(--brand-primary)' }}>
                   ₹{grandTotal.toFixed(2)}
                 </span>

@@ -153,7 +153,7 @@ export const orderService = {
     const now = new Date().toISOString();
     const fallbackTotal = params.total !== undefined
       ? params.total
-      : Number((params.subtotal - (params.discount || 0) + params.tax + canonicalShipping).toFixed(2));
+      : Number((params.subtotal - (params.discount || 0) + canonicalShipping).toFixed(2));
     const codAdvanceAmount = isCod ? Math.min(89, fallbackTotal) : 0;
     const codBalanceDue = isCod ? Number(Math.max(0, fallbackTotal - codAdvanceAmount).toFixed(2)) : 0;
 

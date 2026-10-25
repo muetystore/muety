@@ -19,10 +19,16 @@ export const AdminCoupons: React.FC = () => {
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
 
   const [code, setCode] = useState('');
+  const [title, setTitle] = useState('');
+  const [badge, setBadge] = useState('Special Offers');
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [discountValue, setDiscountValue] = useState<number>(15);
   const [minSpend, setMinSpend] = useState<number>(100);
+  const [maxDiscount, setMaxDiscount] = useState<number | undefined>(undefined);
+  const [startDate, setStartDate] = useState('');
   const [expiresAt, setExpiresAt] = useState('2027-12-31');
+  const [usageLimit, setUsageLimit] = useState<number | undefined>(undefined);
+  const [isStackable, setIsStackable] = useState(false);
   const [description, setDescription] = useState('');
   const [isActive, setIsActive] = useState(true);
 
@@ -39,10 +45,16 @@ export const AdminCoupons: React.FC = () => {
   const openCreateModal = () => {
     setEditingCoupon(null);
     setCode(`MUETY${Math.floor(10 + Math.random() * 90)}`);
+    setTitle('Instant Saree Savings');
+    setBadge('Special Offers');
     setDiscountType('percentage');
     setDiscountValue(20);
     setMinSpend(150);
+    setMaxDiscount(undefined);
+    setStartDate(new Date().toISOString().split('T')[0]);
     setExpiresAt('2027-12-31');
+    setUsageLimit(undefined);
+    setIsStackable(false);
     setDescription('Exclusive promotional discount code.');
     setIsActive(true);
     setModalOpen(true);
@@ -51,10 +63,16 @@ export const AdminCoupons: React.FC = () => {
   const openEditModal = (c: Coupon) => {
     setEditingCoupon(c);
     setCode(c.code);
+    setTitle(c.title || '');
+    setBadge(c.badge || 'Special Offers');
     setDiscountType(c.discountType);
     setDiscountValue(c.discountValue);
     setMinSpend(c.minSpend);
-    setExpiresAt(c.expiresAt);
+    setMaxDiscount(c.maxDiscount);
+    setStartDate(c.startDate ? c.startDate.split('T')[0] : '');
+    setExpiresAt(c.expiresAt ? c.expiresAt.split('T')[0] : '');
+    setUsageLimit(c.usageLimit);
+    setIsStackable(Boolean(c.isStackable));
     setDescription(c.description || '');
     setIsActive(c.isActive);
     setModalOpen(true);
@@ -102,10 +120,16 @@ export const AdminCoupons: React.FC = () => {
       const updated: Coupon = {
         ...editingCoupon,
         code: code.toUpperCase().trim(),
+        title: title.trim() || undefined,
+        badge: badge.trim() || 'Special Offers',
         discountType,
         discountValue: Number(discountValue),
         minSpend: Number(minSpend),
-        expiresAt,
+        maxDiscount: maxDiscount !== undefined && maxDiscount > 0 ? Number(maxDiscount) : undefined,
+        startDate: startDate ? new Date(startDate).toISOString() : undefined,
+        expiresAt: expiresAt ? (expiresAt.includes('T') ? expiresAt : `${expiresAt}T23:59:59.000Z`) : '2027-12-31T23:59:59.000Z',
+        usageLimit: usageLimit !== undefined && usageLimit > 0 ? Number(usageLimit) : undefined,
+        isStackable,
         description,
         isActive
       };
@@ -127,10 +151,16 @@ export const AdminCoupons: React.FC = () => {
       const newCoupon: Coupon = {
         id: couponId,
         code: code.toUpperCase().trim(),
+        title: title.trim() || undefined,
+        badge: badge.trim() || 'Special Offers',
         discountType,
         discountValue: Number(discountValue),
         minSpend: Number(minSpend),
-        expiresAt,
+        maxDiscount: maxDiscount !== undefined && maxDiscount > 0 ? Number(maxDiscount) : undefined,
+        startDate: startDate ? new Date(startDate).toISOString() : undefined,
+        expiresAt: expiresAt ? (expiresAt.includes('T') ? expiresAt : `${expiresAt}T23:59:59.000Z`) : '2027-12-31T23:59:59.000Z',
+        usageLimit: usageLimit !== undefined && usageLimit > 0 ? Number(usageLimit) : undefined,
+        isStackable,
         description,
         isActive,
         usageCount: 0
@@ -200,7 +230,13 @@ export const AdminCoupons: React.FC = () => {
                     <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '1rem', color: 'var(--brand-primary)' }}>
                       {c.code}
                     </span>
+                    {c.badge && (
+                      <span style={{ fontSize: '0.68rem', backgroundColor: '#fef3c7', color: '#92400e', fontWeight: 700, padding: '2px 6px', borderRadius: '4px' }}>
+                        {c.badge}
+                      </span>
+                    )}
                   </div>
+                  {c.title && <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--brand-primary)', marginTop: '2px' }}>{c.title}</div>}
                   {c.description && <div style={{ fontSize: '0.78rem', color: 'var(--brand-muted)', marginTop: '2px' }}>{c.description}</div>}
                 </td>
                 <td style={{ padding: '14px 12px', fontWeight: 700, color: '#10b981' }}>
@@ -251,20 +287,44 @@ export const AdminCoupons: React.FC = () => {
       >
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
           <div className="admin-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Promo Code *</label>
-              <input 
-                type="text" 
-                required 
-                value={code} 
-                onChange={e => setCode(e.target.value.toUpperCase())} 
-                placeholder="e.g. VIP25" 
-                className="form-input" 
-                style={{ textTransform: 'uppercase', fontWeight: 700 }}
-              />
+            <div className="grid-2" style={{ gap: '1rem' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Promo Code *</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={code} 
+                  onChange={e => setCode(e.target.value.toUpperCase())} 
+                  placeholder="e.g. FESTIVE10" 
+                  className="form-input" 
+                  style={{ textTransform: 'uppercase', fontWeight: 700 }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Customer-Facing Title</label>
+                <input 
+                  type="text" 
+                  value={title} 
+                  onChange={e => setTitle(e.target.value)} 
+                  placeholder="e.g. 10% Instant Off on orders above ₹4,999" 
+                  className="form-input" 
+                />
+              </div>
             </div>
 
             <div className="grid-2" style={{ gap: '1rem' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Offer Badge</label>
+                <input 
+                  type="text" 
+                  value={badge} 
+                  onChange={e => setBadge(e.target.value)} 
+                  placeholder="e.g. Special Offers / Festive Saver" 
+                  className="form-input" 
+                />
+              </div>
+
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Discount Type</label>
                 <select 
@@ -276,7 +336,9 @@ export const AdminCoupons: React.FC = () => {
                   <option value="fixed">Fixed Rupee Amount (₹)</option>
                 </select>
               </div>
+            </div>
 
+            <div className="grid-2" style={{ gap: '1rem' }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Discount Value *</label>
                 <input 
@@ -285,6 +347,18 @@ export const AdminCoupons: React.FC = () => {
                   min={1} 
                   value={discountValue} 
                   onChange={e => setDiscountValue(Number(e.target.value))} 
+                  className="form-input" 
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Max Discount Cap (₹)</label>
+                <input 
+                  type="number" 
+                  min={0} 
+                  placeholder="Optional limit for % off"
+                  value={maxDiscount ?? ''} 
+                  onChange={e => setMaxDiscount(e.target.value ? Number(e.target.value) : undefined)} 
                   className="form-input" 
                 />
               </div>
@@ -298,6 +372,30 @@ export const AdminCoupons: React.FC = () => {
                   min={0} 
                   value={minSpend} 
                   onChange={e => setMinSpend(Number(e.target.value))} 
+                  className="form-input" 
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Max Usage Limit</label>
+                <input 
+                  type="number" 
+                  min={1} 
+                  placeholder="Optional overall limit"
+                  value={usageLimit ?? ''} 
+                  onChange={e => setUsageLimit(e.target.value ? Number(e.target.value) : undefined)} 
+                  className="form-input" 
+                />
+              </div>
+            </div>
+
+            <div className="grid-2" style={{ gap: '1rem' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Valid From Date</label>
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={e => setStartDate(e.target.value)} 
                   className="form-input" 
                 />
               </div>
@@ -319,7 +417,7 @@ export const AdminCoupons: React.FC = () => {
                 type="text" 
                 value={description} 
                 onChange={e => setDescription(e.target.value)} 
-                placeholder="e.g. 15% VIP holiday discount" 
+                placeholder="e.g. 10% Instant Festive discount on silk sarees" 
                 className="form-input" 
               />
             </div>

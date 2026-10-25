@@ -211,13 +211,14 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
         }
       }
 
-      // 3. Financial calculations
-      const taxableBase = Math.max(0, calculatedSubtotal - calculatedDiscount);
-      const calculatedTax = Math.round(taxableBase * 0.05 * 100) / 100; // 5% GST
+      // 3. Financial calculations (Tax-inclusive pricing: GST is embedded within product price)
+      const discountedItemTotal = Math.max(0, calculatedSubtotal - calculatedDiscount);
+      // Embedded statutory tax component: (A * r) / (1 + r)
+      const calculatedTax = discountedItemTotal > 0 ? Math.round(((discountedItemTotal * 0.05) / 1.05) * 100) / 100 : 0;
       const isCod = paymentMethod === 'cash_on_delivery';
       // Online payment delivery is 100% FREE (0). COD delivery fee is flat 89.
       const canonicalShippingFee = isCod ? 89 : 0;
-      const calculatedGrandTotal = Number((taxableBase + calculatedTax + canonicalShippingFee).toFixed(2));
+      const calculatedGrandTotal = Number((discountedItemTotal + canonicalShippingFee).toFixed(2));
       const codAdvanceAmount = isCod ? Math.min(89, calculatedGrandTotal) : 0;
       const codBalanceDue = isCod ? Number(Math.max(0, calculatedGrandTotal - codAdvanceAmount).toFixed(2)) : 0;
 
@@ -341,11 +342,27 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
     });
   }
 
+  if (couponCode && typeof couponCode === 'string') {
+    const codeUpper = couponCode.trim().toUpperCase();
+    if (codeUpper === 'FESTIVE10') {
+      if (calculatedSubtotal >= 4999) {
+        calculatedDiscount = Math.min(1000, (calculatedSubtotal * 10) / 100);
+      }
+    } else if (codeUpper === 'MUETYFIRST' || codeUpper === 'WELCOME200') {
+      if (calculatedSubtotal >= 1500) {
+        calculatedDiscount = 200;
+      }
+    } else if (typeof body.discount === 'number' && body.discount > 0) {
+      calculatedDiscount = Math.min(body.discount, calculatedSubtotal);
+    }
+  }
+
   const isCod = paymentMethod === 'cash_on_delivery';
   // Online payment delivery is 100% FREE (0). COD delivery fee is flat 89.
   const canonicalShippingFee = isCod ? 89 : 0;
-  const calculatedTax = Math.round(calculatedSubtotal * 0.05 * 100) / 100;
-  const calculatedGrandTotal = Number((calculatedSubtotal + calculatedTax + canonicalShippingFee).toFixed(2));
+  const discountedItemTotal = Math.max(0, calculatedSubtotal - (calculatedDiscount || 0));
+  const calculatedTax = discountedItemTotal > 0 ? Math.round(((discountedItemTotal * 0.05) / 1.05) * 100) / 100 : 0;
+  const calculatedGrandTotal = Number((discountedItemTotal + canonicalShippingFee).toFixed(2));
   const codAdvanceAmount = isCod ? Math.min(89, calculatedGrandTotal) : 0;
   const codBalanceDue = isCod ? Number(Math.max(0, calculatedGrandTotal - codAdvanceAmount).toFixed(2)) : 0;
 
@@ -359,7 +376,8 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
     shippingAddress,
     items: validatedItems,
     subtotal: calculatedSubtotal,
-    discount: 0,
+    discount: calculatedDiscount,
+    couponCode: couponCode || null,
     appliedCoupon: couponCode || null,
     tax: calculatedTax,
     shippingFee: canonicalShippingFee,

@@ -20,6 +20,9 @@ import {
 // Eagerly loaded core homepage route
 import { HomePage } from '@/features/catalog/pages/HomePage';
 
+import { CookieConsentBanner } from '@/features/privacy/components/CookieConsentBanner';
+import { trackerService } from '@/features/privacy/services/trackerService';
+
 // Lazily loaded customer pages
 const ProductsPage = lazy(() => import('@/features/catalog/pages/ProductsPage').then(m => ({ default: m.ProductsPage })));
 const ProductDetailPage = lazy(() => import('@/features/catalog/pages/ProductDetailPage').then(m => ({ default: m.ProductDetailPage })));
@@ -37,6 +40,7 @@ const RegisterPage = lazy(() => import('@/features/auth/pages/RegisterPage').the
 const AboutPage = lazy(() => import('@/features/info/pages/AboutPage').then(m => ({ default: m.AboutPage })));
 const ContactPage = lazy(() => import('@/features/inquiries/pages/ContactPage').then(m => ({ default: m.ContactPage })));
 const PrivacyPage = lazy(() => import('@/features/info/pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
+const CookiePolicyPage = lazy(() => import('@/features/info/pages/CookiePolicyPage').then(m => ({ default: m.CookiePolicyPage })));
 const TermsPage = lazy(() => import('@/features/info/pages/TermsPage').then(m => ({ default: m.TermsPage })));
 const ShippingPage = lazy(() => import('@/features/info/pages/ShippingPage').then(m => ({ default: m.ShippingPage })));
 const ReturnRefundPage = lazy(() => import('@/features/info/pages/ReturnRefundPage').then(m => ({ default: m.ReturnRefundPage })));
@@ -118,6 +122,7 @@ const CustomerLayout: React.FC = () => {
       <CartDrawer />
       <PatronAuthModal />
       <MobileBottomNav />
+      <CookieConsentBanner />
       <Footer />
     </div>
   );
@@ -125,6 +130,11 @@ const CustomerLayout: React.FC = () => {
 
 export const AppRouter: React.FC = () => {
   const onAdminDomain = isAdminDomain();
+
+  useEffect(() => {
+    // Initialize privacy consent default mode and listen for updates
+    trackerService.init();
+  }, []);
 
   // 1. DEDICATED ADMIN SUBDOMAIN ROUTING (admin.muety.in)
   if (onAdminDomain) {
@@ -267,6 +277,7 @@ export const AppRouter: React.FC = () => {
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/privacy-policy" element={<PrivacyPage />} />
+            <Route path="/cookie-policy" element={<CookiePolicyPage />} />
             <Route path="/terms-conditions" element={<TermsPage />} />
             <Route path="/shipping-policy" element={<ShippingPage />} />
             <Route path="/return-refund-policy" element={<ReturnRefundPage />} />

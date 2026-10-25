@@ -148,23 +148,30 @@ export const AdminUsers: React.FC = () => {
       // Fetch live user and admin records directly from Firestore if available
       if (db) {
         try {
-          const userSnaps = await getDocs(collection(db, 'users'));
-          if (!userSnaps.empty) {
-            const customerMap = new Map<string, UserProfile>();
-            storageService.getUsers().forEach(u => {
-              if (u.uid) customerMap.set(u.uid, u);
-            });
+          const [userSnaps, adminSnaps] = await Promise.all([
+            getDocs(collection(db, 'users')).catch(() => null),
+            getDocs(collection(db, 'admins')).catch(() => null)
+          ]);
 
-            userSnaps.forEach(docSnap => {
+          const customerMap = new Map<string, UserProfile>();
+          storageService.getUsers().forEach(u => {
+            if (u.uid && u.uid !== 'admin-muety-in-id') customerMap.set(u.uid, u);
+          });
+
+          // 1. Process authoritative /admins collection
+          if (adminSnaps && !adminSnaps.empty) {
+            adminSnaps.forEach(docSnap => {
               const raw = docSnap.data() as any;
               const uid = raw.uid || docSnap.id;
               if (uid) {
                 const incoming: UserProfile = {
                   ...raw,
                   uid,
-                  email: raw.email || raw.muetyEmail || 'admin@muety.in',
-                  displayName: raw.displayName || raw.fullName || 'MUETY Admin',
-                  role: raw.role || 'admin',
+                  email: raw.email || raw.muetyEmail || '',
+                  muetyEmail: raw.muetyEmail || raw.email || '',
+                  displayName: raw.displayName || raw.fullName || 'Admin',
+                  role: raw.role || (raw.roles && raw.roles[0]) || 'admin',
+                  roles: raw.roles || [raw.role || 'admin'],
                   status: raw.status || (raw.invitationStatus === 'accepted' ? 'active' : 'invited'),
                   invitationStatus: raw.invitationStatus,
                   customerStatus: raw.customerStatus || (raw.isBlocked ? 'blocked' : 'active'),
@@ -178,10 +185,39 @@ export const AdminUsers: React.FC = () => {
                 }
               }
             });
-
-            const mergedList = Array.from(customerMap.values());
-            storageService.saveUsers(mergedList);
           }
+
+          // 2. Process /users collection
+          if (userSnaps && !userSnaps.empty) {
+            userSnaps.forEach(docSnap => {
+              const raw = docSnap.data() as any;
+              const uid = raw.uid || docSnap.id;
+              if (uid) {
+                const incoming: UserProfile = {
+                  ...raw,
+                  uid,
+                  email: raw.email || raw.muetyEmail || '',
+                  muetyEmail: raw.muetyEmail || (raw.email && raw.email.endsWith('@muety.in') ? raw.email : undefined),
+                  displayName: raw.displayName || raw.fullName || 'MUETY User',
+                  role: raw.role || (raw.roles && raw.roles[0]) || 'customer',
+                  roles: raw.roles || (raw.role ? [raw.role] : ['customer']),
+                  status: raw.status || (raw.invitationStatus === 'accepted' ? 'active' : (raw.role && raw.role !== 'customer' ? 'invited' : 'active')),
+                  invitationStatus: raw.invitationStatus,
+                  customerStatus: raw.customerStatus || (raw.isBlocked ? 'blocked' : 'active'),
+                  createdAt: raw.createdAt || new Date().toISOString()
+                };
+
+                if (customerMap.has(uid)) {
+                  customerMap.set(uid, mergeCustomerProfiles(customerMap.get(uid)!, incoming));
+                } else {
+                  customerMap.set(uid, incoming);
+                }
+              }
+            });
+          }
+
+          const mergedList = Array.from(customerMap.values());
+          storageService.saveUsers(mergedList);
         } catch (dbErr) {
           console.warn('[AdminUsers] Live Firestore fetch skipped/offline:', dbErr);
         }
@@ -189,8 +225,9 @@ export const AdminUsers: React.FC = () => {
 
       const allUsers = customerService.getAllCustomers();
       const adminsOnly = allUsers.filter(u => {
-        const emailLower = (u.email || '').toLowerCase();
+        const emailLower = (u.email || '').toLowerCase().trim();
         if (emailLower.includes('muetystore.com') || emailLower === 'kalvimohan03@gmail.com') return false;
+        if (u.uid === 'admin-muety-in-id') return false;
         const userRoles = getUserRoles(u);
         return userRoles.some(r => [
           'superadmin', 'super_admin', 'admin', 

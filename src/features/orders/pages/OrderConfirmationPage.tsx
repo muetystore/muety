@@ -353,13 +353,12 @@ export const OrderConfirmationPage: React.FC = () => {
                   <span>₹{(order.shippingFee !== undefined ? order.shippingFee : (order.paymentMethod === 'cash_on_delivery' ? 89 : 0)).toFixed(2)}</span>
                 )}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                <span>Applicable Tax (GST):</span>
-                <span>₹{order.tax.toFixed(2)}</span>
-              </div>
-              <div style={{ borderTop: '2px solid var(--brand-border)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.2rem', color: 'var(--brand-primary)' }}>
-                <span>Order Total:</span>
-                <span>₹{order.total.toFixed(2)}</span>
+              <div style={{ borderTop: '2px solid var(--brand-border)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <div>
+                  <span style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--brand-primary)', display: 'block' }}>Order Total:</span>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--brand-muted)', fontWeight: 500 }}>Inclusive of all applicable taxes</span>
+                </div>
+                <span style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--brand-primary)' }}>₹{order.total.toFixed(2)}</span>
               </div>
 
               {order.paymentMethod === 'cash_on_delivery' && (
