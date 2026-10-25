@@ -6,6 +6,9 @@ import { bannerService } from '@/features/banners/services/bannerService';
 export interface BannerSlide {
   id: string;
   image: string;
+  mobileImage?: string;
+  webp?: string;
+  mobileWebp?: string;
   alt: string;
   link: string;
   objectPosition?: string;
@@ -20,6 +23,9 @@ const DEFAULT_SLIDES: BannerSlide[] = [
   {
     id: 'diwali-hero',
     image: '/diwali_hero_banner.jpg',
+    mobileImage: '/diwali_hero_banner_mobile.jpg',
+    webp: '/diwali_hero_banner.webp',
+    mobileWebp: '/diwali_hero_banner_mobile.webp',
     alt: 'MUETY Pure Mulberry Silk & Certified Gold Zari Sarees',
     link: '/products',
     objectPosition: 'center 35%'
@@ -27,11 +33,47 @@ const DEFAULT_SLIDES: BannerSlide[] = [
   {
     id: 'dasara-campaign',
     image: '/dasara_campaign_banner_with_text.jpg',
+    mobileImage: '/dasara_campaign_banner_mobile.jpg',
+    webp: '/dasara_campaign_banner_with_text.webp',
+    mobileWebp: '/dasara_campaign_banner_mobile.webp',
     alt: 'MUETY Dasara Festive Collection - Tradition Meets Elegance',
     link: '/products',
     objectPosition: 'center center'
   }
 ];
+
+function getSlideSources(slide: BannerSlide) {
+  if (slide.mobileWebp || slide.webp) {
+    return {
+      mobileWebp: slide.mobileWebp || slide.webp,
+      desktopWebp: slide.webp,
+      mobileImage: slide.mobileImage || slide.image,
+      desktopImage: slide.image
+    };
+  }
+  if (slide.image.includes('diwali_hero_banner')) {
+    return {
+      mobileWebp: '/diwali_hero_banner_mobile.webp',
+      desktopWebp: '/diwali_hero_banner.webp',
+      mobileImage: '/diwali_hero_banner_mobile.jpg',
+      desktopImage: slide.image
+    };
+  }
+  if (slide.image.includes('dasara_campaign_banner')) {
+    return {
+      mobileWebp: '/dasara_campaign_banner_mobile.webp',
+      desktopWebp: '/dasara_campaign_banner_with_text.webp',
+      mobileImage: '/dasara_campaign_banner_mobile.jpg',
+      desktopImage: slide.image
+    };
+  }
+  return {
+    mobileWebp: undefined,
+    desktopWebp: undefined,
+    mobileImage: slide.image,
+    desktopImage: slide.image
+  };
+}
 
 export const CampaignHero: React.FC<CampaignHeroProps> = ({
   slides: explicitSlides,
@@ -188,27 +230,42 @@ export const CampaignHero: React.FC<CampaignHeroProps> = ({
                   cursor: 'pointer'
                 }}
               >
-                <picture 
-                  className="campaign-hero-picture"
-                  style={{ display: 'block', width: '100%', height: '100%' }}
-                >
-                  <source media="(max-width: 640px)" srcSet={slide.image} />
-                  <img 
-                    src={slide.image} 
-                    alt={slide.alt}
-                    {...({ fetchpriority: idx === currentIndex || idx === 0 ? 'high' : 'auto' } as any)}
-                    loading={idx === 0 ? 'eager' : 'lazy'}
-                    decoding="async"
-                    className="campaign-hero-bg-img"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      objectPosition: slide.objectPosition || 'center center',
-                      display: 'block'
-                    }}
-                  />
-                </picture>
+                {(() => {
+                  const sources = getSlideSources(slide);
+                  return (
+                    <picture 
+                      className="campaign-hero-picture"
+                      style={{ display: 'block', width: '100%', height: '100%' }}
+                    >
+                      {sources.mobileWebp && (
+                        <source type="image/webp" media="(max-width: 640px)" srcSet={sources.mobileWebp} />
+                      )}
+                      {sources.desktopWebp && (
+                        <source type="image/webp" media="(min-width: 641px)" srcSet={sources.desktopWebp} />
+                      )}
+                      {sources.mobileImage && (
+                        <source media="(max-width: 640px)" srcSet={sources.mobileImage} />
+                      )}
+                      <img 
+                        src={slide.image} 
+                        alt={slide.alt}
+                        width={1376}
+                        height={768}
+                        {...({ fetchpriority: idx === currentIndex || idx === 0 ? 'high' : 'auto' } as any)}
+                        loading={idx === 0 ? 'eager' : 'lazy'}
+                        decoding="async"
+                        className="campaign-hero-bg-img"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          objectPosition: slide.objectPosition || 'center center',
+                          display: 'block'
+                        }}
+                      />
+                    </picture>
+                  );
+                })()}
               </Link>
             </div>
           ))}

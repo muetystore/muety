@@ -81,7 +81,7 @@ export const HomePage: React.FC = () => {
         showOnHome: true,
         displayOrder: 1,
         productName: 'Royal Crimson Korvai Saree',
-        photoUrl: '/saree_model_individual.jpg',
+        photoUrl: '/saree_model_individual.webp',
         createdAt: new Date().toISOString()
       },
       {
@@ -97,7 +97,7 @@ export const HomePage: React.FC = () => {
         showOnHome: true,
         displayOrder: 2,
         productName: 'Kanchipuram Mustard Zari Drape',
-        photoUrl: '/saree_model_drape.jpg',
+        photoUrl: '/saree_model_drape.webp',
         createdAt: new Date().toISOString()
       },
       {
@@ -113,7 +113,7 @@ export const HomePage: React.FC = () => {
         showOnHome: true,
         displayOrder: 3,
         productName: 'Emerald Temple Border Saree',
-        photoUrl: '/saree_fabric_detail.jpg',
+        photoUrl: '/saree_fabric_detail.webp',
         createdAt: new Date().toISOString()
       },
       {
@@ -129,7 +129,7 @@ export const HomePage: React.FC = () => {
         showOnHome: true,
         displayOrder: 4,
         productName: 'Salem Royal Gold Tissue Saree',
-        photoUrl: '/saree_model_individual.jpg',
+        photoUrl: '/saree_model_individual.webp',
         createdAt: new Date().toISOString()
       }
     ];

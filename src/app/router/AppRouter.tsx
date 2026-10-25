@@ -17,10 +17,12 @@ import {
   getAdminPortalUrl 
 } from '@/shared/utils/domainRouting';
 
-// Eagerly loaded core entry routes
+// Eagerly loaded core homepage route
 import { HomePage } from '@/features/catalog/pages/HomePage';
-import { ProductsPage } from '@/features/catalog/pages/ProductsPage';
-import { ProductDetailPage } from '@/features/catalog/pages/ProductDetailPage';
+
+// Lazily loaded customer pages
+const ProductsPage = lazy(() => import('@/features/catalog/pages/ProductsPage').then(m => ({ default: m.ProductsPage })));
+const ProductDetailPage = lazy(() => import('@/features/catalog/pages/ProductDetailPage').then(m => ({ default: m.ProductDetailPage })));
 
 // Lazily loaded customer pages
 const CategoriesPage = lazy(() => import('@/features/catalog/pages/CategoriesPage').then(m => ({ default: m.CategoriesPage })));

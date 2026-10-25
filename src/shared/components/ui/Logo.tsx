@@ -95,17 +95,24 @@ export const Logo: React.FC<LogoProps> = ({
           justifyContent: 'center',
           overflow: 'hidden'
         }}>
-          <img 
-            src="/muety-logo.png" 
-            alt="MUETY Logo" 
-            style={{
-              width: '100%',
-              height: '100%',
-              borderRadius: '50%',
-              objectFit: 'cover',
-              display: 'block'
-            }}
-          />
+          <picture style={{ width: '100%', height: '100%', display: 'block' }}>
+            <source type="image/webp" srcSet="/muety-logo.webp" />
+            <img 
+              src="/muety-logo-opt.png" 
+              alt="MUETY Logo" 
+              width={imageSize}
+              height={imageSize}
+              loading="eager"
+              decoding="async"
+              style={{
+                width: '100%',
+                height: '100%',
+                borderRadius: '50%',
+                objectFit: 'cover',
+                display: 'block'
+              }}
+            />
+          </picture>
         </div>
       )}
 

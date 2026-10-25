@@ -1,34 +1,56 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <!-- Google Tag Manager -->
-    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-MW56GX6L');</script>
-    <!-- End Google Tag Manager -->
-    <!-- Microsoft Clarity -->
-    <script type="text/javascript">
-        (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window, document, "clarity", "script", "ywlcm9h1bu");
-    </script>
-    <!-- End Microsoft Clarity -->
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/muety-logo.png" />
-    <link rel="apple-touch-icon" href="/muety-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MUETY | Modern Luxury E-Commerce</title>
     <meta name="description" content="MUETY - Modern, refined, and premium e-commerce shopping experience. Discover luxury collections, curated fashion, accessories, and lifestyle essentials." />
     <meta name="theme-color" content="#0f172a" />
-    <title>MUETY | Modern Luxury E-Commerce</title>
-    
-    <!-- Google Fonts: Modern, Royal Indian Festive & Cursive Script Typography -->
+
+    <link rel="icon" type="image/png" href="/muety-logo-opt.png" />
+    <link rel="apple-touch-icon" href="/muety-logo-opt.png" />
+
+    <!-- Preload Critical LCP Hero Banner (Mobile WebP & Desktop WebP) -->
+    <link rel="preload" as="image" type="image/webp" media="(max-width: 640px)" href="/diwali_hero_banner_mobile.webp" fetchpriority="high" />
+    <link rel="preload" as="image" type="image/webp" media="(min-width: 641px)" href="/diwali_hero_banner.webp" fetchpriority="high" />
+
+    <!-- Google Fonts: Preconnect & Asynchronous Non-Blocking Loading -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@600;700;800;900&family=Great+Vibes&family=Marcellus&family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,600;1,700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Rozha+One&display=swap" rel="stylesheet">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+    </noscript>
+
+    <!-- Deferred Third-Party Analytics (GTM & Clarity load after critical paint) -->
+    <script>
+      (function() {
+        function initAnalytics() {
+          // Google Tag Manager
+          (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+          new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+          j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+          'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+          })(window,document,'script','dataLayer','GTM-MW56GX6L');
+
+          // Microsoft Clarity
+          (function(c,l,a,r,i,t,y){
+              c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+              t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+              y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+          })(window, document, "clarity", "script", "ywlcm9h1bu");
+        }
+
+        if ('requestIdleCallback' in window) {
+          window.requestIdleCallback(initAnalytics, { timeout: 2000 });
+        } else {
+          window.addEventListener('load', function() {
+            setTimeout(initAnalytics, 1000);
+          });
+        }
+      })();
+    </script>
   </head>
   <body>
     <!-- Google Tag Manager (noscript) -->
