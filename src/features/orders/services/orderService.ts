@@ -220,6 +220,15 @@ export const orderService = {
       }
     }
 
+    // Durably dispatch order confirmation email to patron and admin via Netlify server function
+    if (typeof window !== 'undefined' && !isTestEnv()) {
+      fetch('/api/orders/send-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, order })
+      }).catch(err => console.warn('[OrderService] Background email dispatch note:', err?.message || err));
+    }
+
     this.broadcastUpdate(order);
     return order;
   },

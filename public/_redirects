@@ -25,6 +25,9 @@
 /api/cloudinary/sign            /.netlify/functions/cloudinary-signature 200
 /api/media/cloudinary-delete    /.netlify/functions/cloudinary-delete    200
 /api/cloudinary/delete          /.netlify/functions/cloudinary-delete    200
+/api/orders/create               /.netlify/functions/orders            200
+/api/orders/send-confirmation     /.netlify/functions/orders            200
+/api/orders/*                    /.netlify/functions/orders            200
 
 # 2. Countdown & Legal Document Rewrites
 /terms-and-conditions        /terms-and-conditions.html       200
@@ -33,6 +36,10 @@
 /countdown.html              /countdown.html                  200
 
 # 3. Domain-Specific Hostname Routing
+# Apex domain API routes
+https://muety.in/api/orders/*                     /.netlify/functions/orders            200
+https://www.muety.in/api/orders/*                 /.netlify/functions/orders            200
+
 # Apex domain pre-launch: serves Countdown on root
 https://muety.in/            /countdown.html                  200!
 https://www.muety.in/        /countdown.html                  200!
@@ -56,6 +63,7 @@ https://admin.muety.in/api/media/cloudinary-signature /.netlify/functions/cloudi
 https://admin.muety.in/api/cloudinary/sign            /.netlify/functions/cloudinary-signature 200
 https://admin.muety.in/api/media/cloudinary-delete    /.netlify/functions/cloudinary-delete    200
 https://admin.muety.in/api/cloudinary/delete          /.netlify/functions/cloudinary-delete    200
+https://admin.muety.in/api/orders/*                   /.netlify/functions/orders               200
 
 # Admin subdomain: serves Admin SPA entry point
 https://admin.muety.in/      /index.html                      200
@@ -68,6 +76,7 @@ https://store.muety.in/api/media/cloudinary-signature /.netlify/functions/cloudi
 https://store.muety.in/api/cloudinary/sign            /.netlify/functions/cloudinary-signature 200
 https://store.muety.in/api/media/cloudinary-delete    /.netlify/functions/cloudinary-delete    200
 https://store.muety.in/api/cloudinary/delete          /.netlify/functions/cloudinary-delete    200
+https://store.muety.in/api/orders/*                  /.netlify/functions/orders               200
 
 # Storefront subdomain: serves Storefront SPA entry point (dedicated storefront, never redirects to root)
 https://store.muety.in/      /index.html                      200

@@ -41,6 +41,15 @@ export const OrderConfirmationPage: React.FC = () => {
       if (liveOrder) {
         setOrder(liveOrder);
         setLoading(false);
+
+        // Ensure patron and admin confirmation emails are dispatched (idempotent on server)
+        if (typeof window !== 'undefined' && liveOrder.customerEmail) {
+          fetch('/api/orders/send-confirmation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId: liveOrder.id, order: liveOrder })
+          }).catch(() => {});
+        }
       }
     });
 

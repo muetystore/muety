@@ -52,6 +52,11 @@
   to = "/.netlify/functions/launch-status"
   status = 200
 
+[[redirects]]
+  from = "/api/orders/*"
+  to = "/.netlify/functions/orders"
+  status = 200
+
 # ------------------------------------------------------------------------------
 # Countdown & Legal Pages
 # ------------------------------------------------------------------------------
@@ -74,6 +79,16 @@
 # ------------------------------------------------------------------------------
 # Domain-Specific Hostname Routing
 # ------------------------------------------------------------------------------
+[[redirects]]
+  from = "https://muety.in/api/orders/*"
+  to = "/.netlify/functions/orders"
+  status = 200
+
+[[redirects]]
+  from = "https://www.muety.in/api/orders/*"
+  to = "/.netlify/functions/orders"
+  status = 200
+
 # Apex domain pre-launch: serves Countdown on root
 [[redirects]]
   from = "https://muety.in/"
@@ -123,6 +138,11 @@
   to = "/.netlify/functions/launch-status"
   status = 200
 
+[[redirects]]
+  from = "https://admin.muety.in/api/orders/*"
+  to = "/.netlify/functions/orders"
+  status = 200
+
 # Admin subdomain: serves SPA Admin entry point
 [[redirects]]
   from = "https://admin.muety.in/"
@@ -163,6 +183,11 @@
 [[redirects]]
   from = "https://store.muety.in/api/launch-status"
   to = "/.netlify/functions/launch-status"
+  status = 200
+
+[[redirects]]
+  from = "https://store.muety.in/api/orders/*"
+  to = "/.netlify/functions/orders"
   status = 200
 
 # Storefront subdomain: serves SPA Storefront entry point
