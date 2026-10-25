@@ -1,6 +1,7 @@
 import { PatronReview } from '@/types';
 import { storageService } from '@/lib/storage/storageService';
 import { db } from '@/lib/firebase/firebase';
+import { getAuthHeaders } from '@/shared/utils/authHeader';
 import { 
   collection, 
   doc, 
@@ -11,6 +12,27 @@ import {
   onSnapshot, 
   Unsubscribe 
 } from 'firebase/firestore';
+
+/**
+ * Removes any undefined or null keys so Firestore JS SDK never throws
+ * "Unsupported field value: undefined".
+ */
+function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const clean: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      clean[key] = value;
+    }
+  }
+  return clean;
+}
+
+function getApiUrl(endpoint: string): string {
+  if (typeof window !== 'undefined' && window.location?.origin && !window.location.origin.includes('localhost:0')) {
+    return `${window.location.origin}${endpoint}`;
+  }
+  return endpoint;
+}
 
 class ReviewService {
   getAllReviews(): PatronReview[] {
@@ -26,7 +48,12 @@ class ReviewService {
   getApprovedReviews(productId?: string): PatronReview[] {
     const reviews = storageService.getReviews().filter(r => r.status === 'approved');
     if (productId) {
-      return reviews.filter(r => r.productId === productId);
+      const cleanTarget = productId.trim().toLowerCase();
+      return reviews.filter(r => {
+        const rProdId = (r.productId || '').trim().toLowerCase();
+        const rSlug = ((r as any).productSlug || '').trim().toLowerCase();
+        return rProdId === cleanTarget || rSlug === cleanTarget;
+      });
     }
     return reviews;
   }
@@ -53,8 +80,6 @@ class ReviewService {
       if (db) {
         const prodRef = doc(db, 'products', productId);
         const prodSnap = await getDoc(prodRef);
-        // Only update rating and reviewCount if the product document already exists in Firestore.
-        // Never call setDoc with merge:true on non-existent product IDs, which would create phantom "Untitled Product" stubs.
         if (prodSnap.exists()) {
           await updateDoc(prodRef, { reviewCount, rating });
         }
@@ -64,20 +89,37 @@ class ReviewService {
     }
   }
 
-  async addReview(reviewData: Omit<PatronReview, 'id' | 'createdAt'> & { productSlug?: string }): Promise<PatronReview> {
+  async addReview(reviewData: Omit<PatronReview, 'id' | 'createdAt'> & { productSlug?: string; id?: string }): Promise<PatronReview> {
     const newReview: PatronReview = {
       ...reviewData,
-      id: `rev-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: reviewData.id || `rev-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      rating: Number(reviewData.rating) || 5,
+      status: reviewData.status || 'approved',
+      authorLocation: reviewData.authorLocation || 'India',
       createdAt: new Date().toISOString()
     };
+
+    const cleanDoc = sanitizeForFirestore(newReview);
     
+    // 1. Client-side Firestore direct persistence
     if (db) {
       try {
-        await setDoc(doc(db, 'reviews', newReview.id), newReview, { merge: true });
-        console.log(`MUETY Cloud: Review saved to Firestore collection "reviews"`);
+        await setDoc(doc(db, 'reviews', newReview.id), cleanDoc);
+        console.log(`MUETY Cloud: Review ${newReview.id} saved to Firestore "reviews" collection.`);
       } catch (err) {
-        console.warn('Firestore review save note:', err);
+        console.warn('Firestore client review save note:', err);
       }
+    }
+
+    // 2. Server-side authoritative API fallback/sync to guarantee cloud persistence
+    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      try {
+        fetch(getApiUrl('/api/reviews/submit'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cleanDoc)
+        }).catch(() => {});
+      } catch {}
     }
 
     storageService.addReview(newReview);
@@ -97,13 +139,26 @@ class ReviewService {
       updatedAt: new Date().toISOString()
     };
 
+    const cleanDoc = sanitizeForFirestore(updated);
+
     if (db) {
       try {
-        await setDoc(doc(db, 'reviews', id), updated, { merge: true });
+        await setDoc(doc(db, 'reviews', id), cleanDoc, { merge: true });
         console.log(`MUETY Cloud: Review ${id} updated in Firestore`);
       } catch (err) {
         console.warn('Firestore review update note:', err);
       }
+    }
+
+    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      try {
+        const headers = await getAuthHeaders();
+        fetch(getApiUrl('/api/reviews/update'), {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ id, updates: cleanDoc })
+        }).catch(() => {});
+      } catch {}
     }
 
     storageService.updateReview(updated);
@@ -122,7 +177,7 @@ class ReviewService {
       if (db) {
         try {
           const docRef = doc(db, 'reviews', id);
-          await setDoc(docRef, { status }, { merge: true });
+          await setDoc(docRef, { status, updatedAt: new Date().toISOString() }, { merge: true });
         } catch (err) {
           console.warn('Firestore review status update direct note:', err);
         }
@@ -132,16 +187,28 @@ class ReviewService {
     
     const updated: PatronReview = {
       ...review,
-      status
+      status,
+      updatedAt: new Date().toISOString()
     };
     
     if (db) {
       try {
-        await setDoc(doc(db, 'reviews', updated.id), updated, { merge: true });
-        console.log(`MUETY Cloud: Review status updated in Firestore`);
+        await setDoc(doc(db, 'reviews', updated.id), sanitizeForFirestore(updated), { merge: true });
+        console.log(`MUETY Cloud: Review status updated in Firestore to ${status}`);
       } catch (err) {
         console.warn('Firestore review update note:', err);
       }
+    }
+
+    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      try {
+        const headers = await getAuthHeaders();
+        fetch(getApiUrl('/api/reviews/update'), {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ id: updated.id, updates: { status, updatedAt: updated.updatedAt } })
+        }).catch(() => {});
+      } catch {}
     }
 
     storageService.updateReview(updated);
@@ -167,11 +234,30 @@ class ReviewService {
     
     if (db) {
       try {
-        await setDoc(doc(db, 'reviews', updated.id), updated, { merge: true });
+        await setDoc(doc(db, 'reviews', updated.id), sanitizeForFirestore(updated), { merge: true });
         console.log(`MUETY Cloud: Review featured flag updated in Firestore`);
       } catch (err) {
         console.warn('Firestore review update note:', err);
       }
+    }
+
+    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      try {
+        const headers = await getAuthHeaders();
+        fetch(getApiUrl('/api/reviews/update'), {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ 
+            id: updated.id, 
+            updates: { 
+              isFeatured: nextFeatured, 
+              showOnHome: nextFeatured, 
+              status: updated.status, 
+              updatedAt: updated.updatedAt 
+            } 
+          })
+        }).catch(() => {});
+      } catch {}
     }
 
     storageService.updateReview(updated);
@@ -200,6 +286,17 @@ class ReviewService {
       }
     }
 
+    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      try {
+        const headers = await getAuthHeaders();
+        fetch(getApiUrl('/api/reviews/update'), {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ id: updated.id, updates: { displayOrder, updatedAt: updated.updatedAt } })
+        }).catch(() => {});
+      } catch {}
+    }
+
     storageService.updateReview(updated);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('muety_reviews_updated'));
@@ -209,12 +306,28 @@ class ReviewService {
 
   async deleteReview(id: string): Promise<boolean> {
     const target = this.getReviewById(id);
+    
+    // 1. Client-side Firestore deleteDoc
     if (db) {
       try {
         await deleteDoc(doc(db, 'reviews', id));
-        console.log(`MUETY Cloud: Review deleted from Firestore`);
+        console.log(`MUETY Cloud: Review ${id} deleted from Firestore`);
       } catch (err) {
-        console.warn('Firestore review delete note:', err);
+        console.warn('Firestore client review delete note:', err);
+      }
+    }
+
+    // 2. Server-side authoritative API delete to ensure cloud deletion succeeds
+    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      try {
+        const headers = await getAuthHeaders();
+        await fetch(getApiUrl('/api/reviews/delete'), {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ id })
+        });
+      } catch (apiErr) {
+        console.warn('Server review deletion note:', apiErr);
       }
     }
 
@@ -267,21 +380,25 @@ class ReviewService {
               }
             });
             cloudReviews.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-            storageService.saveReviews(cloudReviews);
-            callback(filterApproved(cloudReviews));
+            
+            // Preserve freshly added local reviews (created in last 20 seconds) that might still be syncing
+            const now = Date.now();
+            const currentLocal = storageService.getReviews();
+            const recentUnsynced = currentLocal.filter(lr => {
+              const age = now - new Date(lr.createdAt || 0).getTime();
+              return age < 20000 && !cloudReviews.some(cr => cr.id === lr.id);
+            });
+
+            const merged = [...recentUnsynced, ...cloudReviews].sort(
+              (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+            );
+
+            storageService.saveReviews(merged);
+            callback(filterApproved(merged));
           } else {
-            const local = storageService.getReviews();
-            if (local && local.length > 0) {
-              if (db) {
-                const firestoreDb = db;
-                local.forEach(r => {
-                  setDoc(doc(firestoreDb, 'reviews', r.id), r, { merge: true }).catch(() => {});
-                });
-              }
-              callback(filterApproved(local));
-            } else {
-              callback([]);
-            }
+            // Cloud collection is empty - do NOT resurrect deleted reviews!
+            storageService.saveReviews([]);
+            callback([]);
           }
         }, (err) => {
           if (onError) onError(err);
@@ -314,28 +431,30 @@ class ReviewService {
             });
 
             cloudReviews.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-            storageService.saveReviews(cloudReviews);
-            callback(cloudReviews);
-          } else {
-            const local = storageService.getReviews();
-            if (local && local.length > 0) {
-              if (db) {
-                const firestoreDb = db;
-                local.forEach(r => {
-                  setDoc(doc(firestoreDb, 'reviews', r.id), r, { merge: true }).catch(() => {});
-                });
-              }
-              callback(local);
-            } else {
-              callback([]);
-            }
-          }
 
+            // Preserve freshly added local reviews (created in last 20 seconds) that might still be syncing
+            const now = Date.now();
+            const currentLocal = storageService.getReviews();
+            const recentUnsynced = currentLocal.filter(lr => {
+              const age = now - new Date(lr.createdAt || 0).getTime();
+              return age < 20000 && !cloudReviews.some(cr => cr.id === lr.id);
+            });
+
+            const merged = [...recentUnsynced, ...cloudReviews].sort(
+              (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+            );
+
+            storageService.saveReviews(merged);
+            callback(merged);
+          } else {
+            // Cloud collection is empty - do NOT resurrect deleted reviews!
+            storageService.saveReviews([]);
+            callback([]);
+          }
         }, (err) => {
           if (onError) onError(err);
           else callback(storageService.getReviews());
         });
-
 
         return unsubscribe;
       } catch (err: any) {

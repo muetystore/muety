@@ -139,6 +139,7 @@ export const AdminReviews: React.FC = () => {
 
   const handleDelete = async (id: string, name: string) => {
     if (window.confirm(`Are you sure you want to delete the review by ${name}?`)) {
+      setReviews(prev => prev.filter(r => r.id !== id));
       await reviewService.deleteReview(id);
       await auditService.logAction({
         actorUid: user?.uid || 'system',

@@ -640,9 +640,10 @@ class StorageService {
   getReviews(): PatronReview[] {
     try {
       const data = localStorage.getItem(KEYS.REVIEWS);
-      return data ? JSON.parse(data) : INITIAL_REVIEWS;
+      const list: PatronReview[] = data ? JSON.parse(data) : INITIAL_REVIEWS;
+      return (list || []).filter(r => r && r.id && r.id !== 'rev-1791267536030-832');
     } catch {
-      return INITIAL_REVIEWS;
+      return INITIAL_REVIEWS.filter(r => r && r.id && r.id !== 'rev-1791267536030-832');
     }
   }
 

@@ -678,8 +678,10 @@ export const ProductDetailPage: React.FC = () => {
         status: 'approved',
         isFeatured: false,
         verifiedPurchase: true,
-        photoUrl: uploadedPhotoUrl
+        photoUrl: uploadedPhotoUrl || ''
       });
+
+      setLiveReviews(prev => [createdReview, ...prev.filter(r => r.id !== createdReview.id)]);
 
       // Audit Log for REVIEW_CREATED
       await auditService.logAction({

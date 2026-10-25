@@ -62,6 +62,11 @@ import {
   handleUpdateCustomerServer,
   handleDeleteCustomerServer
 } from './customerApi';
+import {
+  handleSubmitReviewServer,
+  handleDeleteReviewServer,
+  handleUpdateReviewServer
+} from './reviewApi';
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
@@ -435,6 +440,22 @@ export async function handleApiRequest(req: any, res: any): Promise<boolean> {
 
   if (urlPath === '/api/customers/delete') {
     await dispatchRouteHandler(handleDeleteCustomerServer, authHeader, body, res, 'Failed to delete patron.');
+    return true;
+  }
+
+  // PATRON REVIEWS & TESTIMONIALS (Server-Authoritative)
+  if (urlPath === '/api/reviews/submit' || urlPath === '/api/reviews/create') {
+    await dispatchRouteHandler(handleSubmitReviewServer, authHeader, body, res, 'Failed to submit patron review.');
+    return true;
+  }
+
+  if (urlPath === '/api/reviews/delete') {
+    await dispatchRouteHandler(handleDeleteReviewServer, authHeader, body, res, 'Failed to delete review.');
+    return true;
+  }
+
+  if (urlPath === '/api/reviews/update') {
+    await dispatchRouteHandler(handleUpdateReviewServer, authHeader, body, res, 'Failed to update review.');
     return true;
   }
 
