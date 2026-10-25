@@ -559,7 +559,38 @@ export class AuthService {
     if (!auth) {
       throw new Error('Firebase Authentication is not initialized.');
     }
-    return new RecaptchaVerifier(auth, containerIdOrElement, {
+
+    const containerId = typeof containerIdOrElement === 'string' ? containerIdOrElement : null;
+    const container = typeof containerIdOrElement === 'string'
+      ? (typeof document !== 'undefined' ? document.getElementById(containerIdOrElement) : null)
+      : containerIdOrElement;
+
+    // 1. Clean up any existing verifier registered globally on window or container
+    if (typeof window !== 'undefined') {
+      const win = window as any;
+      if (win.recaptchaVerifier) {
+        try {
+          win.recaptchaVerifier.clear();
+        } catch {}
+        win.recaptchaVerifier = null;
+      }
+      if (containerId && win[`recaptchaVerifier_${containerId}`]) {
+        try {
+          win[`recaptchaVerifier_${containerId}`].clear();
+        } catch {}
+        win[`recaptchaVerifier_${containerId}`] = null;
+      }
+    }
+
+    // 2. Clear any lingering DOM child nodes inside the container element so grecaptcha doesn't throw 'reCAPTCHA has already been rendered in this element'
+    if (container) {
+      try {
+        container.innerHTML = '';
+      } catch {}
+    }
+
+    // 3. Create fresh RecaptchaVerifier
+    const verifier = new RecaptchaVerifier(auth, containerIdOrElement, {
       size: options?.size || 'invisible',
       callback: () => {
         if (options?.callback) options.callback();
@@ -568,6 +599,16 @@ export class AuthService {
         console.warn('[AuthService] reCAPTCHA token expired.');
       }
     });
+
+    if (typeof window !== 'undefined') {
+      const win = window as any;
+      win.recaptchaVerifier = verifier;
+      if (containerId) {
+        win[`recaptchaVerifier_${containerId}`] = verifier;
+      }
+    }
+
+    return verifier;
   }
 
   async sendPhoneOtp(

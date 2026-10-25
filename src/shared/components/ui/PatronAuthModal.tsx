@@ -142,7 +142,16 @@ export const PatronAuthModal: React.FC = () => {
       return verifier;
     } catch (err: any) {
       console.warn('[PatronAuthModal] Recaptcha note:', err);
-      return null;
+      try {
+        const container = document.getElementById('modal-recaptcha-container');
+        if (container) container.innerHTML = '';
+        const fallback = setupRecaptcha('modal-recaptcha-container', { size: 'invisible' });
+        recaptchaVerifierRef.current = fallback;
+        return fallback;
+      } catch (retryErr) {
+        console.warn('[PatronAuthModal] Recaptcha retry failed:', retryErr);
+        return null;
+      }
     }
   };
 
@@ -201,6 +210,12 @@ export const PatronAuthModal: React.FC = () => {
           recaptchaVerifierRef.current.clear();
         } catch {}
         recaptchaVerifierRef.current = null;
+      }
+      const container = document.getElementById('modal-recaptcha-container');
+      if (container) {
+        try {
+          container.innerHTML = '';
+        } catch {}
       }
     } finally {
       setLoading(false);
@@ -748,7 +763,7 @@ export const PatronAuthModal: React.FC = () => {
             <span>256-Bit Encrypted Patron Session Vault</span>
           </div>
 
-          <div id="modal-recaptcha-container" style={{ display: 'none' }} />
+          <div id="modal-recaptcha-container" />
         </div>
       </div>
     </div>

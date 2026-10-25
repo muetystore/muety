@@ -111,7 +111,17 @@ export const LoginPage: React.FC = () => {
       return verifier;
     } catch (err: any) {
       console.warn('[LoginPage] Recaptcha initialization note:', err);
-      return null;
+      // If element was previously rendered, ensure container is cleared and retry once
+      try {
+        const container = document.getElementById('recaptcha-container');
+        if (container) container.innerHTML = '';
+        const fallbackVerifier = setupRecaptcha('recaptcha-container', { size: 'invisible' });
+        recaptchaVerifierRef.current = fallbackVerifier;
+        return fallbackVerifier;
+      } catch (retryErr) {
+        console.warn('[LoginPage] Recaptcha fallback note:', retryErr);
+        return null;
+      }
     }
   };
 
@@ -180,12 +190,18 @@ export const LoginPage: React.FC = () => {
       const msg = err?.message || 'Failed to send verification SMS. Please verify your mobile number.';
       setFormError(msg);
       error(msg);
-      // Reset recaptcha on error so next attempt gets a fresh verifier
+      // Reset recaptcha on error so next attempt gets a fresh verifier cleanly
       if (recaptchaVerifierRef.current) {
         try {
           recaptchaVerifierRef.current.clear();
         } catch {}
         recaptchaVerifierRef.current = null;
+      }
+      const container = document.getElementById('recaptcha-container');
+      if (container) {
+        try {
+          container.innerHTML = '';
+        } catch {}
       }
     } finally {
       setLoading(false);
@@ -713,8 +729,8 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Invisible Firebase reCAPTCHA Container */}
-        <div id="recaptcha-container" style={{ display: 'none' }} />
+        {/* Invisible Firebase reCAPTCHA Container - Must NOT have display: none to allow challenge evaluation */}
+        <div id="recaptcha-container" />
       </div>
     </div>
   );
