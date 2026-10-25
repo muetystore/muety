@@ -841,8 +841,8 @@ export const ProductDetailPage: React.FC = () => {
                 </>
               )}
 
-              {/* Floating Mobile & Desktop Zoom In / Out Controls */}
-              <div className="pdp-gallery-zoom-controls" role="group" aria-label="Image zoom controls">
+              {/* Floating Mobile & Desktop Zoom In / Out Controls (Hidden visually, functions preserved) */}
+              <div className="pdp-gallery-zoom-controls" style={{ display: 'none' }} role="group" aria-label="Image zoom controls">
                 {zoomScale > 1 && (
                   <button
                     type="button"

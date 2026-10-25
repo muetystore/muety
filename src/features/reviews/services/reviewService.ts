@@ -89,13 +89,21 @@ class ReviewService {
     }
   }
 
-  async addReview(reviewData: Omit<PatronReview, 'id' | 'createdAt'> & { productSlug?: string; id?: string }): Promise<PatronReview> {
+  async addReview(reviewData: Partial<PatronReview> & { rating?: number; productSlug?: string; id?: string }): Promise<PatronReview> {
+    const rawQuote = reviewData.quote || reviewData.comment || 'Patron Review';
     const newReview: PatronReview = {
+      productName: reviewData.productName || 'Patron Review',
+      authorName: reviewData.authorName || 'Patron',
+      authorLocation: reviewData.authorLocation || 'India',
+      verifiedPurchase: reviewData.verifiedPurchase !== undefined ? reviewData.verifiedPurchase : true,
+      isFeatured: Boolean(reviewData.isFeatured),
+      productId: reviewData.productId || 'general',
       ...reviewData,
+      quote: rawQuote,
+      comment: reviewData.comment || rawQuote,
       id: reviewData.id || `rev-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       rating: Number(reviewData.rating) || 5,
       status: reviewData.status || 'approved',
-      authorLocation: reviewData.authorLocation || 'India',
       createdAt: new Date().toISOString()
     };
 

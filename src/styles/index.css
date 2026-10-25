@@ -3491,10 +3491,10 @@ textarea:focus-visible {
 
 /* Floating Mobile & Desktop Zoom In / Out Controls */
 .pdp-gallery-zoom-controls {
+  display: none !important;
   position: absolute;
   bottom: 14px;
   right: 14px;
-  display: flex;
   align-items: center;
   gap: 6px;
   z-index: 8;
