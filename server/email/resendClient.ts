@@ -30,7 +30,8 @@ export async function sendViaResend(payload: SendEmailPayload): Promise<SendEmai
   const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true' || !!process.env.VITEST;
   const apiKey = process.env.RESEND_API_KEY;
 
-  if (isTest && (!apiKey || apiKey === 'test_resend_key' || apiKey.startsWith('test_'))) {
+  // In test environments (Vitest / Jest / test runner), strictly prevent real outbound emails
+  if (isTest && process.env.RESEND_ENABLE_LIVE_IN_TESTS !== 'true') {
     return {
       success: true,
       messageId: `resend-test-${Date.now()}`

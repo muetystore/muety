@@ -147,19 +147,19 @@ describe('MUETY Customer CRM Security & Data Integrity Hardening Suite', () => {
       await expect(handleCreateServerOrder(mockToken, {
         customerId: 'cust-victim-888',
         customerName: 'Victim User',
-        customerEmail: 'victim@gmail.com',
+        customerEmail: 'victim@example.com',
         shippingAddress: { fullName: 'Victim', streetAddress: '1 Main Rd', city: 'Chennai', postalCode: '600001', phone: '9999999999' },
         items: [{ productId: 'p1', quantity: 1, price: 5000 }]
       })).rejects.toThrow(/Customer ID in request body does not match authenticated credentials/i);
     });
 
     it('derives customer UID exclusively from verified claims for authenticated checkout', async () => {
-      const tokenPayload = Buffer.from(JSON.stringify({ uid: 'cust-verified-555', email: 'verified@gmail.com', roles: ['customer'] })).toString('base64');
+      const tokenPayload = Buffer.from(JSON.stringify({ uid: 'cust-verified-555', email: 'verified@example.com', roles: ['customer'] })).toString('base64');
       const mockToken = `Bearer fakeHeader.${tokenPayload}.fakeSig`;
 
       const result = await handleCreateServerOrder(mockToken, {
         customerName: 'Verified Patron',
-        customerEmail: 'verified@gmail.com',
+        customerEmail: 'verified@example.com',
         shippingAddress: { fullName: 'Verified Patron', streetAddress: '1 Main Rd', city: 'Chennai', postalCode: '600001', phone: '9999999999' },
         items: [{ productId: 'p1', quantity: 2, price: 2000 }]
       });
@@ -171,7 +171,7 @@ describe('MUETY Customer CRM Security & Data Integrity Hardening Suite', () => {
     it('allows guest checkout when no customerId and no token are provided', async () => {
       const result = await handleCreateServerOrder(undefined, {
         customerName: 'Guest Shopper',
-        customerEmail: 'guest@gmail.com',
+        customerEmail: 'guest@example.com',
         shippingAddress: { fullName: 'Guest Shopper', streetAddress: '5 Beach Rd', city: 'Mumbai', postalCode: '400001', phone: '9888888888' },
         items: [{ productId: 'p2', quantity: 1, price: 3500 }]
       });

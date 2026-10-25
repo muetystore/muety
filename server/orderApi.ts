@@ -4,6 +4,7 @@ import { processOrderConfirmationEmails } from './email/emailService';
 export async function handleCreateServerOrder(authHeader: string | undefined, body: any) {
   const caller = await verifyIdTokenAndGetClaims(authHeader);
   const db = getAdminFirestore();
+  const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true' || !!process.env.VITEST;
 
   const {
     customerId,
@@ -319,10 +320,12 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
       };
     });
 
-    // Durably trigger automated order email notifications
-    await processOrderConfirmationEmails(txResult.order).catch(emailErr => {
-      console.error('[OrderApi] Background email notification error:', emailErr);
-    });
+    // Durably trigger automated order email notifications (skipped in automated unit test environment)
+    if (!isTest || process.env.RESEND_ENABLE_LIVE_IN_TESTS === 'true') {
+      await processOrderConfirmationEmails(txResult.order).catch(emailErr => {
+        console.error('[OrderApi] Background email notification error:', emailErr);
+      });
+    }
 
     return txResult;
   }
@@ -384,10 +387,12 @@ export async function handleCreateServerOrder(authHeader: string | undefined, bo
     updatedAt: now
   };
 
-  // Trigger email notifications for fallback path
-  await processOrderConfirmationEmails(orderPayload).catch(emailErr => {
-    console.error('[OrderApi] Background fallback email notification error:', emailErr);
-  });
+  // Trigger email notifications for fallback path (skipped in automated unit tests)
+  if (!isTest || process.env.RESEND_ENABLE_LIVE_IN_TESTS === 'true') {
+    await processOrderConfirmationEmails(orderPayload).catch(emailErr => {
+      console.error('[OrderApi] Background fallback email notification error:', emailErr);
+    });
+  }
 
   return {
     success: true,
