@@ -179,7 +179,7 @@ export const AnnouncementBar: React.FC = () => {
         borderBottom: '1px solid rgba(201, 162, 39, 0.35)',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         position: 'relative',
         zIndex: 1001,
         width: '100%',
@@ -220,49 +220,6 @@ export const AnnouncementBar: React.FC = () => {
             ))}
           </div>
         </div>
-      </div>
-
-
-      {/* Desktop Quick Utility Links */}
-      <div 
-        className="announcement-right-links"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          fontSize: '0.72rem',
-          color: '#cbd5e1',
-          flexShrink: 0,
-          marginLeft: '1rem',
-          zIndex: 2
-        }}
-      >
-        <Link 
-          to="/account?tab=orders" 
-          style={{ color: '#e2e8f0', transition: 'color 0.15s ease' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#facc15')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#e2e8f0')}
-        >
-          Track Order
-        </Link>
-        <span style={{ opacity: 0.35 }}>|</span>
-        <Link 
-          to="/about" 
-          style={{ color: '#e2e8f0', transition: 'color 0.15s ease' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#facc15')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#e2e8f0')}
-        >
-          Muety Atelier
-        </Link>
-        <span style={{ opacity: 0.35 }}>|</span>
-        <Link 
-          to="/support" 
-          style={{ color: '#e2e8f0', transition: 'color 0.15s ease' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#facc15')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#e2e8f0')}
-        >
-          Patron Care
-        </Link>
       </div>
 
       <style>{`
@@ -314,12 +271,8 @@ export const AnnouncementBar: React.FC = () => {
           }
         }
         @media (max-width: 991px) {
-          .announcement-right-links {
-            display: none !important;
-          }
           .announcement-bar-top {
             padding: 5px 8px !important;
-            justify-content: center !important;
           }
         }
         @media (max-width: 425px) {
