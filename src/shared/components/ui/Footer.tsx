@@ -231,12 +231,12 @@ export const Footer: React.FC = () => {
             <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.9rem', color: '#94a3b8' }}>
               <li>
                 <Link to="/about" style={{ transition: 'color var(--transition-fast)' }} onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
-                  About MUETY & Leadership
+                  About Us
                 </Link>
               </li>
               <li>
                 <Link to="/contact" style={{ transition: 'color var(--transition-fast)' }} onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
-                  Contact Concierge
+                  Contact Support
                 </Link>
               </li>
               <li>

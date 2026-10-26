@@ -1,0 +1,19 @@
+﻿# MUETY — Sarees & Ethnic Wear
+# https://www.muety.in
+
+User-agent: *
+Allow: /
+
+# Block private/auth/checkout routes from crawlers
+Disallow: /login
+Disallow: /register
+Disallow: /account
+Disallow: /checkout
+Disallow: /cart
+Disallow: /order-confirmation/
+Disallow: /wishlist
+Disallow: /admin/
+Disallow: /unsubscribe
+
+# Sitemap location
+Sitemap: https://www.muety.in/sitemap.xml

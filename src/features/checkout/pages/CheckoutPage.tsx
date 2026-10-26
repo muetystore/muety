@@ -665,10 +665,10 @@ export const CheckoutPage: React.FC = () => {
                       <Truck size={20} />
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.98rem', color: 'var(--brand-primary)' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--brand-primary)', textAlign: 'left' }}>
                         MUETY Pan-India Tracked Courier (2-4 Business Days)
                       </div>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--brand-muted)', marginTop: '2px' }}>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--brand-muted)', marginTop: '2px', textAlign: 'left' }}>
                         Direct dispatch from Muety atelier • Transit insured with live SMS & tracking
                       </div>
                     </div>

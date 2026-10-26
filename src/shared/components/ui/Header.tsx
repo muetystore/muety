@@ -1026,7 +1026,7 @@ export const Header: React.FC = () => {
                 className={`mobile-nav-tab-btn ${mobileNavTab === 'concierge' ? 'active' : ''}`}
               >
                 <User size={14} color="#C99A16" />
-                <span>Patron Suite</span>
+                <span>Account</span>
                 {isAdminUser && <span className="tab-admin-dot" title="Executive Privilege" />}
               </button>
             </div>
@@ -1347,7 +1347,7 @@ export const Header: React.FC = () => {
                     onClick={() => setMobileNavTab('concierge')}
                     role="button"
                     tabIndex={0}
-                    title="Open Patron Suite"
+                    title="Open Account"
                   >
                     <div className="dock-left">
                       <div className="dock-avatar">
@@ -1365,7 +1365,7 @@ export const Header: React.FC = () => {
                       </div>
                     </div>
                     <div className="dock-right">
-                      <span>Patron Suite</span>
+                      <span>Account</span>
                       <ChevronRight size={14} color="#C99A16" />
                     </div>
                   </div>
