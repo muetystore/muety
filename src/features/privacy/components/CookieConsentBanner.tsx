@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { consentManager } from '../services/consentManager';
 import { ConsentCategories, ConsentCategoryInfo } from '../types';
+import { authService } from '@/features/auth/services/authService';
 
 const CATEGORY_DETAILS: ConsentCategoryInfo[] = [
   {
@@ -41,11 +42,11 @@ const CATEGORY_DETAILS: ConsentCategoryInfo[] = [
   },
   {
     id: 'marketing',
-    name: 'Marketing',
+    name: 'Marketing (Patron Circle)',
     required: false,
-    summary: 'Advertising attribution, remarketing & campaign effectiveness.',
-    details: 'These cookies may be used to measure the effectiveness of promotional campaigns and tailor communications to your interests across partner platforms. Optional and disabled by default.',
-    examples: ['Promotional campaign attribution', 'Ad conversion measurement']
+    summary: 'Advertising attribution, email campaigns & exclusive Patron Circle membership.',
+    details: 'These cookies allow us to tailor boutique communications, deliver personalized atelier previews, and enroll opted-in patrons into the exclusive MUETY Patron Circle for bespoke email campaigns, private collection releases, and curated offers. Optional and disabled by default.',
+    examples: ['MUETY Patron Circle email campaigns', 'Promotional campaign attribution', 'Ad conversion measurement']
   }
 ];
 
@@ -130,10 +131,19 @@ export const CookieConsentBanner: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isCustomizeOpen]);
 
-  const handleAcceptAll = () => {
+  const handleAcceptAll = async () => {
     consentManager.acceptAll();
     setIsVisible(false);
     setIsCustomizeOpen(false);
+
+    try {
+      const user = authService.getCurrentUser();
+      if (user?.uid) {
+        await authService.recordPatronCircleConsent(user.uid, true, user.email, user.phoneNumber);
+      }
+    } catch (err) {
+      console.warn('[CookieConsent] Patron Circle sync note:', err);
+    }
   };
 
   const handleRejectOptional = () => {
@@ -153,11 +163,22 @@ export const CookieConsentBanner: React.FC = () => {
     setIsCustomizeOpen(true);
   };
 
-  const handleSavePreferences = () => {
+  const handleSavePreferences = async () => {
     consentManager.saveCustomPreferences(selectedChoices);
     setIsVisible(false);
     setIsCustomizeOpen(false);
     triggerRef.current?.focus();
+
+    if (selectedChoices.marketing) {
+      try {
+        const user = authService.getCurrentUser();
+        if (user?.uid) {
+          await authService.recordPatronCircleConsent(user.uid, true, user.email, user.phoneNumber);
+        }
+      } catch (err) {
+        console.warn('[CookieConsent] Patron Circle sync note:', err);
+      }
+    }
   };
 
   const toggleCategoryChoice = (category: keyof typeof selectedChoices) => {

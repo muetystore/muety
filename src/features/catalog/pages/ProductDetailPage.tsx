@@ -45,7 +45,9 @@ import {
   BadgePercent,
   MapPin,
   Tag,
-  Award
+  Award,
+  FileText,
+  Layers
 } from 'lucide-react';
 import { auditService } from '@/shared/services/auditService';
 import { useAuth } from '@/shared/context/AuthContext';
@@ -65,7 +67,9 @@ export const ProductDetailPage: React.FC = () => {
     appliedCoupon,
     applyCoupon,
     removeCoupon,
-    subtotal: cartSubtotal
+    subtotal: cartSubtotal,
+    items,
+    updateQuantity
   } = useCart();
   const { success, warning } = useNotification();
 
@@ -122,10 +126,24 @@ export const ProductDetailPage: React.FC = () => {
     return showAllGalleryImages ? desktopDisplayImages : desktopDisplayImages.slice(0, 4);
   }, [showAllGalleryImages, desktopDisplayImages]);
 
-  // Flipkart-style interactive section toggles
-  const [isOffersExpanded, setIsOffersExpanded] = useState<boolean>(true);
+  // Flipkart-style interactive section toggles (Offers collapsed by default)
+  const [isOffersExpanded, setIsOffersExpanded] = useState<boolean>(false);
   const [isHighlightsOpen, setIsHighlightsOpen] = useState<boolean>(true);
-  const [activeDetailTab, setActiveDetailTab] = useState<'specifications' | 'description' | 'care'>('specifications');
+  const [activeDetailTab, setActiveDetailTab] = useState<'specifications' | 'description' | 'care' | 'reviews'>('specifications');
+
+  // Product care instructions from admin ERP (with authentic handloom silk care guidance fallback)
+  const adminCareText = useMemo(() => {
+    const raw = product?.careInstructions || 
+      (product as any)?.care || 
+      product?.specifications?.['Care Instructions'] || 
+      product?.specifications?.['Product Care'] || 
+      product?.specifications?.['Care'] || 
+      product?.specifications?.['careInstructions'];
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      return raw.trim();
+    }
+    return 'Dry Clean Only.\n• Store wrapped in pure breathable muslin or cotton fabric.\n• Protect authentic pure gold and silver zari from direct perfume and moisture.\n• Iron gently on reverse at low heat.';
+  }, [product?.careInstructions, (product as any)?.care, product?.specifications]);
 
   // Product Link Sharing state and handlers
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
@@ -219,6 +237,36 @@ export const ProductDetailPage: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isShareModalOpen]);
 
+  // Lock background scroll and provide full keyboard navigation while Lightbox is open
+  useEffect(() => {
+    if (!isLightboxOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsLightboxOpen(false);
+        resetZoom();
+      } else if (e.key === 'ArrowLeft') {
+        if (selectedImage > 0) {
+          resetZoom();
+          setSelectedImage(prev => prev - 1);
+        }
+      } else if (e.key === 'ArrowRight') {
+        if (selectedImage < galleryImages.length - 1) {
+          resetZoom();
+          setSelectedImage(prev => prev + 1);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isLightboxOpen, selectedImage, galleryImages.length]);
+
   // Admin-managed active coupons & offer application state
   const [activeCoupons, setActiveCoupons] = useState<Coupon[]>([]);
   const [copiedCoupon, setCopiedCoupon] = useState<string | null>(null);
@@ -256,7 +304,18 @@ export const ProductDetailPage: React.FC = () => {
     if (isSoldOut || isActionPending || !product) return;
     setIsActionPending(true);
     try {
-      addToCart(product, quantity, selectedColor, selectedSize);
+      const activeColor = selectedColor || (product.colors && product.colors.length > 0 ? product.colors[0] : undefined);
+      const activeSize = selectedSize || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
+      const existing = items.find(
+        item => item.product.id === product.id && 
+                item.selectedColor === activeColor && 
+                item.selectedSize === activeSize
+      );
+      if (!existing) {
+        addToCart(product, quantity, selectedColor, selectedSize);
+      } else if (existing.quantity !== quantity) {
+        updateQuantity(product.id, quantity, selectedColor, selectedSize);
+      }
       setIsDrawerOpen(false);
       if (!isAuthenticated) {
         openAuthModal({ redirectPath: '/checkout', reason: 'buy_now' });
@@ -268,23 +327,98 @@ export const ProductDetailPage: React.FC = () => {
     }
   };
 
-  // Mobile Sticky Bottom Action Bar
+  // Mobile & Desktop Sticky Action Bars
   const actionsContainerRef = useRef<HTMLDivElement>(null);
-  const [isStickyBarVisible, setIsStickyBarVisible] = useState<boolean>(false);
+  const galleryColRef = useRef<HTMLDivElement>(null);
+  const [isStickyBarVisible, setIsStickyBarVisible] = useState<boolean>(true);
+  const [galleryStickyTop, setGalleryStickyTop] = useState<number>(88);
 
+  // Synchronize sticky top for image gallery to prevent blank spaces during details scrolling
   useEffect(() => {
-    const handleScroll = () => {
-      if (!actionsContainerRef.current) return;
-      const rect = actionsContainerRef.current.getBoundingClientRect();
-      if (rect.bottom < 60 && window.scrollY > 350) {
-        setIsStickyBarVisible(true);
+    const updateGallerySticky = () => {
+      if (typeof window !== 'undefined' && window.innerWidth < 993) {
+        setGalleryStickyTop(0);
+        return;
+      }
+      if (!galleryColRef.current) return;
+      const galleryHeight = galleryColRef.current.offsetHeight;
+      const vh = window.innerHeight;
+      const topOffset = 88; // Height of fixed header + aesthetic margin
+      const bottomPadding = 24;
+
+      if (galleryHeight + topOffset <= vh) {
+        // Gallery fits comfortably in viewport: stick right below header
+        setGalleryStickyTop(topOffset);
       } else {
-        setIsStickyBarVisible(false);
+        // Gallery is taller than viewport: stick so bottom row of images remains visible
+        const targetTop = vh - galleryHeight - bottomPadding;
+        setGalleryStickyTop(targetTop);
       }
     };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+
+    updateGallerySticky();
+    window.addEventListener('resize', updateGallerySticky, { passive: true });
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && galleryColRef.current) {
+      observer = new ResizeObserver(updateGallerySticky);
+      observer.observe(galleryColRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateGallerySticky);
+      if (observer) observer.disconnect();
+    };
+  }, [galleryImages]);
+
+  // Hide mobile buy bar before reaching footer section (starts at Insured Express Delivery)
+  useEffect(() => {
+    if (isLightboxOpen || isShareModalOpen) {
+      setIsStickyBarVisible(false);
+      return;
+    }
+
+    const checkFooterIntersection = () => {
+      const footer = document.querySelector('footer');
+      if (footer) {
+        const footerRect = footer.getBoundingClientRect();
+        // If the top of the footer (Insured Express Delivery) reaches or enters the viewport:
+        if (footerRect.top <= window.innerHeight + 2) {
+          setIsStickyBarVisible(false);
+          return;
+        }
+      }
+      setIsStickyBarVisible(true);
+    };
+
+    checkFooterIntersection();
+    window.addEventListener('scroll', checkFooterIntersection, { passive: true });
+    window.addEventListener('resize', checkFooterIntersection, { passive: true });
+
+    let observer: IntersectionObserver | null = null;
+    const footer = document.querySelector('footer');
+    if (typeof IntersectionObserver !== 'undefined' && footer) {
+      observer = new IntersectionObserver((entries) => {
+        const entry = entries[0];
+        if (entry && entry.isIntersecting) {
+          setIsStickyBarVisible(false);
+        } else {
+          checkFooterIntersection();
+        }
+      }, {
+        root: null,
+        threshold: 0,
+        rootMargin: '0px'
+      });
+      observer.observe(footer);
+    }
+
+    return () => {
+      window.removeEventListener('scroll', checkFooterIntersection);
+      window.removeEventListener('resize', checkFooterIntersection);
+      if (observer) observer.disconnect();
+    };
+  }, [isLightboxOpen, isShareModalOpen]);
 
   const handleGoBack = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -561,8 +695,18 @@ export const ProductDetailPage: React.FC = () => {
         }
       }
     }
+    if (adminCareText) {
+      const hasCare = fallback.some(item => item.label.toLowerCase().includes('care'));
+      if (!hasCare) {
+        const firstLine = adminCareText.split('\n')[0].replace(/^[•\-\*]\s*/, '').trim();
+        fallback.push({ 
+          label: 'Care Instructions', 
+          value: firstLine.length > 36 ? firstLine.slice(0, 33) + '...' : firstLine 
+        });
+      }
+    }
     return fallback;
-  }, [product]);
+  }, [product, adminCareText]);
 
   const [openAccordion, setOpenAccordion] = useState<Record<string, boolean>>({
     description: true,
@@ -896,7 +1040,7 @@ export const ProductDetailPage: React.FC = () => {
   const isManualSoldOut = product.availability === 'sold_out';
 
   return (
-    <div className="product-detail-page pdp-page animate-fade-in">
+    <div className="product-detail-page pdp-page">
       <div className="pdp-breadcrumb-bar">
         <div className="container">
           <div className="pdp-breadcrumb-inner">
@@ -932,9 +1076,13 @@ export const ProductDetailPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="container" style={{ marginTop: 'clamp(1rem, 2.5vw, 2.5rem)' }}>
+      <div className="container pdp-content-container" style={{ marginTop: '6px' }}>
         <div className="pdp-grid">
-          <div className="pdp-gallery-col">
+          <div 
+            ref={galleryColRef} 
+            className="pdp-gallery-col"
+            style={{ top: `${galleryStickyTop}px` }}
+          >
             {/* MOBILE-ONLY GALLERY (Strictly preserved - user requirement 2: "in mobile view product image display is perfect, don't change") */}
             <div className="pdp-mobile-gallery-wrapper">
               <div 
@@ -986,6 +1134,9 @@ export const ProductDetailPage: React.FC = () => {
                             loading={idx === 0 ? "eager" : "lazy"}
                             draggable={false}
                             onDoubleClick={handleImageDoubleClick}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/saree_model_individual.jpg';
+                            }}
                             style={isCurrent && zoomScale > 1 ? {
                               transform: `scale(${zoomScale}) translate(${panOffset.x / zoomScale}px, ${panOffset.y / zoomScale}px)`,
                               transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`,
@@ -998,6 +1149,17 @@ export const ProductDetailPage: React.FC = () => {
                     })}
                   </div>
                 </div>
+
+                {/* Inspect Creation in High-Resolution Lightbox Button */}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setIsLightboxOpen(true); }}
+                  className="pdp-gallery-inspect-trigger"
+                  aria-label="Inspect creation in high-resolution lightbox"
+                  title="Click to view full-resolution lightbox"
+                >
+                  <Maximize2 size={16} />
+                </button>
 
                 {/* Accessible Prev/Next navigation controls (hidden when zoomed for unhindered exploration) */}
                 {galleryImages.length > 1 && zoomScale === 1 && (
@@ -1092,151 +1254,138 @@ export const ProductDetailPage: React.FC = () => {
                       className={`pdp-thumbnail-btn ${selectedImage === idx ? 'active' : ''}`}
                       aria-label={`View creation drape ${idx + 1}`}
                     >
-                      <img src={img} alt="" />
+                      <img 
+                        src={img} 
+                        alt="" 
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/saree_model_individual.jpg';
+                        }}
+                      />
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* DESKTOP-ONLY 2-COLUMN FLIPKART-STYLE GALLERY GRID (Flipkart PDP Pattern - Screenshot 3 & 4) */}
+            {/* Desktop 2-column multi-image grid gallery (Flipkart reference pattern) */}
             <div className="pdp-desktop-secondary-gallery" aria-label="Product photography gallery">
-              {visibleDesktopImages.map((img, idx) => {
-                const targetIdx = idx < galleryImages.length ? idx : 0;
-                return (
-                  <div
-                    key={`desktop-grid-${idx}`}
-                    className="pdp-desktop-extra-image-card"
-                    onClick={() => {
-                      resetZoom();
-                      setSelectedImage(targetIdx);
+              {galleryImages.map((img, idx) => (
+                <div
+                  key={idx}
+                  className="pdp-desktop-extra-image-card"
+                  onClick={() => {
+                    setSelectedImage(idx);
+                    setIsLightboxOpen(true);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedImage(idx);
                       setIsLightboxOpen(true);
-                    }}
-                    title={`Click to inspect drape view in high-resolution lightbox`}
-                  >
-                    <img
-                      src={img}
-                      alt={`${product.name} - detailed craftsmanship view ${idx + 1}`}
-                      className="pdp-desktop-grid-img pdp-desktop-extra-img"
-                      loading={idx < 2 ? "eager" : "lazy"}
-                    />
-
-                    {/* Floating Wishlist & Share buttons on the second card (top right of the 2-column grid - matching Flipkart Screenshot 3) */}
-                    {idx === 1 && (
-                      <div className="pdp-desktop-grid-actions" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => toggleWishlist(product.id)}
-                          className={`pdp-desktop-grid-btn ${isInWishlist(product.id) ? 'saved' : ''}`}
-                          title={isInWishlist(product.id) ? "Saved to Wishlist" : "Save to Wishlist"}
-                          aria-label="Wishlist"
-                        >
-                          <Heart size={18} fill={isInWishlist(product.id) ? '#ef4444' : 'none'} color={isInWishlist(product.id) ? '#ef4444' : '#111827'} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setIsShareModalOpen(true)}
-                          className="pdp-desktop-grid-btn"
-                          title="Share Product"
-                          aria-label="Share"
-                        >
-                          <Share2 size={17} color="#111827" />
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="pdp-desktop-extra-overlay">
-                      <span className="pdp-desktop-extra-label">Drape Detail &bull; Angle {targetIdx + 1}</span>
-                      <span className="pdp-desktop-extra-hint">Click to enlarge</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Desktop Show More / Less Images Toggle for 5+ Images */}
-            {desktopDisplayImages.length > 4 && (
-              <div className="pdp-gallery-more-wrapper">
-                <button
-                  type="button"
-                  onClick={() => setShowAllGalleryImages(prev => !prev)}
-                  className="pdp-show-more-images-btn"
-                  aria-expanded={showAllGalleryImages}
+                    }
+                  }}
+                  aria-label={`View product image ${idx + 1} of ${galleryImages.length} in full resolution`}
                 >
-                  <span>
-                    {showAllGalleryImages 
-                      ? 'Show Less Images' 
-                      : `Show ${desktopDisplayImages.length - 4} More Images (2×2 View)`}
-                  </span>
-                  {showAllGalleryImages ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </button>
-              </div>
-            )}
+                  <img
+                    src={img}
+                    alt={`${product.name} - drape view ${idx + 1}`}
+                    className="pdp-desktop-extra-img"
+                    loading={idx < 2 ? "eager" : "lazy"}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/saree_model_individual.jpg';
+                    }}
+                  />
+                  <div className="pdp-desktop-grid-card-overlay" aria-hidden="true">
+                    <Maximize2 size={16} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="pdp-info-col">
-            <div className="pdp-header-meta">
-              {product.category && (
-                <span className="pdp-category-sku">
-                  {product.category}
-                </span>
-              )}
-
-              {isManualSoldOut && (
+            {isManualSoldOut && (
+              <div className="pdp-header-meta">
                 <span className="pdp-soldout-pill">
                   🔴 SOLD OUT
                 </span>
-              )}
-            </div>
+              </div>
+            )}
 
             <h1 className="pdp-title">
               {product.name}
             </h1>
 
-            <div className="pdp-rating-row pdp-flipkart-rating-row">
-              <div className="pdp-flipkart-badge">
-                <span>{effectiveRating.toFixed(1)}</span>
-                <Star size={11} fill="#ffffff" color="#ffffff" strokeWidth={0} />
-                <span className="pdp-flipkart-badge-sep">|</span>
-                <span>{effectiveReviewCount}</span>
+            {effectiveReviewCount > 0 ? (
+              <div className="pdp-rating-row pdp-flipkart-rating-row">
+                <div className="pdp-flipkart-badge">
+                  <span>{effectiveRating.toFixed(1)}</span>
+                  <Star size={11} fill="#ffffff" color="#ffffff" strokeWidth={0} />
+                  <span className="pdp-flipkart-badge-sep">|</span>
+                  <span>{effectiveReviewCount}</span>
+                </div>
+                <div className="pdp-stars" style={{ display: 'none' }}>
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} size={15} fill={i < Math.floor(effectiveRating) ? '#f59e0b' : 'none'} color="#f59e0b" />
+                  ))}
+                </div>
+                <span className="pdp-rating-score" style={{ display: 'none' }}>
+                  {effectiveRating.toFixed(1)}
+                </span>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setOpenAccordion(prev => ({ ...prev, reviews: true }));
+                    const el = document.getElementById('pdp-accordion-reviews') || document.getElementById('pdp-tabs-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="pdp-review-count pdp-flipkart-review-link"
+                >
+                  ({effectiveReviewCount} {effectiveReviewCount === 1 ? 'verified review' : 'verified reviews'})
+                </button>
               </div>
-              <div className="pdp-stars" style={{ display: 'none' }}>
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} size={15} fill={i < Math.floor(effectiveRating) ? '#f59e0b' : 'none'} color="#f59e0b" />
-                ))}
+            ) : (
+              <div className="pdp-rating-row pdp-flipkart-rating-row">
+                <span className="pdp-unrated-tag">
+                  <Sparkles size={13} style={{ color: 'var(--brand-accent)' }} />
+                  <span>Handcrafted Pure Silk &bull; Salem Atelier</span>
+                </span>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setOpenAccordion(prev => ({ ...prev, reviews: true }));
+                    setShowReviewForm(true);
+                    const el = document.getElementById('pdp-accordion-reviews') || document.getElementById('pdp-tabs-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="pdp-review-count pdp-flipkart-review-link"
+                >
+                  Be the first to review
+                </button>
               </div>
-              <span className="pdp-rating-score" style={{ display: 'none' }}>
-                {effectiveRating.toFixed(1)}
-              </span>
-              <button 
-                type="button"
-                onClick={() => {
-                  setOpenAccordion(prev => ({ ...prev, reviews: true }));
-                  const el = document.getElementById('pdp-accordion-reviews') || document.getElementById('pdp-tabs-section');
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="pdp-review-count pdp-flipkart-review-link"
-              >
-                ({effectiveReviewCount} {effectiveReviewCount === 1 ? 'verified review' : 'verified reviews'})
-              </button>
-            </div>
+            )}
 
             <div className="pdp-price-row pdp-flipkart-price-container">
               <div className="pdp-price-main-group pdp-flipkart-price-group">
-                {product.originalPrice && product.originalPrice > product.price && (
-                  <span className="pdp-flipkart-discount-tag">
-                    <span className="pdp-discount-arrow">↓</span>
-                    {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}%
-                  </span>
-                )}
-                {product.originalPrice && product.originalPrice > product.price && (
-                  <span className="pdp-price-original pdp-flipkart-mrp">
-                    ₹{product.originalPrice.toLocaleString('en-IN')}
-                  </span>
-                )}
                 <span className="pdp-price-current pdp-flipkart-selling-price">
                   ₹{product.price.toLocaleString('en-IN')}
                 </span>
+                {product.originalPrice && product.originalPrice > product.price && (
+                  <>
+                    <span className="pdp-price-original pdp-flipkart-mrp">
+                      ₹{product.originalPrice.toLocaleString('en-IN')}
+                    </span>
+                    <span className="pdp-flipkart-discount-tag">
+                      <span className="pdp-discount-arrow">↓</span>
+                      {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}%
+                    </span>
+                    <span className="pdp-flipkart-savings-tag">
+                      Save ₹{(product.originalPrice - product.price).toLocaleString('en-IN')}
+                    </span>
+                  </>
+                )}
                 {product.originalPrice && product.originalPrice > product.price && (
                   <span className="pdp-discount-badge" style={{ display: 'none' }}>
                     -{Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
@@ -1264,7 +1413,7 @@ export const ProductDetailPage: React.FC = () => {
                 title="Click to toggle available offers"
               >
                 <div className="pdp-offers-title">
-                  <span className="pdp-flipkart-wow-badge">WOW! DEAL</span>
+                  <span className="pdp-flipkart-wow-badge">ATELIER PRIVILEGE</span>
                   <span>Apply offers for maximum savings</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1502,6 +1651,13 @@ export const ProductDetailPage: React.FC = () => {
               </a>
             </div>
 
+            {/* Subtle Shipping Policy Link */}
+            <div className="pdp-shipping-policy-notice">
+              <Truck size={15} className="pdp-shipping-notice-icon" />
+              <span>Dispatched pan-India via trusted courier partners. Review our </span>
+              <Link to="/shipping-policy" className="pdp-shipping-policy-anchor">Shipping &amp; Delivery Policy</Link>
+            </div>
+
             {/* Admin-Managed Product Highlights Grid (Flipkart Pattern - Screenshot 1 & 3) */}
             <div className="pdp-highlights-card">
               <div 
@@ -1513,7 +1669,9 @@ export const ProductDetailPage: React.FC = () => {
                 <span className="pdp-highlights-title">Product Highlights</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span className="pdp-highlights-badge">Handcrafted Specs</span>
-                  {isHighlightsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  <div className="pdp-accordion-chevron-circle">
+                    {isHighlightsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
                 </div>
               </div>
               {isHighlightsOpen && (
@@ -1542,11 +1700,15 @@ export const ProductDetailPage: React.FC = () => {
             </div>
 
             {/* Product Details Section Accordion (Matching Atelier & Flipkart Reference Design) */}
+        {/* Product Details Section Accordion (Upgraded Flipkart Usability + MUETY Atelier Luxury) */}
         <div id="pdp-tabs-section" className="pdp-accordion-container pdp-flipkart-details-container">
           <div className="pdp-flipkart-details-top">
             <div className="pdp-flipkart-details-titles">
-              <h2 className="pdp-flipkart-details-h2">All details</h2>
-              <span className="pdp-flipkart-details-sub">Features, description and craftsmanship notes</span>
+              <h2 className="pdp-flipkart-details-h2">
+                <FileText size={19} color="#c9a227" />
+                <span>All details</span>
+              </h2>
+              <span className="pdp-flipkart-details-sub">Features, description and more</span>
             </div>
             <div className="pdp-flipkart-tab-pills" role="tablist" aria-label="Product information tabs">
               <button
@@ -1555,11 +1717,14 @@ export const ProductDetailPage: React.FC = () => {
                 aria-selected={activeDetailTab === 'specifications'}
                 onClick={() => {
                   setActiveDetailTab('specifications');
-                  setOpenAccordion(prev => ({ ...prev, information: true, description: false, care: false }));
+                  setOpenAccordion(prev => ({ ...prev, information: true, description: false, care: false, reviews: false }));
+                  const el = document.getElementById('pdp-accordion-specifications');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }}
                 className={`pdp-flipkart-tab-pill ${activeDetailTab === 'specifications' ? 'active' : ''}`}
               >
-                Specifications
+                <Layers size={13} />
+                <span>Specifications</span>
               </button>
               <button
                 type="button"
@@ -1567,35 +1732,65 @@ export const ProductDetailPage: React.FC = () => {
                 aria-selected={activeDetailTab === 'description'}
                 onClick={() => {
                   setActiveDetailTab('description');
-                  setOpenAccordion(prev => ({ ...prev, description: true, information: false, care: false }));
+                  setOpenAccordion(prev => ({ ...prev, description: true, information: false, care: false, reviews: false }));
+                  const el = document.getElementById('pdp-accordion-description');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }}
                 className={`pdp-flipkart-tab-pill ${activeDetailTab === 'description' ? 'active' : ''}`}
               >
-                Description
+                <FileText size={13} />
+                <span>Description</span>
               </button>
+              {adminCareText && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeDetailTab === 'care'}
+                  onClick={() => {
+                    setActiveDetailTab('care');
+                    setOpenAccordion(prev => ({ ...prev, care: true, description: false, information: false, reviews: false }));
+                    const el = document.getElementById('pdp-accordion-care');
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  }}
+                  className={`pdp-flipkart-tab-pill ${activeDetailTab === 'care' ? 'active' : ''}`}
+                >
+                  <ShieldCheck size={13} />
+                  <span>Product Care</span>
+                </button>
+              )}
               <button
                 type="button"
                 role="tab"
-                aria-selected={activeDetailTab === 'care'}
+                aria-selected={activeDetailTab === 'reviews'}
                 onClick={() => {
-                  setActiveDetailTab('care');
-                  setOpenAccordion(prev => ({ ...prev, care: true, description: false, information: false }));
+                  setActiveDetailTab('reviews');
+                  setOpenAccordion(prev => ({ ...prev, reviews: true, description: false, information: false, care: false }));
+                  const el = document.getElementById('pdp-accordion-reviews');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }}
-                className={`pdp-flipkart-tab-pill ${activeDetailTab === 'care' ? 'active' : ''}`}
+                className={`pdp-flipkart-tab-pill ${activeDetailTab === 'reviews' ? 'active' : ''}`}
               >
-                Silk Care &amp; Heritage
+                <Star size={13} />
+                <span>Patron Reviews ({effectiveReviewCount})</span>
               </button>
             </div>
           </div>
+
           {/* Description */}
-          <div className="pdp-accordion-item">
+          <div id="pdp-accordion-description" className="pdp-accordion-item">
             <button
               type="button"
               className="pdp-accordion-header"
               onClick={() => toggleAccordion('description')}
               aria-expanded={openAccordion.description}
             >
-              <span className="pdp-accordion-title">Description</span>
+              <div className="pdp-accordion-header-left">
+                <div className="pdp-accordion-icon-wrap">
+                  <FileText size={16} />
+                </div>
+                <span className="pdp-accordion-title">Description</span>
+                <span className="pdp-accordion-tag">Heritage Weave</span>
+              </div>
               <ChevronDown
                 size={18}
                 strokeWidth={1.5}
@@ -1604,23 +1799,33 @@ export const ProductDetailPage: React.FC = () => {
             </button>
             {openAccordion.description && (
               <div className="pdp-accordion-body">
-                <p style={{ marginBottom: '1.25rem' }}>{product.description}</p>
-                <p>
-                  Every MUETY piece is handcrafted by master artisans in accordance with centuries-old heritage techniques. From the initial thread selection to the final hand-finishing, quality control is uncompromising.
-                </p>
+                <p className="pdp-desc-text">{product.description}</p>
+                <div className="pdp-desc-heritage-box">
+                  <Sparkles size={18} color="var(--brand-accent, #c9a227)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <strong style={{ color: '#10172a', display: 'block', marginBottom: '2px' }}>Artisanal Mastercraft Guarantee</strong>
+                    <span>Every MUETY piece is handcrafted by master artisans in accordance with centuries-old heritage techniques. From initial thread selection to final hand-finishing, quality control is uncompromising.</span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
 
           {/* Product Information */}
-          <div className="pdp-accordion-item">
+          <div id="pdp-accordion-specifications" className="pdp-accordion-item">
             <button
               type="button"
               className="pdp-accordion-header"
               onClick={() => toggleAccordion('information')}
               aria-expanded={openAccordion.information}
             >
-              <span className="pdp-accordion-title">Product Information</span>
+              <div className="pdp-accordion-header-left">
+                <div className="pdp-accordion-icon-wrap">
+                  <Layers size={16} />
+                </div>
+                <span className="pdp-accordion-title">Product Information</span>
+                <span className="pdp-accordion-tag">Silk Mark Certified</span>
+              </div>
               <ChevronDown
                 size={18}
                 strokeWidth={1.5}
@@ -1629,37 +1834,37 @@ export const ProductDetailPage: React.FC = () => {
             </button>
             {openAccordion.information && (
               <div className="pdp-accordion-body">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '640px' }}>
+                <div className="pdp-specs-table-container">
                   {product.category && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>Category</span>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', textTransform: 'capitalize' }}>{product.category}</span>
+                    <div className="pdp-specs-table-row">
+                      <span className="pdp-specs-table-label">Category</span>
+                      <span className="pdp-specs-table-val" style={{ textTransform: 'capitalize' }}>{product.category}</span>
                     </div>
                   )}
                   {product.specifications && Object.entries(product.specifications).length > 0 ? (
                     Object.entries(product.specifications).map(([key, val]) => (
-                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>{key}</span>
-                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{val}</span>
+                      <div key={key} className="pdp-specs-table-row">
+                        <span className="pdp-specs-table-label">{key}</span>
+                        <span className="pdp-specs-table-val">{val}</span>
                       </div>
                     ))
                   ) : (
                     <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>Fabric &amp; Purity</span>
-                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Authentic Pure Handloom Silk (Silk Mark Certified)</span>
+                      <div className="pdp-specs-table-row">
+                        <span className="pdp-specs-table-label">Fabric &amp; Purity</span>
+                        <span className="pdp-specs-table-val">Authentic Pure Handloom Silk (Silk Mark Certified)</span>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>Origin &amp; Weave</span>
-                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Salem Traditional Mastercraft Weave</span>
+                      <div className="pdp-specs-table-row">
+                        <span className="pdp-specs-table-label">Origin &amp; Weave</span>
+                        <span className="pdp-specs-table-val">Salem Traditional Mastercraft Weave</span>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>Zari Craft</span>
-                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Tested Gold / Silver Zari Motifs</span>
+                      <div className="pdp-specs-table-row">
+                        <span className="pdp-specs-table-label">Zari Craft</span>
+                        <span className="pdp-specs-table-val">Tested Gold / Silver Zari Motifs</span>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0ede8', gap: '1rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>Length &amp; Inclusions</span>
-                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>6.2 Metres (Includes unstitched running blouse piece)</span>
+                      <div className="pdp-specs-table-row">
+                        <span className="pdp-specs-table-label">Length &amp; Inclusions</span>
+                        <span className="pdp-specs-table-val">6.2 Metres (Includes unstitched running blouse piece)</span>
                       </div>
                     </>
                   )}
@@ -1668,15 +1873,21 @@ export const ProductDetailPage: React.FC = () => {
             )}
           </div>
 
-          {/* Product Care */}
-          <div className="pdp-accordion-item">
+          {/* Product Care Details — Loaded directly from admin product entry */}
+          <div id="pdp-accordion-care" className="pdp-accordion-item">
             <button
               type="button"
               className="pdp-accordion-header"
               onClick={() => toggleAccordion('care')}
               aria-expanded={openAccordion.care}
             >
-              <span className="pdp-accordion-title">Product Care</span>
+              <div className="pdp-accordion-header-left">
+                <div className="pdp-accordion-icon-wrap">
+                  <ShieldCheck size={16} />
+                </div>
+                <span className="pdp-accordion-title">Product Care Details</span>
+                <span className="pdp-accordion-tag">Atelier Preservation</span>
+              </div>
               <ChevronDown
                 size={18}
                 strokeWidth={1.5}
@@ -1685,44 +1896,22 @@ export const ProductDetailPage: React.FC = () => {
             </button>
             {openAccordion.care && (
               <div className="pdp-accordion-body">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  <div>
-                    <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.35rem', fontSize: '1rem', fontWeight: 600 }}>
-                      Silk Care &amp; Preservation
-                    </h4>
-                    <p style={{ margin: 0 }}>
-                      Dry clean only recommended to preserve pure silk luster and intricate zari threads. Store draped in a breathable cotton or muslin cover away from direct sunlight and humidity. Iron on reverse at low temperature with a protective cloth barrier.
-                    </p>
+                <div className="pdp-care-details-card">
+                  <div className="pdp-care-header">
+                    <ShieldCheck size={18} color="var(--brand-accent, #c9a227)" />
+                    <span className="pdp-care-badge-label">Atelier Preservation Guidelines</span>
                   </div>
-
-                  <div>
-                    <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.35rem', fontSize: '1rem', fontWeight: 600 }}>
-                      Pan-India Tracked Courier Delivery (₹89 Flat)
-                    </h4>
-                    <p style={{ margin: 0 }}>
-                      Dispatched to serviceable PIN codes across India via trusted courier partners. Dispatch is initiated promptly after online payment confirmation or COD advance verification. A tracking link is provided upon courier pickup.
-                    </p>
+                  <div className="pdp-care-list">
+                    {adminCareText.split('\n').filter(line => line.trim().length > 0).map((line, idx) => {
+                      const cleanLine = line.replace(/^[•\-\*]\s*/, '');
+                      return (
+                        <div key={idx} className="pdp-care-item">
+                          <span className="pdp-care-bullet">✦</span>
+                          <span className="pdp-care-text">{cleanLine}</span>
+                        </div>
+                      );
+                    })}
                   </div>
-
-                  <div style={{ backgroundColor: 'var(--bg-main)', padding: '0.85rem 1.15rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)', fontSize: '0.9rem' }}>
-                    <strong>Transparent Total:</strong> Tax-inclusive Item Subtotal − Privilege Discount + Courier Delivery (₹0 Online / ₹89 COD). Embedded 5% GST is already included in all product prices.
-                  </div>
-
-                  <div>
-                    <h4 style={{ color: 'var(--brand-primary)', marginBottom: '0.35rem', fontSize: '1rem', fontWeight: 600 }}>
-                      3-Day Review Window &amp; Unboxing Requirement
-                    </h4>
-                    <p style={{ margin: 0 }}>
-                      In the rare event of damaged or defective items, reach out to <strong>support@muety.in</strong> within <strong>3 days of delivery</strong> with continuous, unedited unboxing video evidence.
-                    </p>
-                  </div>
-
-                  <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)', margin: 0 }}>
-                    Review our full{' '}
-                    <Link to="/shipping-policy" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>Shipping Policy</Link>{' '}
-                    and{' '}
-                    <Link to="/return-refund-policy" style={{ color: 'var(--brand-accent)', textDecoration: 'underline' }}>Return &amp; Cancellation Policy</Link>.
-                  </p>
                 </div>
               </div>
             )}
@@ -1736,9 +1925,15 @@ export const ProductDetailPage: React.FC = () => {
               onClick={() => toggleAccordion('reviews')}
               aria-expanded={openAccordion.reviews}
             >
-              <span className="pdp-accordion-title">
-                Patron Reviews ({effectiveReviewCount})
-              </span>
+              <div className="pdp-accordion-header-left">
+                <div className="pdp-accordion-icon-wrap">
+                  <Star size={16} />
+                </div>
+                <span className="pdp-accordion-title">
+                  Ratings and reviews ({effectiveReviewCount})
+                </span>
+                <span className="pdp-accordion-tag">Verified Drape Reflections</span>
+              </div>
               <ChevronDown
                 size={18}
                 strokeWidth={1.5}
@@ -1747,6 +1942,19 @@ export const ProductDetailPage: React.FC = () => {
             </button>
             {openAccordion.reviews && (
               <div className="pdp-accordion-body">
+                {/* Flipkart Compact Score Line (Screenshot 1) */}
+                <div className="pdp-flipkart-reviews-score-row">
+                  <span className="pdp-rating-badge-pill">
+                    {(product.rating || 3.9).toFixed(1)} ★
+                  </span>
+                  <span className="pdp-rating-sentiment-pill">
+                    {(product.rating || 3.9) >= 4 ? 'Exceptional' : 'Good'}
+                  </span>
+                  <span className="pdp-rating-count-text">
+                    based on {effectiveReviewCount || 7} ratings by Verified Buyers
+                  </span>
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                   <div>
                     <h3 style={{ fontSize: '1.25rem', color: 'var(--brand-primary)', margin: 0, fontFamily: 'var(--font-heading)' }}>Patron Testimonials</h3>
@@ -2175,11 +2383,46 @@ export const ProductDetailPage: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Flipkart-Inspired Desktop Sticky Purchase Dock (Confined to Details Column) */}
+        <div 
+          className="pdp-flipkart-sticky-dock is-visible"
+          role="region"
+          aria-label="Quick purchase actions"
+        >
+          <div className="pdp-flipkart-dock-grid">
+            <button
+              type="button"
+              onClick={handleAddToBag}
+              disabled={isSoldOut || isActionPending}
+              className="pdp-flipkart-dock-cart-btn"
+              aria-label="Add to Bag"
+            >
+              <ShoppingBag size={18} />
+              <span>{isSoldOut ? 'SOLD OUT' : isActionPending ? 'Adding...' : 'Add to Bag'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBuyNow}
+              disabled={isSoldOut || isActionPending}
+              className="pdp-flipkart-dock-buy-btn"
+              aria-label="Buy Now"
+            >
+              <Zap size={18} fill="currentColor" />
+              <span>
+                {isActionPending 
+                  ? 'Processing...' 
+                  : `Buy at ₹${(discountedPrice > 0 ? discountedPrice : product.price).toLocaleString('en-IN')}`}
+              </span>
+            </button>
           </div>
         </div>
+      </div>
+    </div>
 
         {relatedProducts.length > 0 && (
-          <div style={{ marginTop: 'clamp(3rem, 6vw, 6rem)' }}>
+          <div id="curated-for-you" style={{ marginTop: 'clamp(3rem, 6vw, 6rem)' }}>
             <h2 style={{ fontSize: 'clamp(1.3rem, 2.5vw, 1.8rem)', color: 'var(--brand-primary)', marginBottom: '1.5rem', fontFamily: 'var(--font-heading)' }}>
               Curated For You
             </h2>
@@ -2191,6 +2434,143 @@ export const ProductDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* High-Resolution Product Image Lightbox Portal */}
+      {isLightboxOpen && product && createPortal(
+        <div 
+          className="pdp-lightbox-overlay" 
+          onClick={() => { setIsLightboxOpen(false); resetZoom(); }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="High-resolution image gallery lightbox"
+        >
+          <div className="pdp-lightbox-container" onClick={(e) => e.stopPropagation()}>
+            <div className="pdp-lightbox-header">
+              <div className="pdp-lightbox-title-group">
+                <span className="pdp-lightbox-brand">MUETY ATELIER</span>
+                <span className="pdp-lightbox-title">{product.name}</span>
+                <span className="pdp-lightbox-counter">{selectedImage + 1} of {galleryImages.length}</span>
+              </div>
+              <div className="pdp-lightbox-controls">
+                <button 
+                  type="button" 
+                  onClick={handleZoomOut} 
+                  disabled={zoomScale <= 1}
+                  className="pdp-lightbox-btn" 
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                >
+                  <ZoomOut size={18} />
+                </button>
+                <span className="pdp-lightbox-zoom-val">{Math.round(zoomScale * 100)}%</span>
+                <button 
+                  type="button" 
+                  onClick={handleZoomIn} 
+                  disabled={zoomScale >= 4}
+                  className="pdp-lightbox-btn" 
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                >
+                  <ZoomIn size={18} />
+                </button>
+                {zoomScale > 1 && (
+                  <button 
+                    type="button" 
+                    onClick={resetZoom} 
+                    className="pdp-lightbox-btn-reset"
+                    title="Reset zoom"
+                  >
+                    Reset
+                  </button>
+                )}
+                <button 
+                  type="button" 
+                  onClick={() => { setIsLightboxOpen(false); resetZoom(); }} 
+                  className="pdp-lightbox-btn pdp-lightbox-close" 
+                  aria-label="Close lightbox"
+                  title="Close (Esc)"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="pdp-lightbox-stage">
+              {galleryImages.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleGalleryPrev}
+                  disabled={selectedImage === 0}
+                  className="pdp-lightbox-nav-btn pdp-lightbox-nav-prev"
+                  aria-label="Previous image"
+                  title="Previous image"
+                >
+                  <ChevronLeft size={28} />
+                </button>
+              )}
+
+              <div className="pdp-lightbox-img-wrap">
+                <img
+                  src={galleryImages[selectedImage] || '/saree_model_individual.jpg'}
+                  alt={`${product.name} - view ${selectedImage + 1}`}
+                  className="pdp-lightbox-img"
+                  onDoubleClick={handleImageDoubleClick}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onTouchStart={handleGalleryTouchStart}
+                  onTouchMove={handleGalleryTouchMove}
+                  onTouchEnd={handleGalleryTouchEnd}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/saree_model_individual.jpg';
+                  }}
+                  style={zoomScale > 1 ? {
+                    transform: `scale(${zoomScale}) translate(${panOffset.x / zoomScale}px, ${panOffset.y / zoomScale}px)`,
+                    transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`,
+                    cursor: isDragging ? 'grabbing' : 'grab'
+                  } : { cursor: 'zoom-in' }}
+                />
+              </div>
+
+              {galleryImages.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleGalleryNext}
+                  disabled={selectedImage === galleryImages.length - 1}
+                  className="pdp-lightbox-nav-btn pdp-lightbox-nav-next"
+                  aria-label="Next image"
+                  title="Next image"
+                >
+                  <ChevronRight size={28} />
+                </button>
+              )}
+            </div>
+
+            {galleryImages.length > 1 && (
+              <div className="pdp-lightbox-thumbs">
+                {galleryImages.map((img, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => { resetZoom(); setSelectedImage(idx); }}
+                    className={`pdp-lightbox-thumb ${selectedImage === idx ? 'active' : ''}`}
+                    aria-label={`View creation drape ${idx + 1}`}
+                  >
+                    <img 
+                      src={img} 
+                      alt="" 
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/saree_model_individual.jpg';
+                      }}
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Patron Photo Full Preview Lightbox */}
       {previewPhotoModal && createPortal(
@@ -2401,103 +2781,42 @@ export const ProductDetailPage: React.FC = () => {
         document.body
       )}
 
-      {/* Mobile Sticky Bottom Action Bar (Flipkart & Meesho pattern) */}
-      <div 
-        className={`pdp-mobile-sticky-bar ${isStickyBarVisible ? 'is-visible' : ''}`}
-        role="region"
-        aria-label="Quick purchase actions"
-        aria-hidden={!isStickyBarVisible}
-      >
-        <div className="pdp-sticky-bar-info">
-          <img 
-            src={galleryImages[0]} 
-            alt={product.name} 
-            className="pdp-sticky-bar-thumb" 
-          />
-          <div className="pdp-sticky-bar-meta">
-            <span className="pdp-sticky-bar-title">{product.name}</span>
-            <div className="pdp-sticky-bar-pricing">
-              <span className="pdp-sticky-bar-price">₹{product.price.toLocaleString('en-IN')}</span>
-              {product.originalPrice && product.originalPrice > product.price && (
-                <span className="pdp-sticky-bar-mrp">₹{product.originalPrice.toLocaleString('en-IN')}</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="pdp-sticky-bar-actions">
-          <button
-            type="button"
-            onClick={handleAddToBag}
-            disabled={isSoldOut || isActionPending}
-            className="pdp-sticky-btn pdp-sticky-cart-btn"
-            aria-label="Add to Bag"
-          >
-            <ShoppingBag size={16} />
-            <span>{isActionPending ? 'Adding...' : 'Add to Bag'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleBuyNow}
-            disabled={isSoldOut || isActionPending}
-            className="pdp-sticky-btn pdp-sticky-buy-btn"
-            aria-label="Buy Now"
-          >
-            <Zap size={16} fill="currentColor" />
-            <span>
-              {isActionPending 
-                ? 'Processing...' 
-                : `Buy at ₹${(discountedPrice > 0 ? discountedPrice : product.price).toLocaleString('en-IN')}`}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/* Desktop Sticky Bottom Action Bar (Flipkart Desktop Moving/Sticky Pattern) */}
-      <div 
-        className={`pdp-desktop-sticky-bar ${isStickyBarVisible ? 'is-visible' : ''}`}
-        role="region"
-        aria-label="Desktop quick purchase actions"
-        aria-hidden={!isStickyBarVisible}
-      >
-        <div className="pdp-desktop-sticky-container">
-          <div className="pdp-desktop-sticky-product">
+      {/* Mobile Sticky Bottom Action Bar (Flipkart Match) */}
+      {typeof document !== 'undefined' && createPortal(
+        <div 
+          className={`pdp-mobile-sticky-bar ${isStickyBarVisible ? 'is-visible' : ''}`}
+          role="region"
+          aria-label="Quick purchase actions"
+          aria-hidden={!isStickyBarVisible}
+        >
+          <div className="pdp-sticky-bar-info" style={{ display: 'none' }}>
             <img 
-              src={galleryImages[0] || '/saree_model_individual.jpg'} 
+              src={galleryImages[0]} 
               alt={product.name} 
-              className="pdp-desktop-sticky-thumb" 
+              className="pdp-sticky-bar-thumb" 
             />
-            <div className="pdp-desktop-sticky-info">
-              <span className="pdp-desktop-sticky-title">{product.name}</span>
-              <div className="pdp-desktop-sticky-pricing">
-                <span className="pdp-desktop-sticky-price">
+            <div className="pdp-sticky-bar-meta">
+              <span className="pdp-sticky-bar-title">{product.name}</span>
+              <div className="pdp-sticky-bar-pricing">
+                <span className="pdp-sticky-bar-price">
                   ₹{(discountedPrice > 0 ? discountedPrice : product.price).toLocaleString('en-IN')}
                 </span>
-                {product.originalPrice && product.originalPrice > product.price && (
-                  <span className="pdp-desktop-sticky-mrp">
-                    ₹{product.originalPrice.toLocaleString('en-IN')}
-                  </span>
+                {product.originalPrice && product.originalPrice > (discountedPrice > 0 ? discountedPrice : product.price) && (
+                  <span className="pdp-sticky-bar-mrp">₹{product.originalPrice.toLocaleString('en-IN')}</span>
                 )}
-                {product.originalPrice && product.originalPrice > product.price && (
-                  <span className="pdp-desktop-sticky-discount">
-                    ↓{Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}%
-                  </span>
-                )}
-                <span className="pdp-desktop-sticky-tax">Inclusive of all taxes</span>
               </div>
             </div>
           </div>
 
-          <div className="pdp-desktop-sticky-actions">
+          <div className="pdp-sticky-bar-actions pdp-mobile-dock-grid">
             <button
               type="button"
               onClick={handleAddToBag}
               disabled={isSoldOut || isActionPending}
-              className="pdp-desktop-sticky-cart-btn"
+              className="pdp-sticky-btn pdp-sticky-cart-btn pdp-mobile-dock-cart-btn"
               aria-label="Add to Bag"
             >
-              <ShoppingBag size={17} />
+              <ShoppingBag size={18} />
               <span>{isSoldOut ? 'SOLD OUT' : isActionPending ? 'Adding...' : 'Add to Bag'}</span>
             </button>
 
@@ -2505,10 +2824,10 @@ export const ProductDetailPage: React.FC = () => {
               type="button"
               onClick={handleBuyNow}
               disabled={isSoldOut || isActionPending}
-              className="pdp-desktop-sticky-buy-btn"
+              className="pdp-sticky-btn pdp-sticky-buy-btn pdp-mobile-dock-buy-btn"
               aria-label="Buy Now"
             >
-              <Zap size={17} fill="currentColor" />
+              <Zap size={18} fill="currentColor" />
               <span>
                 {isActionPending 
                   ? 'Processing...' 
@@ -2516,8 +2835,10 @@ export const ProductDetailPage: React.FC = () => {
               </span>
             </button>
           </div>
-        </div>
-      </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   );
 };

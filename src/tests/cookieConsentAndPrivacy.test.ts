@@ -143,6 +143,7 @@ if (typeof (globalThis as any).localStorage === 'undefined') {
 import { consentManager, CURRENT_POLICY_VERSION } from '../features/privacy/services/consentManager';
 import { trackerService } from '../features/privacy/services/trackerService';
 import { storageService } from '../lib/storage/storageService';
+import { authService } from '../features/auth/services/authService';
 import { CookieConsentRecord } from '../features/privacy/types';
 
 describe('MUETY Cookie Consent & Privacy Controls Test Suite', () => {
@@ -415,6 +416,87 @@ describe('MUETY Cookie Consent & Privacy Controls Test Suite', () => {
       expect(content).toContain('to="/cookie-policy"');
       expect(content).toContain('View MUETY Cookie Policy');
       expect(content).toContain('muety_open_cookie_settings');
+    });
+  });
+
+  describe('5. Marketing Cookie & Patron Circle Integration', () => {
+    it('persists muety_cookie_marketing_consent flag when marketing is accepted', () => {
+      consentManager.rejectOptional();
+      expect((globalThis as any).localStorage.getItem('muety_cookie_marketing_consent')).toBe('false');
+
+      consentManager.acceptAll();
+      expect((globalThis as any).localStorage.getItem('muety_cookie_marketing_consent')).toBe('true');
+
+      consentManager.saveCustomPreferences({ preferences: true, analytics: false, marketing: false });
+      expect((globalThis as any).localStorage.getItem('muety_cookie_marketing_consent')).toBe('false');
+
+      consentManager.saveCustomPreferences({ preferences: false, analytics: true, marketing: true });
+      expect((globalThis as any).localStorage.getItem('muety_cookie_marketing_consent')).toBe('true');
+    });
+
+    it('syncs marketing consent to enroll signed-in patron into Patron Circle and newsletter subs', async () => {
+      const testUser = {
+        uid: 'patron-cookie-test-1',
+        email: 'patron.cookie@muety.in',
+        displayName: 'Cookie Consented Patron',
+        roles: ['customer'] as any[],
+        role: 'customer' as any,
+        createdAt: new Date().toISOString(),
+        patronCircleMember: false,
+        marketingConsent: false
+      };
+      storageService.saveUser(testUser as any);
+      (authService as any).setCurrentUser(testUser as any);
+
+      // Trigger marketing consent
+      const acceptRecord = consentManager.acceptAll();
+      trackerService.syncTrackers(acceptRecord);
+
+      // Wait a brief tick for async consent handling
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Verify patron circle consent recorded
+      const currentUser = authService.getCurrentUser();
+      expect(currentUser?.patronCircleMember).toBe(true);
+      expect(currentUser?.marketingConsent).toBe(true);
+
+      const subs: string[] = JSON.parse((globalThis as any).localStorage.getItem('muety_newsletter_subs') || '[]');
+      expect(subs).toContain('patron.cookie@muety.in');
+    });
+
+    it('automatically enrolls new registering patrons who had accepted marketing cookies beforehand', async () => {
+      // Guest visits and accepts all cookies
+      consentManager.acceptAll();
+      expect((globalThis as any).localStorage.getItem('muety_cookie_marketing_consent')).toBe('true');
+
+      // Guest creates an account/session
+      const guestEmail = `guest.cookie.${Date.now()}.${Math.random().toString(36).substring(2, 6)}@muety.in`;
+      const testGuest = {
+        uid: `guest-patron-${Date.now()}`,
+        email: guestEmail,
+        displayName: 'Guest Turned Patron',
+        roles: ['customer'] as any[],
+        role: 'customer' as any,
+        createdAt: new Date().toISOString()
+      };
+      (authService as any).setCurrentUser(testGuest as any);
+
+      const currentUser = authService.getCurrentUser();
+      expect(currentUser?.patronCircleMember).toBe(true);
+      expect(currentUser?.marketingConsent).toBe(true);
+
+      const subs: string[] = JSON.parse((globalThis as any).localStorage.getItem('muety_newsletter_subs') || '[]');
+      expect(subs).toContain(guestEmail);
+    });
+
+    it('verifies Cookie Preference Center contains Patron Circle and email campaign disclosures', () => {
+      const bannerFilePath = path.resolve(__dirname, '../features/privacy/components/CookieConsentBanner.tsx');
+      const content = fs.readFileSync(bannerFilePath, 'utf8');
+
+      expect(content).toContain('Marketing (Patron Circle)');
+      expect(content).toContain('Patron Circle');
+      expect(content).toContain('email campaigns');
+      expect(content).toContain('MUETY Patron Circle email campaigns');
     });
   });
 });

@@ -301,7 +301,8 @@ export const AdminProductEditor: React.FC = () => {
         setWeaveTechnique(prod.weaveTechnique || '');
         setCraftsmanship(prod.craftsmanship || '');
         setOccasion(prod.occasion || '');
-        setCareInstructions(prod.careInstructions || '');
+        const loadedCare = prod.careInstructions || prod.specifications?.['Care Instructions'] || prod.specifications?.['Product Care'] || '';
+        setCareInstructions(loadedCare);
         setAuthenticityInformation(prod.authenticityInformation || '');
 
         if (Array.isArray(prod.highlights) && prod.highlights.length > 0) {
@@ -345,6 +346,7 @@ export const AdminProductEditor: React.FC = () => {
         { id: 'hl-occasion', label: 'Occasion', value: 'Festive / Bridal', active: true },
         { id: 'hl-care', label: 'Care Instructions', value: 'Dry Clean Only', active: true }
       ]);
+      setCareInstructions('Dry Clean Only. Store wrapped in pure breathable muslin or cotton cloth. Protect delicate pure zari from direct moisture and perfume spray.');
       if (cats.length > 0) {
         const firstCat = cats[0];
         setSelectedCategoryIds([firstCat.id]);
@@ -615,15 +617,23 @@ export const AdminProductEditor: React.FC = () => {
         rating: editingProduct?.rating || 5,
         reviewCount: editingProduct?.reviewCount || 0,
         highlights: highlights
-          .map(h => ({
-            id: h.id || `hl-${Math.random().toString(36).slice(2, 8)}`,
-            label: h.label.trim(),
-            value: h.value.trim(),
-            active: h.active !== false
-          }))
+          .map(h => {
+            const isCare = h.id === 'hl-care' || h.label.toLowerCase().includes('care');
+            const cleanCare = careInstructions.trim();
+            const careShort = cleanCare.includes('\n') 
+              ? cleanCare.split('\n')[0].replace(/^[•\-\*]\s*/, '') 
+              : cleanCare;
+            return {
+              id: h.id || `hl-${Math.random().toString(36).slice(2, 8)}`,
+              label: h.label.trim(),
+              value: isCare && cleanCare ? careShort : h.value.trim(),
+              active: h.active !== false
+            };
+          })
           .filter(h => h.label && h.value),
         specifications: {
           ...(editingProduct?.specifications || {}),
+          'Care Instructions': careInstructions.trim() || 'Dry Clean Only.',
           ...Object.fromEntries(
             highlights
               .filter(h => h.active !== false && h.label.trim() && h.value.trim())
@@ -1425,14 +1435,54 @@ export const AdminProductEditor: React.FC = () => {
                 />
               </div>
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Care Instructions</label>
-                <input
-                  type="text"
+              <div className="form-group" style={{ gridColumn: 'span 2', marginTop: '0.5rem', marginBottom: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                  <label className="form-label" style={{ fontWeight: 700, margin: 0, color: 'var(--brand-primary)' }}>
+                    Product Care Details (Drape Care &amp; Preservation)
+                  </label>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--brand-muted)' }}>
+                    Admin-controlled: Displays on storefront PDP under Product Details &amp; Highlights
+                  </span>
+                </div>
+
+                {/* Quick Care Presets */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--brand-muted)', fontWeight: 600 }}>Quick Presets:</span>
+                  {[
+                    'Dry Clean Only',
+                    'Store in Breathable Muslin / Cotton Bag',
+                    'Air Periodically in Mild Shade',
+                    'Iron on Reverse with Low Heat',
+                    'Avoid Direct Perfume or Chemical Spray on Zari',
+                    'Refold Periodically along New Creases'
+                  ].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        setCareInstructions(prev => {
+                          const trimmed = prev.trim();
+                          if (!trimmed) return preset;
+                          if (trimmed.includes(preset)) return prev;
+                          return `${trimmed}\n• ${preset}`;
+                        });
+                        setIsDirty(true);
+                      }}
+                      className="btn btn-outline btn-sm"
+                      style={{ fontSize: '0.73rem', padding: '3px 8px', borderRadius: '4px' }}
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  rows={3}
                   value={careInstructions}
                   onChange={e => { setCareInstructions(e.target.value); setIsDirty(true); }}
-                  placeholder="e.g. Dry Clean Only. Store in pure cotton cover."
+                  placeholder="e.g. Dry Clean Only.&#10;• Store wrapped in pure unbleached muslin/cotton fabric in a cool, dry place.&#10;• Protect pure zari work from direct perfume or water spray.&#10;• Iron on reverse using low temperature."
                   className="form-input"
+                  style={{ width: '100%', resize: 'vertical', minHeight: '85px', lineHeight: 1.5 }}
                 />
               </div>
             </div>

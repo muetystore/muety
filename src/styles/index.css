@@ -1112,7 +1112,6 @@ ul, ol {
 @media (max-width: 992px) {
   .checkout-grid,
   .cart-grid,
-  .pdp-grid,
   .products-layout-grid,
   .contact-grid {
     grid-template-columns: 1fr !important;
@@ -1178,6 +1177,22 @@ textarea:focus-visible {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: var(--shadow-sm);
+}
+
+/* Compact Header and Announcement Bar on PDP Landing (Flipkart Reference Parity) */
+body:has(.pdp-page) .main-header {
+  height: 52px;
+}
+
+body:has(.pdp-page) .header-container {
+  height: 52px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+body:has(.pdp-page) .announcement-bar-top {
+  padding: 3px 1rem !important;
+  font-size: 0.72rem !important;
 }
 
 .header-container {
@@ -3272,26 +3287,27 @@ textarea:focus-visible {
   padding-bottom: clamp(4rem, 8vw, 7rem);
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip; /* clip horizontal overflow without breaking child position: sticky */
 }
 
 .pdp-breadcrumb-bar {
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--brand-border);
-  padding: 0.75rem 0;
+  padding: 4px 0 !important;
   width: 100%;
 }
 
 .pdp-breadcrumb-inner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.82rem;
+  gap: 6px;
+  font-size: 0.75rem !important;
   color: var(--brand-muted);
   overflow-x: auto;
   white-space: nowrap;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  line-height: 1.25;
 }
 
 .pdp-breadcrumb-inner::-webkit-scrollbar {
@@ -3315,18 +3331,78 @@ textarea:focus-visible {
   flex-shrink: 0;
 }
 
-/* Grid Layout */
+.pdp-breadcrumb-back-btn,
+.pdp-breadcrumb-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px !important;
+  padding: 2px 8px !important;
+  font-size: 0.72rem !important;
+  border-radius: 4px;
+  border: 1px solid var(--brand-border);
+  background: #ffffff;
+  color: var(--brand-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pdp-breadcrumb-back-btn:hover,
+.pdp-breadcrumb-share-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.pdp-content-container {
+  margin-top: 6px !important;
+}
+
+/* Grid Layout: Details column width increased by ~1cm (1.38fr 1fr ratio) */
 .pdp-grid {
   display: grid;
-  grid-template-columns: 1.15fr 1fr;
-  gap: clamp(1.75rem, 3.5vw, 3.5rem);
+  grid-template-columns: 1.38fr 1fr;
+  gap: clamp(1.25rem, 2.2vw, 2rem);
   align-items: start;
 }
 
 @media (max-width: 992px) {
   .pdp-grid {
     grid-template-columns: 1fr !important;
-    gap: 1.5rem !important;
+    gap: 0px !important; /* Minimized to 0 gap between image section and product title */
+  }
+
+  .pdp-gallery-col {
+    position: static !important;
+    top: 0 !important;
+    transform: none !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .pdp-mobile-gallery-wrapper {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .pdp-main-image-card {
+    margin-bottom: 6px !important;
+  }
+
+  .pdp-thumbnails-strip {
+    margin-top: 4px !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .pdp-info-col {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+  }
+
+  .pdp-title {
+    margin-top: 4px !important;
+    margin-bottom: 6px !important;
+    padding-top: 0 !important;
   }
 }
 
@@ -3338,9 +3414,12 @@ textarea:focus-visible {
 
 @media (min-width: 993px) {
   .pdp-gallery-col {
-    position: relative;
+    position: sticky !important;
+    top: var(--gallery-sticky-top, 88px);
+    align-self: start;
     display: flex;
     flex-direction: column;
+    z-index: 10;
   }
 }
 
@@ -4566,6 +4645,11 @@ textarea:focus-visible {
     display: flex !important;
     flex-direction: column;
     gap: 16px;
+    position: sticky !important;
+    top: var(--gallery-sticky-top, 88px);
+    align-self: start;
+    width: 100%;
+    z-index: 10;
   }
 
   .pdp-desktop-secondary-gallery {
@@ -4573,13 +4657,16 @@ textarea:focus-visible {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 14px !important;
     width: 100%;
+    margin-top: 0;
+  }
+
+  .pdp-desktop-secondary-gallery:has(> :only-child) {
+    grid-template-columns: 1fr !important;
+    max-width: 600px;
   }
 
   .pdp-gallery-more-wrapper {
-    margin-top: 14px;
-    width: 100%;
-    display: flex;
-    justify-content: center;
+    display: none !important;
   }
 
   .pdp-show-more-images-btn {
@@ -4638,8 +4725,9 @@ textarea:focus-visible {
   .pdp-desktop-grid-img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain !important;
     object-position: center;
+    background-color: #FAF8F3;
     display: block;
     transition: transform 0.35s ease;
   }
@@ -4711,8 +4799,8 @@ textarea:focus-visible {
 
   .pdp-grid {
     display: grid;
-    grid-template-columns: 1.25fr 1fr !important;
-    gap: 36px !important;
+    grid-template-columns: 1.38fr 1fr !important;
+    gap: 24px !important;
     align-items: start;
   }
 
@@ -4738,7 +4826,8 @@ textarea:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #388e3c;
+  background: #14532d;
+  border: 1px solid #166534;
   color: #ffffff;
   padding: 3px 8px;
   border-radius: 4px;
@@ -4754,8 +4843,21 @@ textarea:focus-visible {
   margin: 0 2px;
 }
 
+.pdp-unrated-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--brand-secondary, #647087);
+  background: #faf8f5;
+  border: 1px solid rgba(201, 162, 39, 0.25);
+  padding: 3px 10px;
+  border-radius: 9999px;
+}
+
 .pdp-flipkart-review-link {
-  color: #878787;
+  color: var(--brand-secondary, #647087);
   font-size: 0.85rem;
   font-weight: 600;
   background: none;
@@ -4767,7 +4869,7 @@ textarea:focus-visible {
 }
 
 .pdp-flipkart-review-link:hover {
-  color: #1a56db;
+  color: var(--brand-accent-hover, #a8841b);
   text-decoration: underline;
 }
 
@@ -4788,10 +4890,22 @@ textarea:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  color: #388e3c;
+  color: #15803d;
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+}
+
+.pdp-flipkart-savings-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #15803d;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .pdp-discount-arrow {
@@ -4870,21 +4984,27 @@ textarea:focus-visible {
 
 /* MUETY High-Conversion Purchase Controls */
 .pdp-add-to-bag-btn {
-  background: #ffffff !important;
-  color: #10172a !important;
-  border: 1.5px solid #10172a !important;
+  background: #111827 !important;
+  color: #ffffff !important;
+  border: 1.5px solid #111827 !important;
   font-weight: 700 !important;
   border-radius: 8px !important;
   height: 48px !important;
   font-size: 0.95rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
   transition: all 0.2s ease !important;
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.22) !important;
 }
 
 .pdp-add-to-bag-btn:hover {
-  background: #f8fafc !important;
-  border-color: #070a12 !important;
+  background: #000000 !important;
+  border-color: #000000 !important;
+  color: #ffffff !important;
   transform: translateY(-1px) !important;
-  box-shadow: 0 4px 14px rgba(16, 23, 42, 0.1) !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35) !important;
 }
 
 .pdp-buy-now-btn {
@@ -4949,6 +5069,66 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
+/* Flipkart Accordion Chevron Button (Screenshot 1) */
+.pdp-accordion-chevron-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #334155;
+  flex-shrink: 0;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.pdp-accordion-chevron-circle:hover {
+  background: #e2e8f0;
+}
+
+/* Flipkart Ratings and Reviews Score Strip (Screenshot 1) */
+.pdp-flipkart-reviews-score-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pdp-rating-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #388e3c;
+  color: #ffffff;
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.pdp-rating-sentiment-pill {
+  display: inline-flex;
+  align-items: center;
+  color: #15803d;
+  border: 1px solid #86efac;
+  background: #f0fdf4;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.pdp-rating-count-text {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
 /* Flipkart All Details Header & Filter Pills */
 .pdp-flipkart-details-container {
   margin-top: 2rem;
@@ -4996,8 +5176,9 @@ textarea:focus-visible {
 }
 
 .pdp-flipkart-tab-pill:hover {
-  border-color: #1a56db;
-  color: #1a56db;
+  border-color: var(--brand-accent, #c9a227);
+  color: var(--brand-primary, #10172a);
+  background-color: #faf8f3;
 }
 
 .pdp-flipkart-tab-pill.active {
@@ -5005,6 +5186,63 @@ textarea:focus-visible {
   color: #ffffff;
   border-color: #111827;
   box-shadow: 0 2px 8px rgba(17, 24, 39, 0.15);
+}
+
+/* Product Care Details Card (Storefront PDP) */
+.pdp-care-details-card {
+  background: #faf8f3;
+  border: 1px solid rgba(201, 162, 39, 0.28);
+  border-radius: 12px;
+  padding: 1.15rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(201, 162, 39, 0.05);
+}
+
+.pdp-care-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--brand-primary, #10172a);
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-bottom: 1px solid rgba(201, 162, 39, 0.18);
+  padding-bottom: 8px;
+}
+
+.pdp-care-badge-label {
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #854d0e;
+  font-weight: 700;
+}
+
+.pdp-care-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.pdp-care-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: #334155;
+  line-height: 1.55;
+}
+
+.pdp-care-bullet {
+  color: var(--brand-accent, #c9a227);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  flex-shrink: 0;
+}
+
+.pdp-care-text {
+  flex: 1;
 }
 
 /* Neutral Shipping & Delivery Information (Policy Aligned - No Speculative Delivery Dates) */
@@ -5405,8 +5643,9 @@ textarea:focus-visible {
 }
 
 @media (max-width: 480px) {
-  .pdp-highlights-grid {
-    grid-template-columns: 1fr;
+  .pdp-highlights-grid,
+  .pdp-flipkart-specs-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
 
@@ -5474,27 +5713,34 @@ textarea:focus-visible {
 
 /* Mobile Sticky Bottom Action Bar (Flipkart & Meesho pattern) */
 .pdp-mobile-sticky-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 9999;
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid var(--brand-border);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
-  padding: 8px 12px;
-  display: flex;
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 9999 !important;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.14);
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  display: flex !important;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  transform: translateY(110%);
-  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  justify-content: center;
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;
+}
+
+.pdp-mobile-sticky-bar:not(.is-visible) {
+  transform: translateY(100%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .pdp-mobile-sticky-bar.is-visible {
-  transform: translateY(0);
+  transform: translateY(0) !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 @media (min-width: 769px) {
@@ -5504,11 +5750,7 @@ textarea:focus-visible {
 }
 
 .pdp-sticky-bar-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
+  display: none !important;
 }
 
 .pdp-sticky-bar-thumb {
@@ -5556,193 +5798,525 @@ textarea:focus-visible {
   text-decoration: line-through;
 }
 
-.pdp-sticky-bar-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
+.pdp-sticky-bar-actions,
+.pdp-mobile-dock-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 10px !important;
+  width: 100% !important;
+  flex: 1 !important;
+  align-items: center !important;
 }
 
 .pdp-sticky-btn {
-  height: 40px;
+  height: 48px;
   padding: 0 14px;
   border-radius: var(--radius-md, 8px);
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 8px;
   cursor: pointer;
   border: none;
   transition: all 0.15s ease;
+  width: 100%;
 }
 
-.pdp-sticky-cart-btn {
-  background: var(--brand-primary);
-  color: #ffffff;
+.pdp-sticky-cart-btn,
+.pdp-mobile-dock-cart-btn {
+  background: #111827 !important;
+  color: #ffffff !important;
+  border: 1.5px solid #111827 !important;
+  border-radius: 8px !important;
+  height: 48px !important;
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.22) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+  transition: all 0.2s ease !important;
 }
 
-.pdp-sticky-buy-btn {
-  background: var(--brand-accent, #c99a16);
-  color: #ffffff;
+.pdp-sticky-cart-btn:hover,
+.pdp-mobile-dock-cart-btn:hover {
+  background: #000000 !important;
+  border-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+.pdp-sticky-buy-btn,
+.pdp-mobile-dock-buy-btn {
+  background: #c9a227 !important; /* Matches desktop buy bar design */
+  color: #10172a !important;
+  border: 1.5px solid #b38b1d !important;
+  border-radius: 8px !important;
+  height: 48px !important;
+  font-size: 0.95rem !important;
+  font-weight: 800 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  box-shadow: 0 4px 14px rgba(201, 162, 39, 0.28) !important;
+  width: 100% !important;
+  transition: all 0.2s ease !important;
+}
+
+.pdp-sticky-buy-btn:hover,
+.pdp-mobile-dock-buy-btn:hover {
+  background: #b38b1d !important;
+  border-color: #8c6d14 !important;
 }
 
 .pdp-sticky-btn:hover {
   transform: translateY(-1px);
 }
 
-/* Desktop Sticky Bottom Action Bar (Flipkart Desktop Moving/Sticky Pattern - MUETY Luxury Identity) */
+/* Desktop Sticky Bottom Action Bar (Old Full-Width Bar Disabled) */
 .pdp-desktop-sticky-bar {
   display: none !important;
 }
 
+/* Flipkart-Inspired Desktop Sticky Purchase Dock (Confined to Details Column) */
+.pdp-flipkart-sticky-dock {
+  display: none !important;
+}
+
+@media (max-width: 992px) {
+  /* Bottom clearance on mobile so content isn't covered by fixed buy bar */
+  .pdp-page {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* On mobile, hide middle buttons grid so purchase actions are exclusively docked at bottom of screen */
+  .pdp-actions-container .pdp-buttons-grid {
+    display: none !important;
+  }
+}
+
 @media (min-width: 993px) {
+  /* On desktop, hide redundant middle buttons grid under quantity (single unified bottom dock moves) */
+  .pdp-actions-container .pdp-buttons-grid {
+    display: none !important;
+  }
+
   .pdp-desktop-sticky-bar {
+    display: none !important;
+  }
+
+  .pdp-flipkart-sticky-dock {
     display: block !important;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 9990;
-    background: rgba(250, 248, 243, 0.96);
+    position: sticky;
+    bottom: 16px;
+    z-index: 35;
+    width: 100%;
+    margin-top: 24px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.96);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-top: 1.5px solid rgba(201, 162, 39, 0.35);
-    box-shadow: 0 -4px 24px rgba(16, 23, 42, 0.1);
-    transform: translateY(110%);
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid rgba(201, 162, 39, 0.28);
+    border-radius: 12px;
+    box-shadow: 0 10px 28px rgba(16, 23, 42, 0.08), 0 2px 8px rgba(201, 162, 39, 0.06);
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform: none !important;
+    transition: opacity 0.24s cubic-bezier(0.16, 1, 0.3, 1), transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .pdp-desktop-sticky-bar.is-visible {
-    transform: translateY(0);
+  .pdp-flipkart-sticky-dock.is-visible {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform: none !important;
   }
 
-  .pdp-desktop-sticky-container {
-    max-width: 1440px;
-    margin: 0 auto;
-    padding: 10px 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 24px;
-  }
-
-  .pdp-desktop-sticky-product {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    min-width: 0;
-  }
-
-  .pdp-desktop-sticky-thumb {
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
-    object-fit: cover;
-    border: 1px solid rgba(201, 162, 39, 0.3);
-    flex-shrink: 0;
-  }
-
-  .pdp-desktop-sticky-info {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-
-  .pdp-desktop-sticky-title {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--brand-primary, #10172a);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 420px;
-  }
-
-  .pdp-desktop-sticky-pricing {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.82rem;
-  }
-
-  .pdp-desktop-sticky-price {
-    font-weight: 800;
-    font-size: 1.1rem;
-    color: var(--brand-primary, #10172a);
-  }
-
-  .pdp-desktop-sticky-mrp {
-    color: var(--brand-muted, #94a3b8);
-    text-decoration: line-through;
-    font-size: 0.85rem;
-  }
-
-  .pdp-desktop-sticky-discount {
-    color: #15803d;
-    font-weight: 700;
-  }
-
-  .pdp-desktop-sticky-tax {
-    color: var(--brand-muted, #94a3b8);
-    font-size: 0.76rem;
-    margin-left: 4px;
-  }
-
-  .pdp-desktop-sticky-actions {
-    display: flex;
-    align-items: center;
+  .pdp-flipkart-dock-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 12px;
-    flex-shrink: 0;
+    align-items: center;
   }
 
-  .pdp-desktop-sticky-cart-btn {
-    background: #ffffff !important;
-    color: #10172a !important;
-    border: 1.5px solid #10172a !important;
+  .pdp-flipkart-dock-cart-btn {
+    background: #111827 !important;
+    color: #ffffff !important;
+    border: 1.5px solid #111827 !important;
     font-weight: 700 !important;
     border-radius: 8px !important;
-    height: 44px !important;
-    padding: 0 22px !important;
-    font-size: 0.92rem !important;
+    height: 48px !important;
+    font-size: 0.95rem !important;
     display: inline-flex !important;
     align-items: center !important;
+    justify-content: center !important;
     gap: 8px !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
+    box-shadow: 0 4px 14px rgba(17, 24, 39, 0.22) !important;
   }
 
-  .pdp-desktop-sticky-cart-btn:hover {
-    background: #f8fafc !important;
-    border-color: #070a12 !important;
+  .pdp-flipkart-dock-cart-btn:hover {
+    background: #000000 !important;
+    border-color: #000000 !important;
+    color: #ffffff !important;
     transform: translateY(-1px) !important;
-    box-shadow: 0 4px 12px rgba(16, 23, 42, 0.08) !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35) !important;
   }
 
-  .pdp-desktop-sticky-buy-btn {
+  .pdp-flipkart-dock-buy-btn {
     background: #c9a227 !important;
     color: #10172a !important;
     border: 1.5px solid #b38b1d !important;
     font-weight: 800 !important;
     border-radius: 8px !important;
-    height: 44px !important;
-    padding: 0 26px !important;
-    font-size: 0.92rem !important;
+    height: 48px !important;
+    font-size: 0.95rem !important;
     display: inline-flex !important;
     align-items: center !important;
+    justify-content: center !important;
     gap: 8px !important;
     cursor: pointer !important;
     box-shadow: 0 4px 14px rgba(201, 162, 39, 0.28) !important;
     transition: all 0.2s ease !important;
   }
 
-  .pdp-desktop-sticky-buy-btn:hover {
+  .pdp-flipkart-dock-buy-btn:hover {
     background: #a8841b !important;
     border-color: #8c6d14 !important;
     transform: translateY(-1px) !important;
-    box-shadow: 0 6px 18px rgba(201, 162, 39, 0.38) !important;
+    box-shadow: 0 6px 20px rgba(201, 162, 39, 0.4) !important;
   }
+
+  .pdp-flipkart-dock-cart-btn:disabled,
+  .pdp-flipkart-dock-buy-btn:disabled {
+    opacity: 0.55 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+  }
+}
+
+/* ==========================================================================
+   MUETY LUXURY PRODUCT IMAGE LIGHTBOX (Accessible Dialog & High-Res Zoom)
+   ========================================================================== */
+.pdp-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(10, 14, 23, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.pdp-lightbox-container {
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  height: 94vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: transparent;
+}
+
+.pdp-lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: rgba(16, 23, 42, 0.85);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  border-radius: var(--radius-md, 10px);
+  color: #ffffff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+.pdp-lightbox-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pdp-lightbox-brand {
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--brand-accent, #c9a227);
+  letter-spacing: 0.1em;
+}
+
+.pdp-lightbox-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 400px;
+}
+
+.pdp-lightbox-counter {
+  font-size: 0.78rem;
+  color: var(--brand-muted, #94a3b8);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.pdp-lightbox-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pdp-lightbox-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pdp-lightbox-btn:hover:not(:disabled) {
+  background: var(--brand-accent, #c9a227);
+  color: #10172a;
+  border-color: var(--brand-accent);
+}
+
+.pdp-lightbox-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pdp-lightbox-zoom-val {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--brand-accent, #c9a227);
+  min-width: 38px;
+  text-align: center;
+}
+
+.pdp-lightbox-btn-reset {
+  background: rgba(201, 162, 39, 0.2);
+  border: 1px solid rgba(201, 162, 39, 0.4);
+  color: var(--brand-accent, #c9a227);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pdp-lightbox-btn-reset:hover {
+  background: var(--brand-accent, #c9a227);
+  color: #10172a;
+}
+
+.pdp-lightbox-close {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  margin-left: 6px;
+}
+
+.pdp-lightbox-close:hover {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #ef4444 !important;
+}
+
+.pdp-lightbox-stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin: 0.75rem 0;
+}
+
+.pdp-lightbox-img-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.pdp-lightbox-img {
+  max-width: 90vw;
+  max-height: 72vh;
+  object-fit: contain;
+  border-radius: var(--radius-md, 8px);
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.pdp-lightbox-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(16, 23, 42, 0.85);
+  border: 1.5px solid rgba(201, 162, 39, 0.4);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.pdp-lightbox-nav-btn:hover:not(:disabled) {
+  background: var(--brand-accent, #c9a227);
+  color: #10172a;
+  transform: translateY(-50%) scale(1.08);
+}
+
+.pdp-lightbox-nav-btn:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+
+.pdp-lightbox-nav-prev {
+  left: 12px;
+}
+
+.pdp-lightbox-nav-next {
+  right: 12px;
+}
+
+.pdp-lightbox-thumbs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(16, 23, 42, 0.85);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  border-radius: var(--radius-md, 10px);
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.pdp-lightbox-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1.5px solid transparent;
+  padding: 1px;
+  background: #000000;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.pdp-lightbox-thumb:hover {
+  opacity: 0.9;
+  border-color: rgba(201, 162, 39, 0.6);
+}
+
+.pdp-lightbox-thumb.active {
+  opacity: 1;
+  border-color: var(--brand-accent, #c9a227);
+  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.4);
+}
+
+.pdp-lightbox-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+/* Lightbox Trigger on Main Image Card */
+.pdp-gallery-inspect-trigger {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(231, 229, 223, 0.9);
+  color: var(--brand-primary, #10172a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.pdp-gallery-inspect-trigger:hover {
+  background: #ffffff;
+  color: var(--brand-accent, #c9a227);
+  border-color: var(--brand-accent, #c9a227);
+  transform: scale(1.08);
+}
+
+/* Subtle Shipping Policy Notice */
+.pdp-shipping-policy-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-secondary, #647087);
+  background: #faf8f5;
+  border: 1px solid rgba(201, 162, 39, 0.2);
+  border-radius: var(--radius-md, 8px);
+  padding: 8px 12px;
+  margin-top: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.pdp-shipping-notice-icon {
+  color: var(--brand-accent, #c9a227);
+  flex-shrink: 0;
+}
+
+.pdp-shipping-policy-anchor {
+  color: var(--brand-primary, #10172a);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--brand-accent, #c9a227);
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+
+.pdp-shipping-policy-anchor:hover {
+  color: var(--brand-accent, #c9a227);
 }
 
 /* Tabs System */
@@ -5751,20 +6325,96 @@ textarea:focus-visible {
   width: 100%;
 }
 
-/* Product Details Reference Accordion */
-.pdp-accordion-container {
-  margin-top: clamp(2.5rem, 5vw, 4rem);
+/* ==========================================================================
+   UPGRADED "ALL DETAILS" SECTION UI (Flipkart Usability + MUETY Atelier Luxury)
+   ========================================================================== */
+.pdp-accordion-container,
+.pdp-flipkart-details-container {
+  margin-top: 1.5rem;
   width: 100%;
-  max-width: 880px;
+  max-width: 100%;
+  background: #ffffff;
+  border: 1px solid #e7e2dc;
+  border-radius: 14px;
+  box-shadow: 0 4px 18px rgba(16, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+.pdp-flipkart-details-top {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  background: #fbf9f6;
+  border-bottom: 1px solid #ede8e1;
+}
+
+.pdp-flipkart-details-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pdp-flipkart-details-h2 {
+  font-family: var(--font-heading, "Playfair Display", serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #10172a;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pdp-flipkart-details-sub {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.pdp-flipkart-tab-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pdp-flipkart-tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid #e2ddd5;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pdp-flipkart-tab-pill:hover {
+  background: #f1ede7;
+  color: #10172a;
+  border-color: #cbd5e1;
+}
+
+.pdp-flipkart-tab-pill.active {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.18);
 }
 
 .pdp-accordion-item {
-  border-top: 1px solid #e7e2dc;
+  border-top: none;
+  border-bottom: 1px solid #f0ede8;
   width: 100%;
+  transition: background-color 0.15s ease;
 }
 
 .pdp-accordion-item:last-child {
-  border-bottom: 1px solid #e7e2dc;
+  border-bottom: none;
 }
 
 .pdp-accordion-header {
@@ -5772,45 +6422,211 @@ textarea:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: clamp(1.1rem, 2.5vw, 1.35rem) 0;
+  padding: 14px 20px;
   background: transparent;
   border: none;
   cursor: pointer;
   text-align: left;
   outline: none;
-  transition: opacity 0.2s ease;
+  transition: background-color 0.15s ease;
   user-select: none;
 }
 
 .pdp-accordion-header:hover {
-  opacity: 0.8;
+  background-color: #faf8f5;
+  opacity: 1;
+}
+
+.pdp-accordion-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pdp-accordion-icon-wrap {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #fbf9f6;
+  border: 1px solid #ede8e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c9a227;
+  flex-shrink: 0;
 }
 
 .pdp-accordion-title {
   font-family: var(--font-heading, "Playfair Display", serif);
-  font-size: clamp(1.05rem, 2.2vw, 1.22rem);
-  font-weight: 500;
-  color: #2a0813;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #10172a;
   letter-spacing: 0.01em;
   margin: 0;
 }
 
+.pdp-accordion-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(201, 162, 39, 0.12);
+  color: #92700e;
+  border: 1px solid rgba(201, 162, 39, 0.25);
+}
+
 .pdp-accordion-chevron {
-  color: #2a0813;
+  color: #64748b;
   transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
 }
 
 .pdp-accordion-chevron.open {
   transform: rotate(180deg);
+  color: #10172a;
 }
 
 .pdp-accordion-body {
-  padding-bottom: clamp(1.25rem, 3vw, 2rem);
+  padding: 16px 20px 22px;
   color: var(--text-secondary);
-  line-height: 1.8;
-  font-size: 0.96rem;
+  line-height: 1.7;
+  font-size: 0.94rem;
   animation: fadeIn 0.2s ease-in-out;
+  background: #ffffff;
+  border-top: 1px solid #f6f3ee;
+}
+
+/* Specifications 2-Column Zebra Table */
+.pdp-specs-table-container {
+  border: 1px solid #ede8e1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
+}
+
+.pdp-specs-table-row {
+  display: flex;
+  border-bottom: 1px solid #ede8e1;
+}
+
+.pdp-specs-table-row:last-child {
+  border-bottom: none;
+}
+
+.pdp-specs-table-row:nth-child(even) .pdp-specs-table-val {
+  background-color: #faf9f7;
+}
+
+.pdp-specs-table-label {
+  width: 38%;
+  padding: 10px 14px;
+  background-color: #f7f4ef;
+  font-weight: 600;
+  font-size: 0.86rem;
+  color: #10172a;
+  border-right: 1px solid #ede8e1;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.pdp-specs-table-val {
+  width: 62%;
+  padding: 10px 14px;
+  background-color: #ffffff;
+  font-size: 0.86rem;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  word-break: break-word;
+}
+
+/* Description Heritage Callout */
+.pdp-desc-text {
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: #334155;
+  margin-bottom: 14px;
+}
+
+.pdp-desc-heritage-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #faf8f5;
+  border-left: 3px solid #c9a227;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: #475569;
+  line-height: 1.6;
+}
+
+/* Flipkart-Inspired Patron Reviews Overview */
+.pdp-reviews-flipkart-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #faf8f5;
+  border: 1px solid #ede8e1;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.pdp-reviews-score-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pdp-reviews-score-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #14532d;
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.pdp-reviews-score-verdict {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #10172a;
+}
+
+.pdp-reviews-score-count {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.pdp-reviews-aspects-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pdp-aspect-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  background: #ffffff;
+  border: 1px solid #e2ddd5;
+  border-radius: 9999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #475569;
 }
 
 .pdp-tabs-nav {

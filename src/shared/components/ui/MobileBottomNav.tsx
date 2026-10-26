@@ -62,7 +62,11 @@ export const MobileBottomNav: React.FC = () => {
   const { wishlist } = useCart();
   const location = useLocation();
 
-  if (location.pathname === '/checkout' || location.pathname.startsWith('/admin')) {
+  if (
+    location.pathname === '/checkout' || 
+    location.pathname.startsWith('/admin') ||
+    location.pathname.startsWith('/products/')
+  ) {
     return null;
   }
 

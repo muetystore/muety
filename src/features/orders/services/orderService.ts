@@ -472,10 +472,49 @@ export const orderService = {
     };
   },
 
+  async syncAllOrders(): Promise<Order[]> {
+    if (typeof window !== 'undefined') {
+      try {
+        const { getAuthHeaders } = await import('@/shared/utils/authHeader');
+        const headers = await getAuthHeaders();
+        const res = await fetch('/api/orders/list', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({})
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.orders)) {
+            const mergedMap = new Map<string, Order>();
+            const localOrders = storageService.getOrders();
+            localOrders.forEach(o => mergedMap.set(o.id, o));
+            data.orders.forEach((o: Order) => mergedMap.set(o.id, o));
+            const merged = Array.from(mergedMap.values()).sort(
+              (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+            );
+            storageService.saveOrders(merged);
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('muety_orders_updated'));
+            }
+            return merged;
+          }
+        }
+      } catch (e: any) {
+        console.warn('[orderService] syncAllOrders note:', e?.message || e);
+      }
+    }
+    return storageService.getOrders();
+  },
+
   subscribeToAllOrders(callback: (orders: Order[]) => void, onError?: (err: Error) => void): () => void {
-    // Only emit immediate local cache in offline or test environments to prevent UI flickering on refresh
-    if (!db || !this.isLiveCloud()) {
-      callback(storageService.getOrders());
+    // Immediately emit local cache to prevent empty screen
+    callback(storageService.getOrders());
+
+    // If client lacks Firebase Auth user, trigger authorized API sync
+    if (typeof window !== 'undefined' && (!auth || !auth.currentUser)) {
+      this.syncAllOrders().then(orders => {
+        if (orders.length > 0) callback(orders);
+      }).catch(() => {});
     }
 
     let firestoreUnsub: Unsubscribe | null = null;
@@ -538,8 +577,15 @@ export const orderService = {
 
           storageService.saveOrders(mergedOrders);
           callback(mergedOrders);
-        }, (err) => {
+        }, async (err) => {
           console.error('[orderService] Firestore onSnapshot error on orders collection:', err?.message || err);
+          try {
+            const apiOrders = await this.syncAllOrders();
+            if (apiOrders.length > 0) {
+              callback(apiOrders);
+              return;
+            }
+          } catch {}
           if (onError) {
             onError(err);
           } else {

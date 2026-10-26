@@ -1,5 +1,6 @@
 import { consentManager } from './consentManager';
 import { CookieConsentRecord } from '../types';
+import { authService } from '@/features/auth/services/authService';
 
 declare global {
   interface Window {
@@ -20,7 +21,8 @@ class TrackerService {
 
     // Initialize dataLayer with default denied consent state (Google Consent Mode v2)
     window.dataLayer = window.dataLayer || [];
-    function gtag(...args: any[]) {
+    function gtag(..._args: any[]) {
+      // eslint-disable-next-line prefer-rest-params
       window.dataLayer?.push(arguments);
     }
     // Only set default if not already configured
@@ -72,9 +74,26 @@ class TrackerService {
       this.disableAnalytics();
     }
 
-    // 3. Gate Marketing Trackers
+    // 3. Gate Marketing Trackers & Patron Circle Enrollment
     if (hasMarketing) {
       window.dataLayer.push({ event: 'marketing_consent_granted' });
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('muety_cookie_marketing_consent', 'true');
+        }
+        const user = authService.getCurrentUser();
+        if (user?.uid) {
+          void authService.recordPatronCircleConsent(user.uid, true, user.email, user.phoneNumber);
+        }
+      } catch (err) {
+        // Safe fallback in isolated test environments
+      }
+    } else {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('muety_cookie_marketing_consent', 'false');
+        }
+      } catch {}
     }
   }
 
@@ -108,6 +127,7 @@ class TrackerService {
       const clarityId = 'ywlcm9h1bu';
       window.clarity = window.clarity || function() {
         (window.clarity as any).q = (window.clarity as any).q || [];
+        // eslint-disable-next-line prefer-rest-params
         (window.clarity as any).q.push(arguments);
       };
 

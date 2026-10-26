@@ -1,22 +1,23 @@
 import { ContactInquiry, InquiryCategory, InquiryStatus } from '@/types';
 import { db, isLiveFirebase } from '@/lib/firebase/firebase';
 import { 
+  collection,
   doc, 
   setDoc, 
   deleteDoc, 
-  updateDoc 
+  updateDoc,
+  onSnapshot,
+  Unsubscribe
 } from 'firebase/firestore';
 
 const STORAGE_KEY = 'muety_inquiries_v1';
 
-const withTimeout = <T>(promise: Promise<T>, ms = 3000): Promise<T> => {
+const withTimeout = <T>(promise: Promise<T>, ms = 3500): Promise<T> => {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), ms))
   ]);
 };
-
-
 
 class InquiryService {
   private channel: BroadcastChannel | null = null;
@@ -74,6 +75,73 @@ class InquiryService {
     }
   }
 
+  subscribeToInquiries(
+    callback: (inquiries: ContactInquiry[]) => void,
+    onError?: (err: Error) => void
+  ): Unsubscribe {
+    // Deliver immediate cache first
+    callback(this.getInquiries());
+
+    if (isLiveFirebase && db) {
+      try {
+        const colRef = collection(db, 'inquiries');
+        const unsub = onSnapshot(colRef, (snapshot) => {
+          const liveList: ContactInquiry[] = [];
+          if (!snapshot.empty) {
+            snapshot.forEach(docSnap => {
+              const data = docSnap.data() as ContactInquiry;
+              if (data) {
+                liveList.push({
+                  ...data,
+                  id: docSnap.id || data.id
+                });
+              }
+            });
+          }
+
+          // Merge live Firestore inquiries with any recent unsynced local inquiries
+          const localInquiries = this.getInquiries();
+          const mergedMap = new Map<string, ContactInquiry>();
+
+          liveList.forEach(item => {
+            mergedMap.set(item.id, item);
+          });
+
+          const now = Date.now();
+          localInquiries.forEach(loc => {
+            if (!mergedMap.has(loc.id)) {
+              const age = now - new Date(loc.createdAt || 0).getTime();
+              // Retain recent local entries that may be in flight
+              if (age < 20000) {
+                mergedMap.set(loc.id, loc);
+              }
+            }
+          });
+
+          const merged = Array.from(mergedMap.values()).sort(
+            (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+          );
+
+          this.saveInquiries(merged);
+          callback(merged);
+        }, (err) => {
+          console.warn('[inquiryService] Firestore onSnapshot error on inquiries:', err?.message || err);
+          if (onError) onError(err);
+          else callback(this.getInquiries());
+        });
+
+        return unsub;
+      } catch (err: any) {
+        console.warn('[inquiryService] Subscription setup error:', err?.message || err);
+        if (onError) onError(err);
+      }
+    }
+
+    const handler = () => callback(this.getInquiries());
+    window.addEventListener('muety_inquiries_updated', handler);
+    return () => window.removeEventListener('muety_inquiries_updated', handler);
+  }
+
   async submitInquiry(data: {
     name: string;
     email: string;
@@ -107,7 +175,7 @@ class InquiryService {
     if (isLiveFirebase && db) {
       try {
         const docRef = doc(db, 'inquiries', newInquiry.id);
-        withTimeout(setDoc(docRef, newInquiry, { merge: true }), 2500)
+        withTimeout(setDoc(docRef, newInquiry, { merge: true }), 4000)
           .then(() => {
             console.log(`MUETY Cloud: Inquiry #${inquiryNumber} synced to Firestore.`);
           })
@@ -134,7 +202,7 @@ class InquiryService {
         _captcha: 'false'
       };
 
-      fetch('https://formsubmit.co/ajax/muetystore@gmail.com', {
+      fetch('https://formsubmit.co/ajax/support@muety.in', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -151,7 +219,7 @@ class InquiryService {
     return newInquiry;
   }
 
-  updateStatus(id: string, status: InquiryStatus, adminNotes?: string): ContactInquiry | null {
+  async updateStatus(id: string, status: InquiryStatus, adminNotes?: string): Promise<ContactInquiry | null> {
     const list = this.getInquiries();
     const idx = list.findIndex(i => i.id === id || i.inquiryNumber === id);
     if (idx === -1) return null;
@@ -174,7 +242,7 @@ class InquiryService {
             adminNotes: list[idx].adminNotes || '',
             updatedAt: list[idx].updatedAt
           }),
-          2500
+          3500
         ).catch(err => console.warn('Firestore status update error:', err));
       } catch (err) {
         console.warn('Firestore update init error:', err);
@@ -184,7 +252,7 @@ class InquiryService {
     return list[idx];
   }
 
-  deleteInquiry(id: string): boolean {
+  async deleteInquiry(id: string): Promise<boolean> {
     const list = this.getInquiries();
     const filtered = list.filter(i => i.id !== id && i.inquiryNumber !== id);
     this.saveInquiries(filtered);
@@ -192,7 +260,7 @@ class InquiryService {
     if (isLiveFirebase && db) {
       try {
         const docRef = doc(db, 'inquiries', id);
-        withTimeout(deleteDoc(docRef), 2500).catch(err =>
+        withTimeout(deleteDoc(docRef), 3500).catch(err =>
           console.warn('Firestore delete error:', err)
         );
       } catch (err) {

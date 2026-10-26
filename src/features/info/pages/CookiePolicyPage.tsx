@@ -135,17 +135,18 @@ export const CookiePolicyPage: React.FC = () => {
             <div style={{ backgroundColor: '#ffffff', border: '1px solid #e7e5df', borderRadius: 'var(--radius-md)', padding: '1.25rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
                 <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--brand-primary)', fontWeight: 700 }}>
-                  Marketing &amp; Attribution (Optional — Default OFF)
+                  Marketing &amp; Patron Circle (Optional — Default OFF)
                 </h3>
                 <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', backgroundColor: '#f1f5f9', padding: '3px 9px', borderRadius: '9999px', textTransform: 'uppercase' }}>
                   Consent Required
                 </span>
               </div>
               <p style={{ margin: '0 0 10px', fontSize: '0.92rem' }}>
-                Used to evaluate promotional campaigns and ad conversions on partner channels. Gated until affirmative consent is given.
+                Used to evaluate promotional campaigns, ad conversions on partner channels, and enroll opted-in patrons into the exclusive MUETY Patron Circle for tailored email campaigns, private releases, and bespoke atelier offers. Gated until affirmative consent is given.
               </p>
               <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.86rem', color: 'var(--brand-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <li><strong>Campaign Attribution:</strong> Tracks promotion effectiveness for festive collections.</li>
+                <li><strong>Patron Circle Email Campaigns:</strong> Enrolls patrons accepting marketing communications to receive bespoke collection emails, private drop invitations, and curated offers.</li>
+                <li><strong>Campaign Attribution:</strong> Tracks promotion effectiveness for festive collections and advertising attribution.</li>
               </ul>
             </div>
           </div>

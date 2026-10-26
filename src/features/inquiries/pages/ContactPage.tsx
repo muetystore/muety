@@ -354,7 +354,7 @@ export const ContactPage: React.FC = () => {
                 </h3>
 
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', maxWidth: '440px', margin: '0 auto 1.75rem', lineHeight: 1.6 }}>
-                  Your message has been logged into our Concierge dispatch system and sent to <strong>muetystore@gmail.com</strong>.
+                  Your message has been logged into our Concierge dispatch system and sent to <strong>support@muety.in</strong>.
                 </p>
 
                 {/* Inquiry Reference Badge Box */}

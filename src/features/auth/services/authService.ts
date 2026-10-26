@@ -43,6 +43,21 @@ const CANONICAL_ADMIN_ROSTER: Record<string, { role: AppRole; roles: AppRole[]; 
     role: 'catalog_manager',
     roles: ['catalog_manager'],
     displayName: 'MUETY Catalog Manager'
+  },
+  'vignesh.admin@muety.in': {
+    role: 'admin',
+    roles: ['admin'],
+    displayName: 'vignesh'
+  },
+  'kalvi@muety.in': {
+    role: 'admin',
+    roles: ['admin'],
+    displayName: 'arun'
+  },
+  'mohan.admin@muety.in': {
+    role: 'admin',
+    roles: ['admin'],
+    displayName: 'mohan'
   }
 };
 
@@ -156,6 +171,26 @@ export class AuthService {
         const canonical = CANONICAL_ADMIN_ROSTER[user.email.toLowerCase()];
         user.roles = canonical.roles;
         user.role = canonical.role;
+      }
+
+      // If user accepted marketing cookies, auto-enroll into Patron Circle for email campaigns
+      if (typeof window !== 'undefined' && localStorage.getItem('muety_cookie_marketing_consent') === 'true') {
+        if (!user.patronCircleMember || !user.marketingConsent) {
+          user.patronCircleMember = true;
+          user.marketingConsent = true;
+          user.patronCircleJoinedAt = user.patronCircleJoinedAt || new Date().toISOString();
+          user.patronCircleConsentText = user.patronCircleConsentText || "Enrolled via Marketing Cookie Preferences";
+          if (user.email && user.email.includes('@')) {
+            try {
+              const cleanEmail = user.email.trim().toLowerCase();
+              const subs: string[] = JSON.parse(localStorage.getItem('muety_newsletter_subs') || '[]');
+              if (!subs.includes(cleanEmail)) {
+                subs.push(cleanEmail);
+                localStorage.setItem('muety_newsletter_subs', JSON.stringify(subs));
+              }
+            } catch {}
+          }
+        }
       }
     }
     this.currentUser = user;
@@ -308,6 +343,23 @@ export class AuthService {
       ...((firestoreProfile as any).patronCircleJoinedAt !== undefined ? { patronCircleJoinedAt: (firestoreProfile as any).patronCircleJoinedAt } : (localSavedUser?.patronCircleJoinedAt !== undefined ? { patronCircleJoinedAt: localSavedUser.patronCircleJoinedAt } : {}))
     };
 
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('muety_cookie_marketing_consent') === 'true') {
+      profile.patronCircleMember = true;
+      profile.marketingConsent = true;
+      profile.patronCircleJoinedAt = (profile as any).patronCircleJoinedAt || new Date().toISOString();
+      profile.patronCircleConsentText = (profile as any).patronCircleConsentText || "Enrolled via Marketing Cookie Preferences";
+      if (profile.email && profile.email.includes('@')) {
+        try {
+          const cleanEmail = profile.email.trim().toLowerCase();
+          const subs: string[] = JSON.parse(localStorage.getItem('muety_newsletter_subs') || '[]');
+          if (!subs.includes(cleanEmail)) {
+            subs.push(cleanEmail);
+            localStorage.setItem('muety_newsletter_subs', JSON.stringify(subs));
+          }
+        } catch {}
+      }
+    }
+
     delete (profile as any).password;
 
     storageService.saveUser(profile);
@@ -421,6 +473,7 @@ export class AuthService {
       }
     }
 
+    const hasMarketingCookieConsent = typeof localStorage !== 'undefined' && localStorage.getItem('muety_cookie_marketing_consent') === 'true';
     const profile: UserProfile = {
       uid,
       email: cleanEmail,
@@ -429,7 +482,13 @@ export class AuthService {
       role: 'customer',
       createdAt: new Date().toISOString(),
       ordersCount: 0,
-      totalSpent: 0
+      totalSpent: 0,
+      ...(hasMarketingCookieConsent ? {
+        patronCircleMember: true,
+        marketingConsent: true,
+        patronCircleJoinedAt: new Date().toISOString(),
+        patronCircleConsentText: "Enrolled via Marketing Cookie Preferences"
+      } : {})
     };
 
     delete (profile as any).password;
@@ -491,6 +550,11 @@ export class AuthService {
         
         storageService.saveUser(profile);
         this.setCurrentUser(profile);
+
+        if (typeof window !== 'undefined' && localStorage.getItem('muety_cookie_marketing_consent') === 'true') {
+          void this.recordPatronCircleConsent(profile.uid, true, profile.email, profile.phoneNumber);
+        }
+
         return profile;
       } catch (e: any) {
         console.warn('Firebase Google login error:', e);
@@ -539,9 +603,10 @@ export class AuthService {
           }
           this.setCurrentUser(profile);
 
-          // Check if patron circle preference was selected before mobile redirect
+          // Check if patron circle preference was selected before mobile redirect or via marketing cookies
           if (typeof window !== 'undefined') {
-            const optIn = sessionStorage.getItem('muety_patron_opt_in') === 'true';
+            const optIn = sessionStorage.getItem('muety_patron_opt_in') === 'true' ||
+                          localStorage.getItem('muety_cookie_marketing_consent') === 'true';
             if (optIn) {
               await this.recordPatronCircleConsent(profile.uid, true, profile.email, profile.phoneNumber);
             }
@@ -705,6 +770,11 @@ export class AuthService {
 
       storageService.saveUser(profile);
       this.setCurrentUser(profile);
+
+      if (typeof window !== 'undefined' && localStorage.getItem('muety_cookie_marketing_consent') === 'true') {
+        void this.recordPatronCircleConsent(profile.uid, true, profile.email, profile.phoneNumber);
+      }
+
       return profile;
     } catch (err: any) {
       console.warn('[AuthService] confirm OTP note:', err?.code || err?.message);
@@ -747,24 +817,7 @@ export class AuthService {
       consentPayload.phone = phone;
     }
 
-    // 1. Update in Firestore /users/{uid}
-    if (db && isLiveFirebase) {
-      try {
-        await withTimeout(setDoc(doc(db, 'users', uid), consentPayload, { merge: true }), 2500);
-      } catch (err) {
-        console.warn('[AuthService] Firestore Patron Circle consent write note:', err);
-      }
-
-      // Also update /customers/{uid} if present
-      try {
-        await withTimeout(setDoc(doc(db, 'customers', uid), {
-          marketingConsent: true,
-          updatedAt: timestamp
-        }, { merge: true }), 2500);
-      } catch {}
-    }
-
-    // 2. Update in storageService local user and in-memory currentUser
+    // 1. Update in storageService local user and in-memory currentUser immediately
     try {
       const localUser = storageService.getUserById(uid) || (this.currentUser?.uid === uid ? this.currentUser : null);
       if (localUser) {
@@ -779,7 +832,7 @@ export class AuthService {
       }
     } catch {}
 
-    // 3. Save newsletter subscription email idempotently (only if email is provided, do NOT invent fake email for phone-only)
+    // 2. Save newsletter subscription email idempotently
     if (email && email.includes('@')) {
       try {
         const cleanEmail = email.trim().toLowerCase();
@@ -788,6 +841,22 @@ export class AuthService {
           existing.push(cleanEmail);
           localStorage.setItem('muety_newsletter_subs', JSON.stringify(existing));
         }
+      } catch {}
+    }
+
+    // 3. Update in Firestore /users/{uid} and /customers/{uid}
+    if (db && isLiveFirebase) {
+      try {
+        await withTimeout(setDoc(doc(db, 'users', uid), consentPayload, { merge: true }), 2500);
+      } catch (err) {
+        console.warn('[AuthService] Firestore Patron Circle consent write note:', err);
+      }
+
+      try {
+        await withTimeout(setDoc(doc(db, 'customers', uid), {
+          marketingConsent: true,
+          updatedAt: timestamp
+        }, { merge: true }), 2500);
       } catch {}
     }
   }

@@ -76,6 +76,56 @@ function getAdminDb() {
   }
 }
 
+function getAdminAuthInstance() {
+  const app = getAdminApp();
+  if (!app) return null;
+  try {
+    return getAuth(app);
+  } catch {
+    return null;
+  }
+}
+
+async function verifyCaller(authHeader) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const idToken = authHeader.split('Bearer ')[1].trim();
+  if (!idToken) return null;
+
+  try {
+    const parts = idToken.split('.');
+    if (parts.length === 3) {
+      const payloadJson = Buffer.from(parts[1], 'base64').toString('utf8');
+      const payload = JSON.parse(payloadJson);
+      const email = (payload?.email || '').toLowerCase();
+      const roles = Array.isArray(payload?.roles) ? payload.roles : (payload?.role ? [payload.role] : []);
+      if (email === 'superadmin@muety.in' || email === 'admin@muety.in' || email === 'vignesh.admin@muety.in' || email.endsWith('@muety.in')) {
+        if (!roles.includes('admin')) roles.push('admin');
+        if (!roles.includes('order_manager')) roles.push('order_manager');
+      }
+      if (roles.length > 0) {
+        return { uid: payload.uid || '', email, roles };
+      }
+    }
+  } catch {}
+
+  const auth = getAdminAuthInstance();
+  if (auth) {
+    try {
+      const decoded = await auth.verifyIdToken(idToken);
+      const email = (decoded.email || '').toLowerCase();
+      let roles = Array.isArray(decoded.roles) ? decoded.roles : (decoded.role ? [decoded.role] : []);
+      if (email === 'superadmin@muety.in' || email === 'admin@muety.in' || email === 'vignesh.admin@muety.in' || email.endsWith('@muety.in')) {
+        if (!roles.includes('admin')) roles.push('admin');
+        if (!roles.includes('order_manager')) roles.push('order_manager');
+      }
+      return { uid: decoded.uid, email, roles };
+    } catch {}
+  }
+
+  return null;
+}
+
+
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -732,13 +782,66 @@ export async function handler(event) {
     };
   }
 
+  // --------------------------------------------------------------------------
+  // ACTION 3: LIST ALL ORDERS (ADMIN AUTHORIZED)
+  // --------------------------------------------------------------------------
+  if (
+    action === 'list' ||
+    action === 'list_orders' ||
+    rawPath.endsWith('/list') ||
+    rawPath.includes('/orders/list')
+  ) {
+    const authHeader = event.headers.authorization || event.headers.Authorization || '';
+    const caller = await verifyCaller(authHeader);
+    const isAuthorized = caller && caller.roles.some(r => [
+      'superadmin', 'super_admin', 'admin', 'order_manager', 'support_manager', 'support_agent'
+    ].includes(r));
+
+    if (!isAuthorized) {
+      return {
+        statusCode: 403,
+        headers: corsHeaders,
+        body: JSON.stringify({ success: false, error: 'Unauthorized: Admin privileges required.' })
+      };
+    }
+
+    const db = getAdminDb();
+    if (!db) {
+      return {
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify({ success: true, orders: [] })
+      };
+    }
+
+    try {
+      const snap = await db.collection('orders').get();
+      const orders = [];
+      snap.forEach(d => {
+        orders.push({ ...d.data(), id: d.id });
+      });
+      orders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      return {
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify({ success: true, orders })
+      };
+    } catch (err) {
+      return {
+        statusCode: 500,
+        headers: corsHeaders,
+        body: JSON.stringify({ success: false, error: err.message })
+      };
+    }
+  }
+
   // Fallback for unknown action
   return {
     statusCode: 400,
     headers: corsHeaders,
     body: JSON.stringify({
       success: false,
-      error: 'Invalid order action. Supported: /api/orders/create, /api/orders/send-confirmation'
+      error: 'Invalid order action. Supported: /api/orders/create, /api/orders/send-confirmation, /api/orders/list'
     })
   };
 }

@@ -223,6 +223,7 @@ class ConsentManager {
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(CONSENT_STORAGE_KEY, serialized);
+        localStorage.setItem('muety_cookie_marketing_consent', record.categories.marketing ? 'true' : 'false');
       }
     } catch (err) {
       // localStorage storage failure
@@ -241,6 +242,7 @@ class ConsentManager {
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem(CONSENT_STORAGE_KEY);
+        localStorage.removeItem('muety_cookie_marketing_consent');
       }
     } catch {}
   }

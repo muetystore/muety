@@ -30,16 +30,19 @@ export const AdminInquiries: React.FC = () => {
   };
 
   useEffect(() => {
-    window.addEventListener('muety_inquiries_updated', refreshInquiries);
+    const unsubscribe = inquiryService.subscribeToInquiries((liveInquiries) => {
+      setInquiries(liveInquiries);
+      setSelectedInquiry(prev => prev ? liveInquiries.find(i => i.id === prev.id) || null : null);
+    });
+
     return () => {
-      window.removeEventListener('muety_inquiries_updated', refreshInquiries);
+      if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, []);
 
-  const handleStatusChange = (id: string, newStatus: InquiryStatus) => {
-    const updated = inquiryService.updateStatus(id, newStatus);
+  const handleStatusChange = async (id: string, newStatus: InquiryStatus) => {
+    const updated = await inquiryService.updateStatus(id, newStatus);
     if (updated) {
-      refreshInquiries();
       if (selectedInquiry && selectedInquiry.id === id) {
         setSelectedInquiry(updated);
       }
@@ -47,19 +50,17 @@ export const AdminInquiries: React.FC = () => {
     }
   };
 
-  const handleSaveNotes = (id: string) => {
-    const updated = inquiryService.updateStatus(id, selectedInquiry?.status || 'replied', adminReplyNotes);
+  const handleSaveNotes = async (id: string) => {
+    const updated = await inquiryService.updateStatus(id, selectedInquiry?.status || 'replied', adminReplyNotes);
     if (updated) {
-      refreshInquiries();
       setSelectedInquiry(updated);
       success('Internal concierge notes saved.', 'Notes Saved');
     }
   };
 
-  const handleDelete = (id: string, num: string) => {
+  const handleDelete = async (id: string, num: string) => {
     if (window.confirm(`Are you sure you want to delete Inquiry #${num}?`)) {
-      inquiryService.deleteInquiry(id);
-      refreshInquiries();
+      await inquiryService.deleteInquiry(id);
       if (selectedInquiry?.id === id) {
         setSelectedInquiry(null);
       }

@@ -447,3 +447,47 @@ export async function handleSendOrderConfirmation(authHeader: string | undefined
     ...emailResult
   };
 }
+
+/**
+ * POST /api/orders/list
+ * Server-authoritative order retrieval for admin ERP & fulfillment.
+ * Uses Firebase Admin Firestore, verifying caller has order/admin privileges.
+ */
+export async function handleListServerOrders(authHeader: string | undefined, _body: any) {
+  const caller = await verifyIdTokenAndGetClaims(authHeader);
+  if (!caller) {
+    throw new Error('UNAUTHENTICATED: Authentication token required.');
+  }
+
+  const isAuthorized = caller.roles.some(r => [
+    'superadmin', 'super_admin', 'admin', 'order_manager', 'support_manager', 'support_agent'
+  ].includes(r));
+
+  if (!isAuthorized) {
+    throw new Error('PERMISSION_DENIED: Access denied. Administrative authorization required.');
+  }
+
+  const db = getAdminFirestore();
+  if (!db) {
+    return {
+      success: true,
+      orders: [],
+      source: 'uninitialized_db'
+    };
+  }
+
+  let orders: any[] = [];
+  try {
+    const snap = await db.collection('orders').get();
+    orders = snap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    orders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  } catch (err: any) {
+    console.warn('[OrderApi] Failed to list orders from Firestore:', err?.message || err);
+  }
+
+  return {
+    success: true,
+    orders
+  };
+}
+

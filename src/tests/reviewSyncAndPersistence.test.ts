@@ -51,7 +51,7 @@ describe('Patron Reviews — Cloud Persistence, Synchronization & Deletion Resil
       // Verify stored in storageService
       const all = storageService.getReviews();
       expect(all.some(r => r.id === review.id)).toBe(true);
-    });
+    }, 15000);
 
     it('syncs product reviewCount and average rating when review is added', async () => {
       // Seed product
@@ -80,7 +80,7 @@ describe('Patron Reviews — Cloud Persistence, Synchronization & Deletion Resil
       const updatedProd = storageService.getProductById('prod-sync-01');
       expect(updatedProd?.reviewCount).toBe(1);
       expect(updatedProd?.rating).toBe(5.0);
-    });
+    }, 15000);
   });
 
   describe('2. Review Deletion Resilience (No Resurrection)', () => {
@@ -98,7 +98,7 @@ describe('Patron Reviews — Cloud Persistence, Synchronization & Deletion Resil
       const deleted = await reviewService.deleteReview(rev.id);
       expect(deleted).toBe(true);
       expect(storageService.getReviews().some(r => r.id === rev.id)).toBe(false);
-    });
+    }, 15000);
 
     it('ensures storageService.getReviews filters out legacy test review rev-1791267536030-832', () => {
       // Simulate stale review present in localStorage

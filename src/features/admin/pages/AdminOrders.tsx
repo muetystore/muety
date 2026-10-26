@@ -162,8 +162,11 @@ export const AdminOrders: React.FC = () => {
       },
       (err) => {
         setLoading(false);
-        setOrders(prev => prev.length > 0 ? prev : storageService.getOrders());
-        setQueryError(`Live Sync Note: ${err?.message || 'Using synchronized order ledger.'}`);
+        const currentOrders = storageService.getOrders();
+        setOrders(prev => prev.length > 0 ? prev : currentOrders);
+        if (currentOrders.length === 0 && orders.length === 0) {
+          setQueryError(`Live Sync Note: ${err?.message || 'Using synchronized order ledger.'}`);
+        }
       }
     );
 
