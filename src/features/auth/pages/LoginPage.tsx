@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { useAuth } from '@/shared/context/AuthContext';
+import { authService } from '@/features/auth/services/authService';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { Logo } from '@/shared/components/ui/Logo';
 import { useCart } from '@/shared/context/CartContext';
@@ -41,6 +42,9 @@ const COUNTRY_CODES: CountryCode[] = [
 export const LoginPage: React.FC = () => {
   useDocumentTitle('Sign In | MUETY');
   const { 
+    user,
+    isAuthenticated,
+    isAuthReady,
     loginWithGoogle, 
     sendPhoneOtp, 
     verifyPhoneOtp, 
@@ -52,7 +56,9 @@ export const LoginPage: React.FC = () => {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const redirectParam = searchParams.get('redirect');
-  const from = redirectParam || (location.state as any)?.from?.pathname || '/account';
+  const savedRedirect = typeof window !== 'undefined' ? sessionStorage.getItem('muety_auth_redirect_dest') : null;
+  const rawFrom = redirectParam || savedRedirect || (location.state as any)?.from?.pathname || '/account';
+  const from = (rawFrom === '/login' || rawFrom.startsWith('/login?')) ? '/account' : rawFrom;
 
   // Mode: 'choices' (primary Google + Mobile button) | 'phone_step1' (enter number) | 'phone_step2' (enter OTP)
   const [authMode, setAuthMode] = useState<'choices' | 'phone_step1' | 'phone_step2'>('choices');
@@ -93,6 +99,27 @@ export const LoginPage: React.FC = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, [resendCooldown]);
+
+  // Check for Google redirect errors captured during startup
+  useEffect(() => {
+    const redirectErr = authService.getLastRedirectError();
+    if (redirectErr) {
+      const msg = redirectErr.message || 'Google Authentication encountered an issue. Please try again.';
+      setFormError(msg);
+      error(msg);
+      authService.clearLastRedirectError();
+    }
+  }, [error]);
+
+  // When authentication completes (from redirect, state listener, or existing session), navigate to intended page
+  useEffect(() => {
+    if (isAuthReady && isAuthenticated && user) {
+      if (typeof window !== 'undefined' && sessionStorage.getItem('muety_auth_redirect_dest')) {
+        sessionStorage.removeItem('muety_auth_redirect_dest');
+      }
+      navigate(from, { replace: true });
+    }
+  }, [isAuthReady, isAuthenticated, user, from, navigate]);
 
   const initRecaptcha = () => {
     try {
@@ -231,6 +258,37 @@ export const LoginPage: React.FC = () => {
   };
 
   const fullDisplayPhone = `${countryCode} ${phoneNumber.replace(/\D/g, '')}`;
+
+  if (!isAuthReady) {
+    return (
+      <div 
+        className="login-page animate-fade-in" 
+        style={{
+          minHeight: '85vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 'clamp(2rem, 5vw, 4rem) 1.25rem',
+          backgroundColor: 'var(--bg-main, #fbfaf6)',
+          gap: '1rem'
+        }}
+      >
+        <div style={{
+          width: '36px',
+          height: '36px',
+          border: '3px solid rgba(201, 162, 39, 0.2)',
+          borderTopColor: '#c9a227',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite'
+        }} />
+        <span style={{ fontSize: '0.85rem', color: '#64748b', letterSpacing: '0.05em' }}>
+          Verifying MUETY credentials...
+        </span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div 

@@ -17,6 +17,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isAuthReady: boolean;
   isAuthModalOpen: boolean;
   authModalConfig: AuthModalConfig | null;
   openAuthModal: (config?: AuthModalConfig) => void;
@@ -50,7 +51,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(authService.getCurrentUser());
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(authService.getIsInitialized());
+  const [isLoading, setIsLoading] = useState<boolean>(!authService.getIsInitialized());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalConfig, setAuthModalConfig] = useState<AuthModalConfig | null>(null);
 
@@ -65,10 +67,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   useEffect(() => {
-    const unsubscribe = authService.subscribe((newUser) => {
-      setUser(newUser);
+    let isMounted = true;
+
+    // Await initial auth initialization and redirect processing
+    authService.waitForAuthReady().then((resolvedUser) => {
+      if (isMounted) {
+        setUser(resolvedUser);
+        setIsAuthReady(true);
+        setIsLoading(false);
+      }
+    }).catch(() => {
+      if (isMounted) {
+        setIsAuthReady(true);
+        setIsLoading(false);
+      }
     });
-    return () => unsubscribe();
+
+    const unsubscribe = authService.subscribe((newUser) => {
+      if (isMounted) {
+        setUser(newUser);
+      }
+    });
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, pass: string) => {
@@ -209,6 +232,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isAdmin,
       isAuthenticated,
       isLoading,
+      isAuthReady,
       isAuthModalOpen,
       authModalConfig,
       openAuthModal,

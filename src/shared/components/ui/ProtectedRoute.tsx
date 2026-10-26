@@ -17,10 +17,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredRoles,
   requiredPermission
 }) => {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, isAuthReady } = useAuth();
   const location = useLocation();
 
-  if (isLoading) {
+  if (!isAuthReady || isLoading) {
     return (
       <div style={{
         display: 'flex',

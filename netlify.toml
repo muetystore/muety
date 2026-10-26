@@ -58,6 +58,15 @@
   status = 200
 
 # ------------------------------------------------------------------------------
+# Firebase Auth Handler Proxy (First-Party Domain OAuth Redirect Support)
+# ------------------------------------------------------------------------------
+[[redirects]]
+  from = "/__/auth/*"
+  to = "https://muetystore-fdad2.firebaseapp.com/__/auth/:splat"
+  status = 200
+  force = true
+
+# ------------------------------------------------------------------------------
 # Countdown & Legal Pages
 # ------------------------------------------------------------------------------
 [[redirects]]

@@ -98,6 +98,9 @@ export class AuthService {
   private static instance: AuthService;
   private currentUser: UserProfile | null = null;
   private listeners: ((user: UserProfile | null) => void)[] = [];
+  private initPromise: Promise<UserProfile | null> | null = null;
+  private isInitialized: boolean = false;
+  private lastRedirectError: Error | null = null;
 
   private constructor() {
     const saved = typeof window !== 'undefined' ? localStorage.getItem(CURRENT_USER_KEY) : null;
@@ -118,30 +121,71 @@ export class AuthService {
       this.currentUser = null;
     }
 
-    if (auth && isLiveFirebase) {
-      try {
-        onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
-          if (fbUser) {
-            try {
-              const profile = await this.fetchUserProfile(fbUser);
-              this.setCurrentUser(profile);
-            } catch (e) {
-              console.warn('onAuthStateChanged profile fetch note:', e);
-            }
-          } else {
-            const saved = typeof window !== 'undefined' ? localStorage.getItem(CURRENT_USER_KEY) : null;
-            if (!saved) {
-              this.setCurrentUser(null);
-            }
+    const liveAuth = auth;
+    if (liveAuth && isLiveFirebase) {
+      this.initPromise = new Promise<UserProfile | null>((resolve) => {
+        let hasResolved = false;
+        const markReady = (user: UserProfile | null) => {
+          if (!hasResolved) {
+            hasResolved = true;
+            this.isInitialized = true;
+            resolve(user);
           }
-        });
+        };
 
+        // 1. Process Google redirect result during startup
         if (typeof window !== 'undefined') {
-          this.handleRedirectResult().catch(() => {});
+          this.handleRedirectResult()
+            .then((redirectUser) => {
+              if (redirectUser) {
+                markReady(redirectUser);
+              }
+            })
+            .catch((err) => {
+              console.warn('[AuthService] Startup redirect result note:', err);
+            });
         }
-      } catch (authInitErr) {
-        console.warn('Firebase onAuthStateChanged init note:', authInitErr);
-      }
+
+        // 2. Centralized auth state listener
+        try {
+          onAuthStateChanged(liveAuth, async (fbUser: FirebaseUser | null) => {
+            if (fbUser) {
+              try {
+                if (this.currentUser && this.currentUser.uid === fbUser.uid) {
+                  markReady(this.currentUser);
+                  return;
+                }
+                const profile = await this.fetchUserProfile(fbUser);
+                this.setCurrentUser(profile);
+                markReady(profile);
+              } catch (e) {
+                console.warn('[AuthService] onAuthStateChanged profile fetch note:', e);
+                markReady(this.currentUser);
+              }
+            } else {
+              const savedUser = typeof window !== 'undefined' ? localStorage.getItem(CURRENT_USER_KEY) : null;
+              if (!savedUser) {
+                this.setCurrentUser(null);
+              }
+              markReady(this.currentUser);
+            }
+          }, (authError) => {
+            console.warn('[AuthService] onAuthStateChanged error:', authError);
+            markReady(this.currentUser);
+          });
+        } catch (authInitErr) {
+          console.warn('[AuthService] Firebase onAuthStateChanged init note:', authInitErr);
+          markReady(this.currentUser);
+        }
+
+        // 3. Safety fallback timer so startup is never blocked indefinitely
+        setTimeout(() => {
+          markReady(this.currentUser);
+        }, 5000);
+      });
+    } else {
+      this.isInitialized = true;
+      this.initPromise = Promise.resolve(this.currentUser);
     }
   }
 
@@ -154,6 +198,25 @@ export class AuthService {
 
   public getCurrentUser(): UserProfile | null {
     return this.currentUser;
+  }
+
+  public async waitForAuthReady(): Promise<UserProfile | null> {
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+    return this.currentUser;
+  }
+
+  public getIsInitialized(): boolean {
+    return this.isInitialized;
+  }
+
+  public getLastRedirectError(): Error | null {
+    return this.lastRedirectError;
+  }
+
+  public clearLastRedirectError(): void {
+    this.lastRedirectError = null;
   }
 
   public subscribe(callback: (user: UserProfile | null) => void): () => void {
@@ -518,6 +581,12 @@ export class AuthService {
 
         let cred;
         if (useRedirectOnMobile && isMobile) {
+          if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const redirectParam = params.get('redirect');
+            const dest = redirectParam || (window.location.pathname === '/login' ? '/account' : window.location.pathname + window.location.search);
+            sessionStorage.setItem('muety_auth_redirect_dest', dest);
+          }
           await signInWithRedirect(auth, provider);
           return new Promise(() => {}); // Execution will pause as page navigates to Google
         }
@@ -527,6 +596,12 @@ export class AuthService {
         } catch (popupErr: any) {
           if (popupErr?.code === 'auth/popup-blocked' && isMobile) {
             console.info('[AuthService] Popup blocked on mobile browser, falling back to redirect.');
+            if (typeof window !== 'undefined') {
+              const params = new URLSearchParams(window.location.search);
+              const redirectParam = params.get('redirect');
+              const dest = redirectParam || (window.location.pathname === '/login' ? '/account' : window.location.pathname + window.location.search);
+              sessionStorage.setItem('muety_auth_redirect_dest', dest);
+            }
             await signInWithRedirect(auth, provider);
             return new Promise(() => {});
           }
@@ -591,6 +666,9 @@ export class AuthService {
       try {
         const cred = await getRedirectResult(auth);
         if (cred && cred.user) {
+          if (import.meta.env.DEV) {
+            console.info('[AuthService] Google redirect result retrieved successfully for UID:', cred.user.uid);
+          }
           const profile = await this.fetchUserProfile(cred.user);
           if (db && isLiveFirebase) {
             try {
@@ -599,7 +677,9 @@ export class AuthService {
                 setDoc(doc(db, 'users', cred.user.uid), clientPayload, { merge: true }),
                 setDoc(doc(db, 'customers', cred.user.uid), clientPayload, { merge: true })
               ]);
-            } catch {}
+            } catch (firestoreErr) {
+              console.warn('[AuthService] Firestore profile sync note after redirect:', firestoreErr);
+            }
           }
           this.setCurrentUser(profile);
 
@@ -616,7 +696,14 @@ export class AuthService {
           return profile;
         }
       } catch (err: any) {
+        this.lastRedirectError = err;
         console.warn('[AuthService] getRedirectResult note:', err?.code || err?.message);
+        if (import.meta.env.DEV) {
+          console.error('[AuthService] Google redirect result diagnostic:', {
+            code: err?.code,
+            message: err?.message
+          });
+        }
       }
     }
     return null;
