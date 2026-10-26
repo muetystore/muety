@@ -311,10 +311,9 @@ describe('MUETY Customer Authentication Restructure & Patron Circle Transition',
       expect(loginPageContent).toContain('setResendCooldown(30)');
       expect(loginPageContent).toContain('Edit');
 
-      // Patron Circle optional checkbox
-      expect(loginPageContent).toContain('id="patron-circle-opt-in"');
-      expect(loginPageContent).toContain("Yes, I'd like to join the MUETY Patron Circle and receive exclusive collection previews, bridal updates and invitations.");
-      expect(loginPageContent).toContain('const [patronCircleOptIn, setPatronCircleOptIn] = useState(false)');
+      // Patron Circle consent is managed via cookie consent banner, not redundant login checkbox
+      expect(loginPageContent).not.toContain('id="patron-circle-opt-in"');
+      expect(loginPageContent).not.toContain("Yes, I'd like to join the MUETY Patron Circle");
 
       // Legal links
       expect(loginPageContent).toContain('to="/terms-conditions"');
@@ -333,7 +332,7 @@ describe('MUETY Customer Authentication Restructure & Patron Circle Transition',
 
       expect(modalContent).toContain('Continue with Google');
       expect(modalContent).toContain('Continue with mobile number');
-      expect(modalContent).toContain('modal-patron-circle-opt-in');
+      expect(modalContent).not.toContain('modal-patron-circle-opt-in');
       expect(modalContent).toContain('Enter 6-Digit OTP Code');
     });
   });

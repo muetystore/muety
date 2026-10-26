@@ -47,8 +47,7 @@ export const PatronAuthModal: React.FC = () => {
     loginWithGoogle,
     sendPhoneOtp,
     verifyPhoneOtp,
-    setupRecaptcha,
-    recordPatronCircleConsent
+    setupRecaptcha
   } = useAuth();
 
   const { items, subtotal, appliedCoupon, wishlist } = useCart();
@@ -65,8 +64,7 @@ export const PatronAuthModal: React.FC = () => {
   const [confirmationResult, setConfirmationResult] = useState<any>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Patron Circle Consent (Unchecked by default)
-  const [patronCircleOptIn, setPatronCircleOptIn] = useState(false);
+
 
   // Loading & Error States
   const [loading, setLoading] = useState(false);
@@ -114,11 +112,6 @@ export const PatronAuthModal: React.FC = () => {
   const targetPath = authModalConfig?.redirectPath || '/checkout';
 
   const handleAuthSuccess = async (u: any) => {
-    // Record Patron Circle opt-in if selected
-    if (patronCircleOptIn && u?.uid) {
-      await recordPatronCircleConsent(u.uid, true, u.email, u.phoneNumber);
-    }
-
     closeAuthModal();
     const name = u.displayName ? u.displayName.split(' ')[0] : 'Patron';
     success(`Welcome back, ${name}. Moving to secure checkout.`, 'Signed In');
@@ -696,45 +689,15 @@ export const PatronAuthModal: React.FC = () => {
             </form>
           )}
 
-          {/* TASK 3: OPTIONAL PATRON CIRCLE OPT-IN CHECKBOX */}
+          {/* Terms & Privacy */}
           <div 
-            style={{
-              marginTop: '1.25rem',
-              paddingTop: '1rem',
-              borderTop: '1px solid #f1f5f9',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '10px'
+            style={{ 
+              marginTop: '1.25rem', 
+              paddingTop: '1rem', 
+              borderTop: '1px solid #f1f5f9', 
+              textAlign: 'center' 
             }}
           >
-            <input 
-              type="checkbox"
-              id="modal-patron-circle-opt-in"
-              checked={patronCircleOptIn}
-              onChange={(e) => setPatronCircleOptIn(e.target.checked)}
-              style={{ 
-                marginTop: '3px', 
-                cursor: 'pointer', 
-                accentColor: 'var(--brand-accent, #c9a227)',
-                width: '15px',
-                height: '15px'
-              }}
-            />
-            <label 
-              htmlFor="modal-patron-circle-opt-in"
-              style={{ 
-                fontSize: '0.8rem', 
-                color: 'var(--brand-primary, #10182d)', 
-                lineHeight: 1.45, 
-                cursor: 'pointer' 
-              }}
-            >
-              Yes, I'd like to join the MUETY Patron Circle and receive exclusive collection previews, bridal updates and invitations.
-            </label>
-          </div>
-
-          {/* Terms & Privacy */}
-          <div style={{ marginTop: '1rem', textAlign: 'center' }}>
             <p style={{ fontSize: '0.74rem', color: '#64748b', margin: 0 }}>
               By continuing, you acknowledge MUETY's{' '}
               <Link to="/terms-conditions" target="_blank" style={{ color: '#c9a227', textDecoration: 'underline', fontWeight: 600 }}>

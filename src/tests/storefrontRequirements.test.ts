@@ -159,16 +159,15 @@ describe('MUETY Storefront — 8 Core Requirements Verification Suite', () => {
       expect(homePageCode).not.toContain('id="patron-circle-consent"');
     });
 
-    it('verifies LoginPage displays optional Patron Circle opt-in and legal links', () => {
+    it('verifies LoginPage handles legal links and does not display redundant Patron Circle checkbox', () => {
       const loginCode = fs.readFileSync(
         path.join(process.cwd(), 'src/features/auth/pages/LoginPage.tsx'),
         'utf-8'
       );
 
-      // Checkbox is unchecked by default and optional
-      expect(loginCode).toContain('const [patronCircleOptIn, setPatronCircleOptIn] = useState(false)');
-      expect(loginCode).toContain('id="patron-circle-opt-in"');
-      expect(loginCode).toContain("Yes, I'd like to join the MUETY Patron Circle");
+      // Patron Circle consent handled via cookie consent banner, not redundant login checkbox
+      expect(loginCode).not.toContain('id="patron-circle-opt-in"');
+      expect(loginCode).not.toContain("Yes, I'd like to join the MUETY Patron Circle");
       expect(loginCode).toContain('to="/terms-conditions"');
       expect(loginCode).toContain('to="/privacy-policy"');
     });

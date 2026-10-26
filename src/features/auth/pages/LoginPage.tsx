@@ -44,8 +44,7 @@ export const LoginPage: React.FC = () => {
     loginWithGoogle, 
     sendPhoneOtp, 
     verifyPhoneOtp, 
-    setupRecaptcha, 
-    recordPatronCircleConsent 
+    setupRecaptcha 
   } = useAuth();
   const { items, subtotal, appliedCoupon, wishlist } = useCart();
   const { error, success, info } = useNotification();
@@ -65,8 +64,7 @@ export const LoginPage: React.FC = () => {
   const [confirmationResult, setConfirmationResult] = useState<any>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Patron Circle Consent (Unchecked by default)
-  const [patronCircleOptIn, setPatronCircleOptIn] = useState(false);
+
 
   // Loading & Error States
   const [loading, setLoading] = useState(false);
@@ -130,18 +128,9 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
     setFormError(null);
 
-    // Save patron circle opt-in intent in sessionStorage for mobile redirects
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('muety_patron_opt_in', patronCircleOptIn ? 'true' : 'false');
-    }
-
     try {
       const user = await loginWithGoogle(true);
       if (user) {
-        // Record patron circle consent if opted in
-        if (patronCircleOptIn) {
-          await recordPatronCircleConsent(user.uid, true, user.email, user.phoneNumber);
-        }
         success(`Welcome to MUETY, ${user.displayName || 'Patron'}.`, 'Signed In Successfully');
         navigate(from, { replace: true });
       }
@@ -229,10 +218,6 @@ export const LoginPage: React.FC = () => {
     try {
       const user = await verifyPhoneOtp(confirmationResult, cleanCode);
       if (user) {
-        // Record patron circle consent if opted in
-        if (patronCircleOptIn) {
-          await recordPatronCircleConsent(user.uid, true, user.email, user.phoneNumber);
-        }
         success(`Welcome to MUETY, ${user.displayName || 'Patron'}.`, 'Verified Successfully');
         navigate(from, { replace: true });
       }
@@ -675,48 +660,15 @@ export const LoginPage: React.FC = () => {
           </form>
         )}
 
-        {/* =========================================================================
-            TASK 3: PATRON CIRCLE OPTIONAL CONSENT CHECKBOX
-            Unchecked by default. Displayed once below authentication options.
-            ========================================================================= */}
+        {/* Legal Terms & Conditions & Privacy Policy links */}
         <div 
-          style={{
-            marginTop: '1.5rem',
-            paddingTop: '1.25rem',
-            borderTop: '1px solid var(--brand-border, #e2e8f0)',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '10px'
+          style={{ 
+            marginTop: '1.5rem', 
+            paddingTop: '1.25rem', 
+            borderTop: '1px solid var(--brand-border, #e2e8f0)', 
+            textAlign: 'center' 
           }}
         >
-          <input 
-            type="checkbox"
-            id="patron-circle-opt-in"
-            checked={patronCircleOptIn}
-            onChange={(e) => setPatronCircleOptIn(e.target.checked)}
-            style={{ 
-              marginTop: '3px', 
-              cursor: 'pointer', 
-              accentColor: 'var(--brand-accent, #c9a227)',
-              width: '16px',
-              height: '16px'
-            }}
-          />
-          <label 
-            htmlFor="patron-circle-opt-in"
-            style={{ 
-              fontSize: '0.82rem', 
-              color: 'var(--brand-primary, #10182d)', 
-              lineHeight: 1.45, 
-              cursor: 'pointer' 
-            }}
-          >
-            Yes, I'd like to join the MUETY Patron Circle and receive exclusive collection previews, bridal updates and invitations.
-          </label>
-        </div>
-
-        {/* Legal Terms & Conditions & Privacy Policy links */}
-        <div style={{ marginTop: '1.25rem', textAlign: 'center' }}>
           <p style={{ fontSize: '0.76rem', color: 'var(--brand-muted, #64748b)', margin: 0, lineHeight: 1.5 }}>
             By continuing, you acknowledge MUETY's{' '}
             <Link to="/terms-conditions" target="_blank" style={{ color: 'var(--brand-accent, #c9a227)', textDecoration: 'underline', fontWeight: 600 }}>
