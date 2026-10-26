@@ -576,26 +576,22 @@ export class AuthService {
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
 
-        const isMobile = typeof window !== 'undefined' && 
-          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
+        // Use signInWithPopup on all platforms:
+        // — On desktop: opens a popup window.
+        // — On mobile Chrome/Android: opens as a new tab, which works reliably.
+        // signInWithRedirect + getRedirectResult is avoided because mobile browsers
+        // block cross-origin IndexedDB/storage used by Firebase to pass the result back,
+        // causing getRedirectResult to silently return null after a successful Google login.
         let cred;
-        if (useRedirectOnMobile && isMobile) {
-          if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const redirectParam = params.get('redirect');
-            const dest = redirectParam || (window.location.pathname === '/login' ? '/account' : window.location.pathname + window.location.search);
-            sessionStorage.setItem('muety_auth_redirect_dest', dest);
-          }
-          await signInWithRedirect(auth, provider);
-          return new Promise(() => {}); // Execution will pause as page navigates to Google
-        }
-
         try {
-          cred = await withTimeout(signInWithPopup(auth, provider), 30000);
+          cred = await withTimeout(signInWithPopup(auth, provider), 60000);
         } catch (popupErr: any) {
-          if (popupErr?.code === 'auth/popup-blocked' && isMobile) {
-            console.info('[AuthService] Popup blocked on mobile browser, falling back to redirect.');
+          // Only fall back to redirect when the popup is EXPLICITLY blocked by the browser
+          if (
+            popupErr?.code === 'auth/popup-blocked' ||
+            popupErr?.code === 'auth/cancelled-popup-request'
+          ) {
+            console.info('[AuthService] Popup blocked — falling back to signInWithRedirect.');
             if (typeof window !== 'undefined') {
               const params = new URLSearchParams(window.location.search);
               const redirectParam = params.get('redirect');
@@ -603,7 +599,7 @@ export class AuthService {
               sessionStorage.setItem('muety_auth_redirect_dest', dest);
             }
             await signInWithRedirect(auth, provider);
-            return new Promise(() => {});
+            return new Promise(() => {}); // Page navigates away
           }
           throw popupErr;
         }
@@ -682,6 +678,11 @@ export class AuthService {
             }
           }
           this.setCurrentUser(profile);
+
+          // Clear redirect destination key — consumed successfully
+          if (typeof window !== 'undefined') {
+            sessionStorage.removeItem('muety_auth_redirect_dest');
+          }
 
           // Check if patron circle preference was selected before mobile redirect or via marketing cookies
           if (typeof window !== 'undefined') {

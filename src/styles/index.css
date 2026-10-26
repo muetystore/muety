@@ -8012,8 +8012,8 @@ body:has(.pdp-page) .announcement-bar-top {
   .cookie-consent-inner {
     flex-direction: column;
     align-items: stretch;
-    gap: 1.25rem;
-    padding: 1.25rem 1.25rem;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
   }
   .cookie-consent-actions {
     justify-content: stretch;
@@ -8027,16 +8027,41 @@ body:has(.pdp-page) .announcement-bar-top {
 
 @media (max-width: 768px) {
   .cookie-consent-banner {
-    bottom: calc(var(--bottom-safe-clearance, 70px) + 10px);
-    left: 0.75rem;
-    right: 0.75rem;
+    bottom: calc(var(--bottom-safe-clearance, 70px) + 6px);
+    left: 0.5rem;
+    right: 0.5rem;
+    border-radius: 10px;
+  }
+  .cookie-consent-inner {
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+  }
+  .cookie-consent-title {
+    font-size: 0.88rem;
+  }
+  .cookie-consent-badge {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.5rem;
+    gap: 0.25rem;
+  }
+  .cookie-consent-text {
+    font-size: 0.78rem;
+    line-height: 1.45;
+    margin-bottom: 0.35rem;
+  }
+  .cookie-consent-links {
+    font-size: 0.73rem;
   }
   .cookie-consent-actions {
-    flex-direction: column;
-    gap: 0.5rem;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0.4rem;
   }
   .cookie-consent-actions .btn-cookie-action {
-    width: 100%;
+    flex: 1;
+    width: auto;
+    padding: 0.55rem 0.4rem;
+    font-size: 0.78rem;
   }
   .cookie-modal-card {
     max-height: 90vh;
@@ -8044,8 +8069,8 @@ body:has(.pdp-page) .announcement-bar-top {
   .cookie-modal-header,
   .cookie-modal-body,
   .cookie-modal-footer {
-    padding-left: 1.25rem;
-    padding-right: 1.25rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
   .cookie-modal-footer {
     flex-direction: column-reverse;

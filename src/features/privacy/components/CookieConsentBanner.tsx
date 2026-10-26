@@ -209,7 +209,7 @@ export const CookieConsentBanner: React.FC = () => {
               <div className="cookie-consent-header">
                 <span className="cookie-consent-badge">
                   <ShieldCheck size={14} className="cookie-badge-icon" />
-                  <span>Privacy Choices</span>
+                  <span>Cookies Consent</span>
                 </span>
                 <h2 id="cookie-consent-heading" className="cookie-consent-title">
                   Your privacy matters at MUETY
