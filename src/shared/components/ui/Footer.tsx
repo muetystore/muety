@@ -386,11 +386,28 @@ export const Footer: React.FC = () => {
           <div>
             &copy; {new Date().getFullYear()} MUETY Inc. All Rights Reserved. Luxury E-Commerce Atelier.
           </div>
-          <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <Link to="/privacy-policy" style={{ color: '#94a3b8' }}>Privacy</Link>
-            <Link to="/cookie-policy" style={{ color: '#94a3b8' }}>Cookies</Link>
+          <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', flexWrap: 'wrap' }} className="footer-bottom-links">
+            <Link 
+              to="/privacy-policy" 
+              className="footer-bottom-link"
+              style={{ color: '#94a3b8', textDecoration: 'none', transition: 'color var(--transition-fast)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+            >
+              Privacy
+            </Link>
+            <Link 
+              to="/cookie-policy" 
+              className="footer-bottom-link"
+              style={{ color: '#94a3b8', textDecoration: 'none', transition: 'color var(--transition-fast)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+            >
+              Cookies
+            </Link>
             <button
               type="button"
+              className="footer-bottom-link"
               onClick={() => window.dispatchEvent(new CustomEvent('muety_open_cookie_settings'))}
               style={{
                 background: 'none',
@@ -398,21 +415,52 @@ export const Footer: React.FC = () => {
                 padding: 0,
                 font: 'inherit',
                 color: '#94a3b8',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'color var(--transition-fast)'
               }}
               onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')}
               onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
             >
               Cookie Preferences
             </button>
-            <Link to="/terms-conditions" style={{ color: '#94a3b8' }}>Terms</Link>
-            <Link to="/shipping-policy" style={{ color: '#94a3b8' }}>Shipping</Link>
-            <Link to="/return-refund-policy" style={{ color: '#94a3b8' }}>Returns &amp; Refunds</Link>
+            <Link 
+              to="/terms-conditions" 
+              className="footer-bottom-link"
+              style={{ color: '#94a3b8', textDecoration: 'none', transition: 'color var(--transition-fast)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+            >
+              Terms
+            </Link>
+            <Link 
+              to="/shipping-policy" 
+              className="footer-bottom-link"
+              style={{ color: '#94a3b8', textDecoration: 'none', transition: 'color var(--transition-fast)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+            >
+              Shipping
+            </Link>
+            <Link 
+              to="/return-refund-policy" 
+              className="footer-bottom-link"
+              style={{ color: '#94a3b8', textDecoration: 'none', transition: 'color var(--transition-fast)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#d4af37')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+            >
+              Returns &amp; Refunds
+            </Link>
           </div>
         </div>
       </div>
 
       <style>{`
+        .footer-bottom-link {
+          transition: color 0.15s ease !important;
+        }
+        .footer-bottom-link:hover {
+          color: #d4af37 !important;
+        }
         @media (max-width: 960px) {
           .footer-links-grid {
             grid-template-columns: 1fr 1fr !important;
