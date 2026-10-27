@@ -8082,3 +8082,271 @@ body:has(.pdp-page) .announcement-bar-top {
 }
 
 
+
+/* ============================================================
+   MUETY REDESIGN — Royal Maroon x Ivory White x Antique Gold
+   Reference Design Match — UI-only overrides
+   ============================================================ */
+
+/* ---- Base Typography Override ---- */
+html { text-align: left; }
+
+body {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #282522;
+  background-color: #FFFDF8;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Playfair Display', Georgia, serif;
+  color: #282522;
+  letter-spacing: -0.01em;
+}
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar-thumb { background: rgba(142, 27, 50, 0.25); }
+::-webkit-scrollbar-thumb:hover { background: rgba(142, 27, 50, 0.45); }
+
+/* ---- Announcement Bar ---- */
+.announcement-bar-top {
+  background-color: #8E1B32 !important;
+  border-bottom-color: rgba(198, 161, 91, 0.4) !important;
+  font-family: 'Poppins', sans-serif !important;
+}
+
+/* ---- Main Header ---- */
+.main-header {
+  background-color: #FFFFFF !important;
+  border-bottom: 1px solid #E8DDD5 !important;
+}
+.main-header.scrolled {
+  background-color: rgba(255, 253, 248, 0.96) !important;
+  box-shadow: 0 2px 12px rgba(142, 27, 50, 0.08) !important;
+}
+
+/* ---- Desktop Navigation ---- */
+.desktop-nav a {
+  font-family: 'Poppins', sans-serif !important;
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+  color: #282522 !important;
+}
+.desktop-nav a:hover, .desktop-nav a.active {
+  color: #8E1B32 !important;
+  border-bottom-color: #8E1B32 !important;
+  font-weight: 600 !important;
+}
+.nav-dropdown-trigger {
+  font-family: 'Poppins', sans-serif !important;
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+  color: #282522 !important;
+}
+.nav-dropdown-trigger:hover, .nav-dropdown-trigger.active {
+  color: #8E1B32 !important;
+  border-bottom-color: #C6A15B !important;
+  font-weight: 600 !important;
+}
+.nav-simple-link {
+  font-family: 'Poppins', sans-serif !important;
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+  color: #282522 !important;
+}
+.nav-simple-link:hover, .nav-simple-link.active {
+  color: #8E1B32 !important;
+  border-bottom-color: #C6A15B !important;
+  font-weight: 600 !important;
+}
+
+/* ---- Header Dropdowns ---- */
+.collections-dropdown-menu {
+  border-top-color: #C6A15B !important;
+  box-shadow: 0 20px 40px -10px rgba(142, 27, 50, 0.12), 0 0 0 1px rgba(198, 161, 91, 0.2) !important;
+}
+.dropdown-section-header {
+  background: linear-gradient(180deg, #FFFDF8 0%, #F9F4ED 100%) !important;
+}
+.dropdown-item-link:hover {
+  background-color: #FFF8F0 !important;
+  color: #8E1B32 !important;
+}
+.dropdown-item-link:hover .dropdown-item-bullet { background-color: #C6A15B !important; }
+.dropdown-footer-link.gold {
+  color: #8E1B32 !important;
+  background-color: rgba(198, 161, 91, 0.1) !important;
+}
+
+/* ---- Header Auth Buttons ---- */
+.header-account-btn { border-color: #E8DDD5 !important; color: #282522 !important; }
+.header-account-btn:hover { border-color: #C6A15B !important; background-color: #FFF8F0 !important; }
+.header-guest-signin-btn {
+  background-color: rgba(142, 27, 50, 0.06) !important;
+  border-color: rgba(142, 27, 50, 0.3) !important;
+  color: #8E1B32 !important;
+}
+.header-guest-signin-btn:hover {
+  background-color: rgba(142, 27, 50, 0.12) !important;
+  border-color: #8E1B32 !important;
+}
+.header-badge-count-static { background-color: #8E1B32 !important; }
+
+/* ---- Account Dropdown ---- */
+.account-dropdown-guest-header {
+  background: linear-gradient(135deg, #8E1B32 0%, #6B1326 100%) !important;
+  border-bottom-color: #C6A15B !important;
+}
+.account-menu-item.gold { color: #8E1B32 !important; }
+.account-menu-item:hover { background-color: #FFF8F0 !important; color: #8E1B32 !important; }
+
+/* ---- Shop By Mega Menu ---- */
+.shopby-megamenu {
+  border-color: #E8DDD5 !important;
+  box-shadow: 0 16px 42px rgba(142, 27, 50, 0.12) !important;
+}
+.shopby-column-title { color: #8E1B32 !important; border-bottom-color: #E8DDD5 !important; }
+.shopby-link-list a:hover { color: #8E1B32 !important; }
+.shopby-link-list a.highlight-gold, .shopby-link-list a.highlight-red { color: #8E1B32 !important; }
+.shopby-footer { background-color: #FFFDF8 !important; border-top-color: #E8DDD5 !important; }
+
+/* ---- Primary Buttons ---- */
+.btn-primary {
+  background-color: #8E1B32 !important;
+  color: #FFFFFF !important;
+  font-family: 'Poppins', sans-serif !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+}
+.btn-primary:hover {
+  background-color: #6B1326 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 16px rgba(142, 27, 50, 0.3) !important;
+}
+.btn-accent {
+  background: linear-gradient(135deg, #C6A15B 0%, #B08A42 100%) !important;
+  color: #282522 !important;
+  font-family: 'Poppins', sans-serif !important;
+  font-weight: 700 !important;
+}
+.btn-accent:hover {
+  background: linear-gradient(135deg, #D4B470 0%, #C6A15B 100%) !important;
+  box-shadow: 0 12px 24px -6px rgba(198, 161, 91, 0.4) !important;
+}
+.btn-outline { color: #8E1B32 !important; border-color: #8E1B32 !important; }
+.btn-outline:hover { background: #8E1B32 !important; color: #FFFFFF !important; }
+
+/* ---- Forms ---- */
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: #C6A15B !important;
+  box-shadow: 0 0 0 3px rgba(198, 161, 91, 0.2) !important;
+}
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline-color: #C6A15B !important;
+}
+
+/* ---- Product Card ---- */
+.product-card {
+  background-color: #FFFFFF !important;
+  border-color: #E8DDD5 !important;
+  border-radius: 10px !important;
+  transition: transform 0.25s ease, box-shadow 0.25s ease !important;
+}
+.product-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 12px 28px rgba(142, 27, 50, 0.12) !important;
+  border-color: rgba(198, 161, 91, 0.4) !important;
+}
+.product-card-btn-add {
+  background-color: #8E1B32 !important;
+  color: #FFFFFF !important;
+  font-family: 'Poppins', sans-serif !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  border-radius: 6px !important;
+}
+.product-card-btn-add:hover:not(:disabled) { background-color: #6B1326 !important; }
+
+/* Carousel nav arrows */
+.product-nav-arrow {
+  background-color: #FFFFFF !important;
+  border: 1.5px solid #E8DDD5 !important;
+  color: #8E1B32 !important;
+  box-shadow: 0 2px 8px rgba(142, 27, 50, 0.1) !important;
+}
+.product-nav-arrow:hover {
+  background-color: #8E1B32 !important;
+  border-color: #8E1B32 !important;
+  color: #FFFFFF !important;
+}
+
+/* Review nav */
+.review-nav-btn { border-color: #E8DDD5 !important; color: #8E1B32 !important; }
+.review-nav-btn:hover { border-color: #8E1B32 !important; background-color: #FFF8F0 !important; }
+
+/* ---- Footer ---- */
+.main-footer, .site-footer {
+  background-color: #282522 !important;
+  color: #FFFDF8 !important;
+  border-top-color: rgba(198, 161, 91, 0.3) !important;
+}
+.footer-section-title, .footer-heading {
+  font-family: 'Playfair Display', Georgia, serif !important;
+  color: #C6A15B !important;
+}
+.footer-link, .footer-nav-link {
+  font-family: 'Poppins', sans-serif !important;
+  color: rgba(255, 253, 248, 0.72) !important;
+}
+.footer-link:hover, .footer-nav-link:hover { color: #C6A15B !important; }
+.footer-copyright { color: rgba(255, 253, 248, 0.45) !important; font-size: 0.78rem !important; }
+
+/* ---- Mobile Nav ---- */
+.mobile-nav-drawer { background-color: #FFFDF8 !important; border-right-color: #E8DDD5 !important; }
+.mobile-nav-header { background-color: #FFFFFF !important; border-bottom-color: #E8DDD5 !important; }
+.mobile-nav-kicker { color: #C6A15B !important; }
+.mobile-nav-close-btn { border-color: #C6A15B !important; color: #C6A15B !important; }
+.mobile-nav-tab-btn.active { background: #FFF3E0 !important; border-color: #C6A15B !important; color: #282522 !important; }
+.tab-admin-dot { background: #8E1B32 !important; }
+
+/* ---- Cart Drawer header ---- */
+.cart-drawer-header {
+  background: linear-gradient(135deg, #8E1B32 0%, #6B1326 100%) !important;
+  color: #FFFFFF !important;
+  border-bottom-color: #C6A15B !important;
+}
+
+/* ---- Admin ---- */
+.admin-modal-header {
+  background: linear-gradient(135deg, #8E1B32 0%, #6B1326 100%) !important;
+  border-bottom-color: #C6A15B !important;
+}
+.admin-section-nav-item.active { background-color: #8E1B32 !important; border-color: #C6A15B !important; }
+.admin-sticky-save-bar { border-color: #C6A15B !important; }
+.admin-sticky-save-bar-actions .btn-save-changes {
+  background-color: #C6A15B !important;
+  border-color: #C6A15B !important;
+  color: #282522 !important;
+}
+
+/* ---- Wishlist ---- */
+button[aria-label="Remove from Wishlist"] { background-color: #8E1B32 !important; color: #FFFFFF !important; }
+
+/* ---- Pagination ---- */
+.pagination-btn.active { background-color: #8E1B32 !important; color: #FFFFFF !important; border-color: #8E1B32 !important; }
+.pagination-btn:hover:not(.active) { border-color: #8E1B32 !important; color: #8E1B32 !important; }
+
+/* ---- Search ---- */
+.search-result-item:hover { background-color: #FFF8F0 !important; color: #8E1B32 !important; }
+
+/* ---- Mobile Bottom Nav ---- */
+.mobile-bottom-nav { background-color: #FFFFFF !important; border-top: 1px solid #E8DDD5 !important; }
+
+/* ---- Auth modal header ---- */
+.patron-auth-modal-header {
+  background: linear-gradient(135deg, #8E1B32 0%, #6B1326 100%) !important;
+  border-bottom-color: #C6A15B !important;
+}
+
+/* ============================================================
+   End MUETY Redesign Overrides
+   ============================================================ */

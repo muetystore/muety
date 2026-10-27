@@ -1,84 +1,74 @@
 :root {
-  /* MUETY Premium Indian Luxury Color Palette */
-  --brand-primary: #10172a;
-  /* Deep Primary Ink/Navy */
-  --brand-primary-light: #1e293b;
-  /* Midnight Slate */
-  --brand-primary-dark: #070a12;
-  /* Pitch Obsidian */
+  /* ================================================================
+     MUETY — Royal Maroon x Ivory White x Antique Gold Design System
+     ================================================================ */
 
-  --brand-accent: #c9a227;
-  /* Heritage Gold */
-  --brand-accent-hover: #a8841b;
-  /* Deep Burnished Gold */
-  --brand-accent-light: #fef9e7;
-  /* Pale Gold Shimmer */
-  --brand-accent-glow: rgba(201, 162, 39, 0.25);
+  /* Brand Primary — Royal Maroon */
+  --brand-primary: #8E1B32;
+  --brand-primary-light: #A82240;
+  --brand-primary-dark: #6B1326;
 
-  --brand-burgundy: #7d1f2b;
-  /* Deep Regal Burgundy */
-  --brand-burgundy-light: #991b1b;
-  /* Warm Crimson */
-  --brand-plum: #4a0e2e;
-  /* Deep Rich Plum */
-  --brand-plum-dark: #33081e;
-  /* Royal Night Plum */
-  --brand-sale: #b91c1c;
-  /* Prominent Sale Red */
-  --brand-sale-bg: #fef2f2;
+  /* Accent — Antique Gold */
+  --brand-accent: #C6A15B;
+  --brand-accent-hover: #B08A42;
+  --brand-accent-light: #FAF3E0;
+  --brand-accent-glow: rgba(198, 161, 91, 0.25);
 
-  --brand-secondary: #647087;
-  /* Refined Cool Slate */
-  --brand-muted: #94a3b8;
-  /* Muted Silver */
-  --brand-border: #e6e7eb;
-  /* Refined Light Border */
-  --brand-border-dark: #334155;
-  /* Refined Dark Border */
+  /* Secondary maroon/plum tones */
+  --brand-burgundy: #8E1B32;
+  --brand-burgundy-light: #A82240;
+  --brand-plum: #5C1020;
+  --brand-plum-dark: #3E0A16;
+  --brand-sale: #B91C1C;
+  --brand-sale-bg: #FEF2F2;
 
-  /* Neutral Backgrounds */
-  --bg-main: #faf8f3;
-  /* Warm Ivory / Pure Alabaster */
-  --bg-alabaster: #faf8f3;
-  --bg-surface: #ffffff;
-  /* Clean Pure White */
-  --bg-surface-elevated: #ffffff;
-  --bg-subtle: #f4f1ea;
-  /* Subtle Warm Ivory Gray */
-  --bg-dark: #10172a;
-  --bg-dark-surface: #1e293b;
+  /* Neutrals */
+  --brand-secondary: #6B7280;
+  --brand-muted: #9CA3AF;
+  --brand-border: #E8DDD5;
+  --brand-border-dark: #8E1B32;
 
-  /* Text Colors */
-  --text-primary: #10172a;
-  --text-secondary: #647087;
-  --text-muted: #8b95a5;
-  --text-inverse: #faf8f3;
+  /* Backgrounds — Ivory */
+  --bg-main: #FFFDF8;
+  --bg-alabaster: #FFFDF8;
+  --bg-surface: #FFFFFF;
+  --bg-surface-elevated: #FFFFFF;
+  --bg-subtle: #F9F4ED;
+  --bg-dark: #282522;
+  --bg-dark-surface: #342E2A;
 
-  /* Semantic Status Colors */
-  --status-success: #10b981;
-  --status-success-bg: #ecfdf5;
-  --status-warning: #f59e0b;
-  --status-warning-bg: #fffbeb;
-  --status-danger: #ef4444;
-  --status-danger-bg: #fef2f2;
-  --status-info: #3b82f6;
-  --status-info-bg: #eff6ff;
+  /* Text */
+  --text-primary: #282522;
+  --text-secondary: #6B7280;
+  --text-muted: #9CA3AF;
+  --text-inverse: #FFFDF8;
 
-  /* Typography */
-  --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Semantic Status */
+  --status-success: #10B981;
+  --status-success-bg: #ECFDF5;
+  --status-warning: #F59E0B;
+  --status-warning-bg: #FFFBEB;
+  --status-danger: #EF4444;
+  --status-danger-bg: #FEF2F2;
+  --status-info: #3B82F6;
+  --status-info-bg: #EFF6FF;
+
+  /* Typography — Playfair Display for headings, Poppins for body */
+  --font-heading: 'Playfair Display', 'Georgia', serif;
+  --font-body: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-festive-decorative: 'Cinzel Decorative', 'Cinzel', serif;
-  --font-festive-headline: 'Rozha One', 'Playfair Display', serif;
+  --font-festive-headline: 'Playfair Display', serif;
   --font-festive-serif: 'Playfair Display', 'Marcellus', serif;
   --font-festive-royal: 'Cinzel', 'Marcellus', serif;
 
   /* Elevation & Shadows */
-  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-  --shadow-gold: 0 10px 25px -5px rgba(212, 175, 55, 0.3);
+  --shadow-xs: 0 1px 2px 0 rgba(142, 27, 50, 0.04);
+  --shadow-sm: 0 1px 3px 0 rgba(142, 27, 50, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(142, 27, 50, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(142, 27, 50, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(142, 27, 50, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --shadow-gold: 0 10px 25px -5px rgba(198, 161, 91, 0.35);
+  --shadow-maroon: 0 8px 20px -4px rgba(142, 27, 50, 0.3);
 
   /* Radii */
   --radius-sm: 6px;
@@ -94,8 +84,8 @@
 
   /* Layout */
   --container-max: 1320px;
-  --header-height: 60px;
-  --header-height-mobile: 52px;
+  --header-height: 64px;
+  --header-height-mobile: 56px;
   --bottom-nav-height: 58px;
   --bottom-safe-clearance: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 16px);
   --admin-sidebar-width: 260px;
