@@ -1293,7 +1293,8 @@ body:has(.pdp-page) .announcement-bar-top {
   flex-shrink: 1;
 }
 
-.desktop-nav a {
+.desktop-nav > a,
+.nav-simple-link {
   font-family: var(--font-heading);
   font-size: 0.92rem;
   font-weight: 500;
@@ -1306,8 +1307,10 @@ body:has(.pdp-page) .announcement-bar-top {
   white-space: nowrap;
 }
 
-.desktop-nav a:hover,
-.desktop-nav a.active {
+.desktop-nav > a:hover,
+.desktop-nav > a.active,
+.nav-simple-link:hover,
+.nav-simple-link.active {
   color: #0f172a;
   font-weight: 700;
   border-bottom-color: #0f172a;
@@ -1556,9 +1559,10 @@ body:has(.pdp-page) .announcement-bar-top {
 .shopby-megamenu {
   position: absolute;
   top: calc(100% + 8px);
-  left: -120px;
-  width: 760px;
-  max-width: 90vw;
+  left: -80px;
+  width: 900px;
+  max-width: 94vw;
+  box-sizing: border-box;
   background-color: #ffffff;
   border-radius: var(--radius-lg);
   box-shadow: 0 16px 42px rgba(16, 24, 45, 0.15);
@@ -1588,6 +1592,7 @@ body:has(.pdp-page) .announcement-bar-top {
 .shopby-column {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .shopby-column-highlight {
@@ -1614,7 +1619,12 @@ body:has(.pdp-page) .announcement-bar-top {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.6rem;
+}
+
+.shopby-link-list li {
+  margin: 0;
+  padding: 0;
 }
 
 .shopby-link-list a {
@@ -1622,7 +1632,13 @@ body:has(.pdp-page) .announcement-bar-top {
   color: #334155;
   text-decoration: none;
   transition: all 0.15s ease;
-  display: inline-block;
+  display: block;
+  white-space: normal !important;
+  word-break: normal;
+  overflow-wrap: break-word;
+  line-height: 1.4;
+  padding: 2px 0 !important;
+  border-bottom: none !important;
 }
 
 .shopby-link-list a:hover {
@@ -1649,7 +1665,7 @@ body:has(.pdp-page) .announcement-bar-top {
 .shopby-footer {
   background-color: #faf8f3;
   border-top: 1px solid var(--brand-border);
-  padding: 8px 1.75rem;
+  padding: 10px 1.75rem;
   text-align: right;
 }
 
@@ -1658,6 +1674,8 @@ body:has(.pdp-page) .announcement-bar-top {
   font-weight: 700;
   color: var(--brand-primary);
   text-decoration: none;
+  display: inline-block;
+  white-space: nowrap;
 }
 
 .shopby-footer-link:hover {
@@ -8205,6 +8223,14 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 16px 42px rgba(142, 27, 50, 0.12) !important;
 }
 .shopby-column-title { color: #8E1B32 !important; border-bottom-color: #E8DDD5 !important; }
+.shopby-column { min-width: 0 !important; }
+.shopby-link-list a {
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  display: block !important;
+  line-height: 1.4 !important;
+}
 .shopby-link-list a:hover { color: #8E1B32 !important; }
 .shopby-link-list a.highlight-gold, .shopby-link-list a.highlight-red { color: #8E1B32 !important; }
 .shopby-footer { background-color: #FFFDF8 !important; border-top-color: #E8DDD5 !important; }

@@ -301,13 +301,13 @@ export const Header: React.FC = () => {
                 {shopByMenuOpen && (
                   <div 
                     className="shopby-megamenu animate-fade-in"
-                    style={{ width: `${Math.min(760, Math.max(360, activeShopByColsCount * 190))}px` }}
+                    style={{ width: `${Math.min(920, Math.max(380, activeShopByColsCount * 225))}px` }}
                     onMouseEnter={handleShopByEnter}
                     onMouseLeave={handleShopByLeave}
                   >
                     <div 
                       className="shopby-megamenu-grid"
-                      style={{ gridTemplateColumns: `repeat(${activeShopByColsCount}, minmax(160px, 1fr))` }}
+                      style={{ gridTemplateColumns: `repeat(${activeShopByColsCount}, minmax(190px, 1fr))` }}
                     >
                       {/* Column 1: Occasion */}
                       {shopByOccasions.length > 0 && (
