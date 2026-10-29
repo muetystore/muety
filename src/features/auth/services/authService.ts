@@ -152,6 +152,7 @@ export class AuthService {
             if (fbUser) {
               try {
                 if (this.currentUser && this.currentUser.uid === fbUser.uid) {
+                  fbUser.getIdTokenResult(true).catch(() => {});
                   markReady(this.currentUser);
                   return;
                 }
@@ -163,9 +164,13 @@ export class AuthService {
                 markReady(this.currentUser);
               }
             } else {
-              const savedUser = typeof window !== 'undefined' ? localStorage.getItem(CURRENT_USER_KEY) : null;
-              if (!savedUser) {
+              if (this.currentUser && (this.currentUser.email?.endsWith('@muety.in') || (this.currentUser.roles && this.currentUser.roles.some(r => r !== 'customer')))) {
                 this.setCurrentUser(null);
+              } else {
+                const savedUser = typeof window !== 'undefined' ? localStorage.getItem(CURRENT_USER_KEY) : null;
+                if (!savedUser) {
+                  this.setCurrentUser(null);
+                }
               }
               markReady(this.currentUser);
             }
@@ -473,7 +478,7 @@ export class AuthService {
 
     if (auth && isLiveFirebase) {
       try {
-        const cred = await withTimeout(signInWithEmailAndPassword(auth, cleanEmail, pass), 4500);
+        const cred = await withTimeout(signInWithEmailAndPassword(auth, cleanEmail, pass), 15000);
         const profile = await this.fetchUserProfile(cred.user);
         this.setCurrentUser(profile);
         return profile;
@@ -481,6 +486,9 @@ export class AuthService {
         console.warn('Firebase signIn note:', error?.code || error?.message);
         if (error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential' || error?.code === 'auth/user-not-found') {
           throw new Error('Invalid authentication credentials. Access Denied.');
+        }
+        if (cleanEmail.endsWith('@muety.in') || CANONICAL_ADMIN_ROSTER[cleanEmail]) {
+          throw new Error(`Administrative authentication failed: ${error?.message || 'Network timeout connecting to Firebase Auth. Please try again.'}`);
         }
       }
     }

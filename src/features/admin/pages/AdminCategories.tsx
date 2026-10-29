@@ -3,6 +3,7 @@ import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { productService } from '@/features/catalog/services/productService';
 import { auditService } from '@/shared/services/auditService';
 import { useAuth } from '@/shared/context/AuthContext';
+import { authService } from '@/features/auth/services/authService';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { Category, Product } from '@/types';
 import { auth, db } from '@/lib/firebase/firebase';
@@ -70,28 +71,35 @@ export const AdminCategories: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const currentFbUser = auth?.currentUser;
-    if (import.meta.env.DEV && currentFbUser) {
-      currentFbUser.getIdTokenResult(true).then((tokenResult) => {
-        const claims = tokenResult.claims;
-        const rolesArr: string[] = Array.isArray(claims.roles)
-          ? (claims.roles as string[])
-          : (typeof claims.role === 'string' ? [claims.role] : (user?.roles || []));
-        const resRole = rolesArr[0] || user?.role || 'customer';
-        console.log('[MUETY AUTH DIAGNOSTIC]', {
-          uid: currentFbUser.uid,
-          email: currentFbUser.email,
-          emailVerified: currentFbUser.emailVerified,
-          customClaims: claims,
-          resolvedRole: resRole,
-          isSuperAdmin: rolesArr.includes('superadmin') || rolesArr.includes('super_admin'),
-          isAdmin: rolesArr.includes('superadmin') || rolesArr.includes('super_admin') || rolesArr.includes('admin'),
-          isCatalogManager: rolesArr.includes('superadmin') || rolesArr.includes('super_admin') || rolesArr.includes('admin') || rolesArr.includes('catalog_manager')
-        });
-      }).catch(err => {
+    let isSubscribed = true;
+    const verifyAndRefreshToken = async () => {
+      try {
+        await authService.waitForAuthReady();
+        const currentFbUser = auth?.currentUser;
+        if (currentFbUser && isSubscribed) {
+          const tokenResult = await currentFbUser.getIdTokenResult(true);
+          const claims = tokenResult.claims;
+          const rolesArr: string[] = Array.isArray(claims.roles)
+            ? (claims.roles as string[])
+            : (typeof claims.role === 'string' ? [claims.role] : (user?.roles || []));
+          const resRole = rolesArr[0] || user?.role || 'customer';
+          console.log('[MUETY AUTH DIAGNOSTIC]', {
+            uid: currentFbUser.uid,
+            email: currentFbUser.email,
+            emailVerified: currentFbUser.emailVerified,
+            customClaims: claims,
+            resolvedRole: resRole,
+            isSuperAdmin: rolesArr.includes('superadmin') || rolesArr.includes('super_admin'),
+            isAdmin: rolesArr.includes('superadmin') || rolesArr.includes('super_admin') || rolesArr.includes('admin'),
+            isCatalogManager: rolesArr.includes('superadmin') || rolesArr.includes('super_admin') || rolesArr.includes('admin') || rolesArr.includes('catalog_manager')
+          });
+        }
+      } catch (err) {
         console.warn('[MUETY AUTH DIAGNOSTIC ERROR]', err);
-      });
-    }
+      }
+    };
+    verifyAndRefreshToken();
+    return () => { isSubscribed = false; };
   }, [user]);
 
   const [formError, setFormError] = useState<string | null>(null);
@@ -429,8 +437,9 @@ export const AdminCategories: React.FC = () => {
       setModalOpen(false);
     } catch (err: any) {
       console.error('[MUETY CATEGORY DIAGNOSTIC] CATEGORY WRITE ERROR:', err?.code || err?.message, err);
-      const errMsg = err?.code === 'permission-denied'
-        ? 'Category save failed: Missing or insufficient permissions.'
+      const isPermDenied = err?.code === 'permission-denied' || (err?.message && err.message.includes('Missing or insufficient permissions'));
+      const errMsg = isPermDenied
+        ? 'Live administrative authorization failed. Your security session may have expired — please sign out and sign back in to refresh credentials.'
         : (err?.message || 'Failed to save category to Firestore.');
       setFormError(errMsg);
       error(errMsg);

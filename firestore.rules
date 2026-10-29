@@ -7,17 +7,28 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Helper: check if the logged-in user is a known hardcoded admin by email
-    function isKnownAdminEmail() {
-      return 'email' in request.auth.token
-        && request.auth.token.email is string
-        && (
-          request.auth.token.email.lower() in [
-            'superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in',
-            'kalvi@muety.in', 'mohan.admin@muety.in', 'vignesh.admin@muety.in'
-          ]
-          || request.auth.token.email.lower().matches('.*\\.admin@muety\\.in')
-        );
+    // Helper: check if the logged-in user is a known hardcoded admin by email or verified UID
+    function isKnownAdmin() {
+      return isSignedIn() && (
+        (
+          'email' in request.auth.token
+          && request.auth.token.email is string
+          && (
+            request.auth.token.email.lower() in [
+              'superadmin@muety.in', 'admin@muety.in', 'catalog@muety.in',
+              'kalvi@muety.in', 'mohan.admin@muety.in', 'vignesh.admin@muety.in'
+            ]
+            || request.auth.token.email.lower().matches('.*\\.admin@muety\\.in')
+          )
+        )
+        || request.auth.uid in [
+          '64HTWU7iCWNtvRKHhTCuJeXFLxq2', // superadmin@muety.in
+          'JP8J4Ii061bdGcqmEtcxViLgHky2', // admin@muety.in
+          'IovRv0vMBGSE85rOK6sslN0XEbA2', // mohan.admin@muety.in
+          'n4bR4NuzutPXX0V2lUPCNwmVv962', // kalvi@muety.in
+          'rXYeoVurZqMmMSTEvgxUt7OQqhB2'  // vignesh.admin@muety.in
+        ]
+      );
     }
 
     function getRoles() {
@@ -29,8 +40,8 @@ service cloud.firestore {
               // 2. Custom claim: role string (set by Admin SDK)
               : (('role' in request.auth.token && request.auth.token.role is string && request.auth.token.role.size() > 0)
                   ? [request.auth.token.role]
-                  // 3. Known admin email — fast path, no Firestore read needed
-                  : (isKnownAdminEmail()
+                  // 3. Known admin email or verified UID — fast path, no Firestore read needed
+                  : (isKnownAdmin()
                       ? ['superadmin', 'admin', 'catalog_manager', 'order_manager']
                       // 4. Firestore admins document lookup
                       : (exists(/databases/$(database)/documents/admins/$(request.auth.uid))

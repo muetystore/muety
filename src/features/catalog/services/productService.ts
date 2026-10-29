@@ -32,6 +32,8 @@ import {
   CloudinaryMediaMetadata
 } from '@/lib/media/cloudinary';
 
+import { ensureLiveAdminAuth } from './catalogAuthHelper';
+
 const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
 const inFlightSkus = new Set<string>();
 const localCounters: Record<string, number> = {};
@@ -1342,6 +1344,7 @@ export const productService = {
     const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
     if (db && !isTestEnv) {
       try {
+        await ensureLiveAdminAuth();
         const batch = writeBatch(db);
         batch.set(doc(db, 'categories', category.id), category, { merge: true });
         batch.set(doc(db, 'categoryCodes', categoryCode), { categoryId: category.id, code: categoryCode });
@@ -1390,6 +1393,7 @@ export const productService = {
     const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
     if (db && !isTestEnv) {
       try {
+        await ensureLiveAdminAuth();
         const batch = writeBatch(db);
         batch.set(doc(db, 'categories', updated.id), updated, { merge: true });
         batch.set(doc(db, 'categoryCodes', code), { categoryId: updated.id, code }, { merge: true });

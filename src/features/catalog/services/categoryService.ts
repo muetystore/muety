@@ -17,6 +17,7 @@ import {
   generateCategoryCodeSuggestion,
   isCategoryCodeLocked 
 } from './categoryCodeService';
+import { ensureLiveAdminAuth } from './catalogAuthHelper';
 
 const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
 
@@ -372,6 +373,7 @@ class CategoryService {
 
     if (db && !isTestEnv) {
       try {
+        await ensureLiveAdminAuth();
         const batch = writeBatch(db);
         batch.set(doc(db, 'categories', catId), category, { merge: true });
         batch.set(doc(db, 'categoryCodes', categoryCode), { categoryId: catId, code: categoryCode }, { merge: true });
@@ -407,6 +409,7 @@ class CategoryService {
 
     if (db && !isTestEnv) {
       try {
+        await ensureLiveAdminAuth();
         const batch = writeBatch(db);
         batch.delete(doc(db, 'categories', id));
         if (targetCat?.categoryCode) {
