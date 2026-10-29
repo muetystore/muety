@@ -1,4 +1,4 @@
-import { db, auth } from '@/lib/firebase/firebase';
+import { db, auth, isLiveFirebase } from '@/lib/firebase/firebase';
 import { authService } from '@/features/auth/services/authService';
 
 /**
@@ -7,7 +7,7 @@ import { authService } from '@/features/auth/services/authService';
  */
 export async function ensureLiveAdminAuth(): Promise<void> {
   const isTest = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
-  if (isTest || !db) return;
+  if (isTest || !db || !isLiveFirebase) return;
   if (!auth) return;
 
   if (!auth.currentUser) {

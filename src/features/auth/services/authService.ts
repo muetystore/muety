@@ -487,8 +487,16 @@ export class AuthService {
         if (error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential' || error?.code === 'auth/user-not-found') {
           throw new Error('Invalid authentication credentials. Access Denied.');
         }
+        if (error?.code === 'auth/operation-not-allowed') {
+          throw new Error('Administrative authentication failed: Email/Password sign-in method is disabled in Firebase Console.');
+        }
+        if (error?.code === 'auth/too-many-requests') {
+          throw new Error('Administrative authentication failed: Access temporarily disabled due to too many failed attempts. Please try again later.');
+        }
         if (cleanEmail.endsWith('@muety.in') || CANONICAL_ADMIN_ROSTER[cleanEmail]) {
-          throw new Error(`Administrative authentication failed: ${error?.message || 'Network timeout connecting to Firebase Auth. Please try again.'}`);
+          const rawMsg = error?.message || 'Network timeout connecting to Firebase Auth. Please try again.';
+          const cleanMsg = rawMsg.replace(/^Firebase:\s*(Error\s*)?(\(auth\/[^)]+\)\.?\s*)?/i, '').trim() || rawMsg;
+          throw new Error(`Administrative authentication failed: ${cleanMsg}`);
         }
       }
     }
