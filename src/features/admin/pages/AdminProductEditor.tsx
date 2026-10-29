@@ -43,7 +43,7 @@ interface SectionConfig {
 
 const SECTIONS: SectionConfig[] = [
   { id: 'basic', title: 'Basic Information', shortLabel: 'Basic Info', icon: Info },
-  { id: 'pricing', title: 'Pricing & Tax', shortLabel: 'Pricing', icon: DollarSign },
+  { id: 'pricing', title: 'Pricing', shortLabel: 'Pricing', icon: DollarSign },
   { id: 'photography', title: 'Photography', shortLabel: 'Photos', icon: ImageIcon },
   { id: 'variants', title: 'Variants & Attributes', shortLabel: 'Variants', icon: Tag },
   { id: 'inventory', title: 'Inventory ERP & SKU', shortLabel: 'Inventory', icon: Package },
@@ -1031,11 +1031,11 @@ export const AdminProductEditor: React.FC = () => {
             </div>
           </div>
 
-          {/* 2. PRICING & TAX */}
+          {/* 2. PRICING */}
           <div id="section-pricing" className="admin-product-section-card card">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.25rem', borderBottom: '1px solid var(--brand-border)', paddingBottom: '0.75rem' }}>
               <DollarSign size={20} color="#d4af37" />
-              <h3 style={{ fontSize: '1.15rem', color: 'var(--brand-primary)', margin: 0 }}>Pricing & Tax</h3>
+              <h3 style={{ fontSize: '1.15rem', color: 'var(--brand-primary)', margin: 0 }}>Pricing</h3>
             </div>
 
             <div className="admin-form-grid-2col">
@@ -1074,20 +1074,11 @@ export const AdminProductEditor: React.FC = () => {
                 </div>
                 <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px', display: 'block' }}>Leave empty if no discount slash price.</span>
               </div>
+            </div>
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">GST Tax Rate (%)</label>
-                <select
-                  value={taxRate}
-                  onChange={e => { setTaxRate(Number(e.target.value)); setIsDirty(true); }}
-                  className="form-select"
-                >
-                  <option value={5}>5% GST (Apparel & Textile standard)</option>
-                  <option value={12}>12% GST</option>
-                  <option value={18}>18% GST</option>
-                  <option value={0}>0% Exempted</option>
-                </select>
-              </div>
+            <div style={{ marginTop: '0.85rem', padding: '10px 14px', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-md)', border: '1px solid var(--brand-border)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', color: 'var(--brand-muted)' }}>
+              <CheckCircle2 size={15} color="#10b981" style={{ flexShrink: 0 }} />
+              <span><strong>All-Inclusive Pricing:</strong> All product prices are inclusive of GST and statutory taxes. Taxes are not collected separately at checkout.</span>
             </div>
           </div>
 

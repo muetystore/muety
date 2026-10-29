@@ -1,6 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, Firestore } from 'firebase/firestore';
 import { env } from '@/lib/config/env';
 
 const firebaseConfig = {
@@ -29,14 +29,17 @@ try {
   if (app) {
     auth = getAuth(app);
     const customDbId = env.firebase.databaseId;
-    if (customDbId && customDbId !== 'default' && customDbId !== '(default)') {
-      try {
-        db = getFirestore(app, customDbId);
-      } catch {
-        db = getFirestore(app);
-      }
-    } else {
-      db = getFirestore(app);
+    const hasCustomDb = Boolean(customDbId && customDbId !== 'default' && customDbId !== '(default)');
+    try {
+      db = initializeFirestore(
+        app,
+        {
+          experimentalAutoDetectLongPolling: true
+        },
+        hasCustomDb ? customDbId : undefined
+      );
+    } catch {
+      db = hasCustomDb ? getFirestore(app, customDbId) : getFirestore(app);
     }
   }
 } catch (error) {
