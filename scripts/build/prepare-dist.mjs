@@ -161,7 +161,34 @@ if (fs.existsSync(publicRedirects)) {
   console.log('✓ Packaged dist/_redirects from public/_redirects');
 }
 
-// 6. Validation Verification Checks
+// 6. Generate Netlify Edge Function launch configuration snapshot
+const edgeFunctionsDir = path.join(rootDir, 'netlify', 'edge-functions');
+if (!fs.existsSync(edgeFunctionsDir)) {
+  fs.mkdirSync(edgeFunctionsDir, { recursive: true });
+}
+
+const edgeConfigTs = path.join(edgeFunctionsDir, 'launch-config.ts');
+const edgeConfigJson = path.join(edgeFunctionsDir, 'launch-config.json');
+
+const edgeLaunchConfigData = {
+  launchDate: buildConfig.launchAt,
+  storeUrl: buildConfig.storeUrl
+};
+
+fs.writeFileSync(
+  edgeConfigTs,
+  `// Auto-generated build-time launch configuration snapshot\nexport const launchConfig = {\n  launchDate: ${JSON.stringify(buildConfig.launchAt)},\n  storeUrl: ${JSON.stringify(buildConfig.storeUrl)}\n};\n\nexport default launchConfig;\n`,
+  'utf8'
+);
+
+fs.writeFileSync(
+  edgeConfigJson,
+  JSON.stringify(edgeLaunchConfigData, null, 2) + '\n',
+  'utf8'
+);
+console.log('✓ Generated Netlify Edge Function launch configuration snapshot');
+
+// 7. Validation Verification Checks
 const requiredFiles = [
   { path: path.join(distDir, 'index.html'), label: 'Storefront & Admin SPA entry point' },
   { path: path.join(distDir, 'countdown.html'), label: 'Countdown & Launch entry point' },
@@ -171,7 +198,9 @@ const requiredFiles = [
   { path: path.join(distDir, 'privacy-policy.html'), label: 'Privacy policy page' },
   { path: path.join(distDir, 'assets', 'images', 'hero.jpg'), label: 'Countdown hero image asset' },
   { path: path.join(distDir, 'countdown', 'index.html'), label: 'Full countdown mirror entry' },
-  { path: path.join(distDir, '_redirects'), label: 'Netlify multi-domain redirect map' }
+  { path: path.join(distDir, '_redirects'), label: 'Netlify multi-domain redirect map' },
+  { path: path.join(edgeFunctionsDir, 'launch-redirect.ts'), label: 'Netlify Edge Function launch redirect handler' },
+  { path: path.join(edgeFunctionsDir, 'launch-config.ts'), label: 'Netlify Edge Function launch config snapshot' }
 ];
 
 let hasErrors = false;

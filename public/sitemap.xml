@@ -1,39 +1,39 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
-  <!-- MUETY Sarees and Ethnic Wear | https://www.muety.in -->
+  <!-- MUETY Sarees and Ethnic Wear | https://store.muety.in -->
 
   <!-- Homepage -->
   <url>
-    <loc>https://www.muety.in/</loc>
+    <loc>https://store.muety.in/</loc>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
 
   <!-- Explore Collections -->
   <url>
-    <loc>https://www.muety.in/products</loc>
+    <loc>https://store.muety.in/products</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
 
   <!-- Saree Categories -->
   <url>
-    <loc>https://www.muety.in/categories</loc>
+    <loc>https://store.muety.in/categories</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <!-- About Us -->
   <url>
-    <loc>https://www.muety.in/about</loc>
+    <loc>https://store.muety.in/about</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <!-- Contact Support -->
   <url>
-    <loc>https://www.muety.in/contact</loc>
+    <loc>https://store.muety.in/contact</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>

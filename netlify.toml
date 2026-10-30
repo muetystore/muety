@@ -15,6 +15,13 @@
   SECRETS_SCAN_OMIT_PATHS = "scripts/*,docs/*,src/tests/*,.env.example,countdown/.env.example,*.md,*.example,.agents/*,.agents/**,server/*"
 
 # ------------------------------------------------------------------------------
+# Netlify Edge Functions (Post-Launch Domain Consolidation & Permanent Redirect)
+# ------------------------------------------------------------------------------
+[[edge_functions]]
+  function = "launch-redirect"
+  path = "/*"
+
+# ------------------------------------------------------------------------------
 # API Functions
 # ------------------------------------------------------------------------------
 [[redirects]]

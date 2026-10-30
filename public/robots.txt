@@ -1,5 +1,5 @@
-﻿# MUETY — Sarees & Ethnic Wear
-# https://www.muety.in
+# MUETY — Sarees & Ethnic Wear
+# https://store.muety.in
 
 User-agent: *
 Allow: /
@@ -16,4 +16,4 @@ Disallow: /admin/
 Disallow: /unsubscribe
 
 # Sitemap location
-Sitemap: https://www.muety.in/sitemap.xml
+Sitemap: https://store.muety.in/sitemap.xml

@@ -93,3 +93,75 @@ export const getAdminPortalUrl = (path = '/admin'): string => {
   }
   return `https://admin.muety.in${cleanPath}`;
 };
+
+/**
+ * Checks if the hostname is candidate for post-launch apex consolidation (muety.in / www.muety.in).
+ * Strips port if present.
+ */
+export const isRedirectableApexHost = (hostname?: string): boolean => {
+  const host = (hostname ?? getHostname()).toLowerCase().trim().split(':')[0];
+  return host === 'muety.in' || host === 'www.muety.in';
+};
+
+/**
+ * Evaluates whether configured launch date has passed against a reference UTC timestamp.
+ * Interprets ISO 8601 strings with timezone offsets accurately.
+ */
+export const isLaunchPassed = (
+  launchDateStr?: string,
+  referenceTime: number = Date.now()
+): { isPassed: boolean; timestamp: number; isValid: boolean } => {
+  if (!launchDateStr || typeof launchDateStr !== 'string' || !launchDateStr.trim()) {
+    return { isPassed: false, timestamp: NaN, isValid: false };
+  }
+  const timestamp = new Date(launchDateStr.trim()).getTime();
+  if (isNaN(timestamp)) {
+    return { isPassed: false, timestamp: NaN, isValid: false };
+  }
+  return {
+    isPassed: referenceTime >= timestamp,
+    timestamp,
+    isValid: true
+  };
+};
+
+/**
+ * Constructs the permanent 301 redirect target URL on store.muety.in,
+ * preserving pathname, query string, and URL-encoded characters.
+ */
+export const buildRedirectUrl = (
+  requestUrl: string,
+  targetOrigin: string = 'https://store.muety.in'
+): string => {
+  const parsed = new URL(requestUrl);
+  const cleanOrigin = targetOrigin.replace(/\/+$/, '');
+
+  // Apex root with no query parameters -> canonical storefront root without trailing slash
+  if ((parsed.pathname === '/' || parsed.pathname === '') && !parsed.search) {
+    return cleanOrigin;
+  }
+
+  // Apex root with query parameters -> e.g. https://store.muety.in/?utm_source=...
+  if (parsed.pathname === '/' || parsed.pathname === '') {
+    return `${cleanOrigin}/${parsed.search}`;
+  }
+
+  // Subpath preservation: keeps pathname (including encoded characters) and query parameters
+  return `${cleanOrigin}${parsed.pathname}${parsed.search}`;
+};
+
+/**
+ * Determines whether a given request should be consolidated from apex to storefront.
+ * Returns true ONLY if hostname is muety.in/www.muety.in AND launch timestamp has passed.
+ */
+export const shouldConsolidateApexDomain = (
+  hostname?: string,
+  launchDateStr?: string,
+  referenceTime: number = Date.now()
+): boolean => {
+  if (!isRedirectableApexHost(hostname)) {
+    return false;
+  }
+  const evalResult = isLaunchPassed(launchDateStr, referenceTime);
+  return evalResult.isValid && evalResult.isPassed;
+};
