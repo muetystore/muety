@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { productService } from '@/features/catalog/services/productService';
 import { storageService } from '@/lib/storage/storageService';
-import { personalizationService } from '@/features/catalog/services/personalizationService';
+import { recommendationService } from '@/features/catalog/services/recommendationService';
 import { ProductCard } from '@/features/catalog/components/ProductCard';
 import { QuickViewModal } from '@/features/catalog/components/QuickViewModal';
 import { SortDropdown } from '@/features/catalog/components/SortDropdown';
@@ -25,20 +25,11 @@ import {
   SlidersHorizontal, 
   Search, 
   X, 
-  Sparkles, 
-  RotateCcw, 
-  Loader2, 
-  Grid 
+  Sparkles,
+  RotateCcw,
+  Loader2,
+  Grid
 } from 'lucide-react';
-
-const STOREFRONT_LISTING_STATE_KEY = 'muety_storefront_listing_state';
-const PAGE_SIZE = 20;
-
-interface SavedStorefrontListingState {
-  scrollY: number;
-  visibleCount: number;
-  timestamp: number;
-}
 
 export const ProductsPage: React.FC = () => {
   useDocumentTitle('Pure Silk Sarees & Ethnic Catalog | MUETY');
@@ -103,61 +94,104 @@ export const ProductsPage: React.FC = () => {
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [searchInputVal, setSearchInputVal] = useState(queryParam);
 
-  // 1. Retrieve any saved listing position & count from prior navigation
-  const savedState = useMemo<SavedStorefrontListingState | null>(() => {
+  // Requirement 3 & 5: Restore state on back navigation and load in batches of 20
+  const STORE_STATE_KEY = 'muety_storefront_catalog_state';
+  const savedCatalogState = useRef((() => {
     try {
-      const raw = sessionStorage.getItem(STOREFRONT_LISTING_STATE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Date.now() - parsed.timestamp < 2 * 60 * 60 * 1000) {
-          return parsed;
-        }
-      }
+      const raw = sessionStorage.getItem(STORE_STATE_KEY);
+      if (raw) return JSON.parse(raw);
     } catch {}
     return null;
+  })()).current;
+
+  // Initially show first 20 products, or previous visible count if returning from PDP
+  const [visibleCount, setVisibleCount] = useState<number>(() => {
+    return savedCatalogState?.visibleCount ? Math.max(savedCatalogState.visibleCount, 20) : 20;
+  });
+
+  const isRestoringScroll = useRef<boolean>(Boolean(savedCatalogState?.scrollY && savedCatalogState.scrollY > 0));
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const handleLoadMore = useCallback(() => {
+    setVisibleCount(prev => prev + 20);
   }, []);
 
-  const [visibleCount, setVisibleCount] = useState<number>(() => {
-    return savedState?.visibleCount && savedState.visibleCount >= PAGE_SIZE
-      ? savedState.visibleCount
-      : PAGE_SIZE;
-  });
-  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
-  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const scrollRestoredRef = useRef<boolean>(false);
-  const isFirstMountRef = useRef<boolean>(true);
+  // Infinite scroll trigger via IntersectionObserver
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          handleLoadMore();
+        }
+      },
+      { rootMargin: '400px 0px' }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [handleLoadMore]);
 
-  // Save listing state to sessionStorage on unmount & beforeunload
-  const saveListingPosition = useCallback((targetScrollY?: number) => {
-    try {
-      const payload: SavedStorefrontListingState = {
-        scrollY: targetScrollY !== undefined ? targetScrollY : window.scrollY,
-        visibleCount,
-        timestamp: Date.now()
-      };
-      sessionStorage.setItem(STOREFRONT_LISTING_STATE_KEY, JSON.stringify(payload));
-    } catch {}
+  // Fallback scroll listener for infinite load
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 600) {
+        handleLoadMore();
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [handleLoadMore]);
+
+  // Persist scroll position and visible count for seamless PDP back navigation
+  useEffect(() => {
+    const saveCatalogState = () => {
+      // Do not overwrite with 0 while restoring previous position
+      if (isRestoringScroll.current) return;
+      try {
+        sessionStorage.setItem(STORE_STATE_KEY, JSON.stringify({
+          scrollY: window.scrollY,
+          visibleCount
+        }));
+      } catch {}
+    };
+
+    window.addEventListener('scroll', saveCatalogState, { passive: true });
+    return () => window.removeEventListener('scroll', saveCatalogState);
   }, [visibleCount]);
 
-  useEffect(() => {
-    saveListingPosition();
-    const handleBeforeUnload = () => saveListingPosition(window.scrollY);
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      saveListingPosition(window.scrollY);
-    };
-  }, [saveListingPosition]);
-
-  // Reset pagination batch size when user actively changes search/filters
-  useEffect(() => {
-    if (isFirstMountRef.current) {
-      isFirstMountRef.current = false;
+  // Restore scroll position when returning from PDP
+  useLayoutEffect(() => {
+    if (!savedCatalogState?.scrollY || savedCatalogState.scrollY <= 0) {
+      isRestoringScroll.current = false;
       return;
     }
-    setVisibleCount(PAGE_SIZE);
-  }, [filters, sortBy]);
+
+    const targetY = savedCatalogState.scrollY;
+    let frameId: number;
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    const attemptScroll = () => {
+      attempts++;
+      const currentHeight = document.documentElement.scrollHeight;
+      const viewportHeight = window.innerHeight;
+
+      if (currentHeight >= targetY + (viewportHeight * 0.1) || attempts >= maxAttempts) {
+        window.scrollTo({
+          top: targetY,
+          behavior: 'instant'
+        });
+        setTimeout(() => {
+          isRestoringScroll.current = false;
+        }, 120);
+      } else {
+        frameId = requestAnimationFrame(attemptScroll);
+      }
+    };
+
+    frameId = requestAnimationFrame(attemptScroll);
+    return () => cancelAnimationFrame(frameId);
+  }, []);
 
   // Subscribe to real-time products and categories
   useEffect(() => {
@@ -288,6 +322,10 @@ export const ProductsPage: React.FC = () => {
 
   // Handle changing filters
   const handleFilterChange = (partial: Partial<ProductFilterState>) => {
+    setVisibleCount(20);
+    if (partial.category && partial.category !== 'all') {
+      recommendationService.recordCategoryBrowse(partial.category);
+    }
     setFilters(prev => {
       const updated = { ...prev, ...partial };
       updateUrlParams(updated, sortBy);
@@ -297,12 +335,14 @@ export const ProductsPage: React.FC = () => {
 
   // Handle changing sort option
   const handleSortChange = (newSort: SortOption) => {
+    setVisibleCount(20);
     setSortBy(newSort);
     updateUrlParams(filters, newSort);
   };
 
   // Handle mobile drawer apply
   const handleApplyMobileFilters = (draft: ProductFilterState) => {
+    setVisibleCount(20);
     setFilters(draft);
     updateUrlParams(draft, sortBy);
   };
@@ -339,6 +379,7 @@ export const ProductsPage: React.FC = () => {
 
   // Reset all filters
   const resetFilters = () => {
+    setVisibleCount(20);
     const fresh: ProductFilterState = {
       ...DEFAULT_FILTER_STATE,
       category: 'all',
@@ -376,58 +417,15 @@ export const ProductsPage: React.FC = () => {
     return filterProducts(allProducts, filters);
   }, [allProducts, filters]);
 
-  // Sort filtered products personalizing 'featured' default view while deterministic
+  // Sort filtered products deterministically
   const sortedProducts = useMemo(() => {
-    if (sortBy === 'featured') {
-      return personalizationService.sortPersonalized(filteredProducts);
-    }
     return sortProducts(filteredProducts, sortBy);
   }, [filteredProducts, sortBy]);
 
-  // Visible sliced products for infinite scrolling
-  const visibleProducts = useMemo(() => {
+  // Display initial 20 products, then 20 more on scroll to minimize DB reads and DOM load
+  const displayedProducts = useMemo(() => {
     return sortedProducts.slice(0, visibleCount);
   }, [sortedProducts, visibleCount]);
-
-  const hasMore = visibleCount < sortedProducts.length;
-
-  // IntersectionObserver for infinite scrolling sentinel
-  useEffect(() => {
-    if (!hasMore || isLoadingMore) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0] && entries[0].isIntersecting) {
-        setIsLoadingMore(true);
-        setLoadMoreError(null);
-        setTimeout(() => {
-          setVisibleCount(prev => Math.min(prev + PAGE_SIZE, sortedProducts.length));
-          setIsLoadingMore(false);
-        }, 150);
-      }
-    }, {
-      rootMargin: '250px'
-    });
-
-    if (sentinelRef.current) {
-      observer.observe(sentinelRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [hasMore, isLoadingMore, sortedProducts.length]);
-
-  // Scroll restoration after visible products are rendered
-  useEffect(() => {
-    if (savedState?.scrollY && savedState.scrollY > 0 && !scrollRestoredRef.current && visibleProducts.length > 0) {
-      scrollRestoredRef.current = true;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.scrollTo({
-            top: savedState.scrollY,
-            behavior: 'instant' as ScrollBehavior
-          });
-        });
-      });
-    }
-  }, [visibleProducts.length, savedState]);
 
   // Calculate live category counts taking other active filters into account
   const categoryCounts = useMemo(() => {
@@ -487,7 +485,9 @@ export const ProductsPage: React.FC = () => {
           </button>
 
           <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
-            {sortedProducts.length} {sortedProducts.length === 1 ? 'item' : 'items'}
+            {displayedProducts.length < sortedProducts.length 
+              ? `${displayedProducts.length} of ${sortedProducts.length} items` 
+              : `${sortedProducts.length} ${sortedProducts.length === 1 ? 'item' : 'items'}`}
           </span>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -549,7 +549,7 @@ export const ProductsPage: React.FC = () => {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              Showing <strong style={{ color: '#10172a' }}>{sortedProducts.length}</strong> {sortedProducts.length === 1 ? 'creation' : 'creations'}
+              Showing <strong style={{ color: '#10172a' }}>{displayedProducts.length < sortedProducts.length ? `${displayedProducts.length} of ${sortedProducts.length}` : sortedProducts.length}</strong> {sortedProducts.length === 1 ? 'creation' : 'creations'}
             </span>
 
             <SortDropdown
@@ -664,85 +664,56 @@ export const ProductsPage: React.FC = () => {
                 </button>
               </div>
             ) : (
-              /* Product Grid with Infinite Scroll */
+              /* Product Grid */
               <>
                 <div className={`products-grid-3col ${mobileLayout === '1col' ? 'grid-view-1col' : ''}`}>
-                  {visibleProducts.map(product => (
+                  {displayedProducts.map(product => (
                     <ProductCard 
                       key={product.id} 
                       product={product} 
-                      onQuickView={(p) => setQuickViewProduct(p)} 
+                      onQuickView={(p) => {
+                        recommendationService.recordProductView(p);
+                        setQuickViewProduct(p);
+                      }} 
                     />
                   ))}
                 </div>
 
-                {/* Loading Skeletons when fetching next batch */}
-                {isLoadingMore && (
-                  <div className={`products-grid-3col ${mobileLayout === '1col' ? 'grid-view-1col' : ''}`} style={{ marginTop: '1.25rem' }}>
-                    {[1, 2, 3].map(skIdx => (
-                      <div 
-                        key={`sk-${skIdx}`} 
-                        className="product-card" 
-                        style={{
-                          backgroundColor: '#ffffff',
-                          borderRadius: 'var(--radius-md, 10px)',
-                          border: '1px solid #e2e8f0',
-                          overflow: 'hidden',
-                          display: 'flex',
-                          flexDirection: 'column'
-                        }}
-                      >
-                        <div style={{
-                          width: '100%',
-                          paddingTop: '108%',
-                          backgroundColor: '#f1f5f9',
-                          animation: 'pulse 1.5s infinite ease-in-out'
-                        }} />
-                        <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <div style={{ width: '40%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px' }} />
-                          <div style={{ width: '85%', height: '16px', backgroundColor: '#e2e8f0', borderRadius: '4px' }} />
-                          <div style={{ width: '30%', height: '18px', backgroundColor: '#e2e8f0', borderRadius: '4px', marginTop: '4px' }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {/* Sentinel for Infinite Scroll (loads next 20 automatically on scroll) */}
+                <div ref={sentinelRef} style={{ width: '100%', height: '24px', pointerEvents: 'none' }} />
 
-                {/* Sentinel Trigger Element */}
-                <div ref={sentinelRef} style={{ height: '30px', margin: '10px 0', pointerEvents: 'none' }} />
-
-                {/* End of Catalog Feed Indicator */}
-                {!hasMore && sortedProducts.length > 0 && (
-                  <div style={{ textAlign: 'center', padding: '2.5rem 1rem 1rem' }}>
-                    <div style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      backgroundColor: '#f8fafc',
-                      border: '1px solid #e2e8f0',
-                      padding: '8px 20px',
-                      borderRadius: '9999px',
-                      color: '#475569',
-                      fontSize: '0.85rem',
-                      fontWeight: 600
-                    }}>
-                      <Sparkles size={16} color="#c9a227" />
-                      <span>You have viewed all {sortedProducts.length} authentic Salem handloom creations.</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Error & Retry Component */}
-                {loadMoreError && (
-                  <div style={{ textAlign: 'center', padding: '1.5rem', color: '#dc2626' }}>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.9rem' }}>{loadMoreError}</p>
-                    <button 
-                      type="button" 
-                      onClick={() => { setLoadMoreError(null); setVisibleCount(prev => prev + PAGE_SIZE); }}
-                      className="btn btn-outline btn-sm"
+                {/* Infinite Scroll / Batch Loading Controls */}
+                {sortedProducts.length > visibleCount && (
+                  <div style={{ textAlign: 'center', padding: '2rem 1rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                    <button
+                      type="button"
+                      onClick={handleLoadMore}
+                      className="btn btn-outline"
+                      style={{
+                        padding: '10px 24px',
+                        fontWeight: 700,
+                        fontSize: '0.9rem',
+                        borderColor: '#c9a227',
+                        color: 'var(--brand-primary, #6b1326)',
+                        borderRadius: '8px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        cursor: 'pointer'
+                      }}
                     >
-                      Retry Loading More
+                      <Sparkles size={16} color="#c9a227" />
+                      <span>Load More Sarees ({displayedProducts.length} of {sortedProducts.length})</span>
                     </button>
+                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                      Scroll down to automatically reveal 20 more creations
+                    </span>
+                  </div>
+                )}
+
+                {sortedProducts.length > 0 && visibleCount >= sortedProducts.length && (
+                  <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b', fontSize: '0.85rem' }}>
+                    <span>✓ All {sortedProducts.length} {sortedProducts.length === 1 ? 'creation' : 'creations'} viewed</span>
                   </div>
                 )}
               </>

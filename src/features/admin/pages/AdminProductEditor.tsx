@@ -32,9 +32,7 @@ import {
   Sparkles,
   ChevronUp,
   ChevronDown,
-  GripVertical,
-  MoveLeft,
-  MoveRight
+  GripVertical
 } from 'lucide-react';
 
 interface SectionConfig {
@@ -447,6 +445,65 @@ export const AdminProductEditor: React.FC = () => {
     setIsDirty(true);
   };
 
+  // Image Drag & Drop Reordering State
+  const [draggedImageIdx, setDraggedImageIdx] = useState<number | null>(null);
+  const [dragOverImageIdx, setDragOverImageIdx] = useState<number | null>(null);
+
+  const handleImageDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedImageIdx(index);
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', String(index));
+    } catch {}
+  };
+
+  const handleImageDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverImageIdx !== index) {
+      setDragOverImageIdx(index);
+    }
+  };
+
+  const handleImageDragLeave = (index: number) => {
+    if (dragOverImageIdx === index) {
+      setDragOverImageIdx(null);
+    }
+  };
+
+  const handleImageDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedImageIdx === null || draggedImageIdx === targetIndex) {
+      setDraggedImageIdx(null);
+      setDragOverImageIdx(null);
+      return;
+    }
+    const updated = [...images];
+    const [moved] = updated.splice(draggedImageIdx, 1);
+    updated.splice(targetIndex, 0, moved);
+    setImages(updated);
+    setIsDirty(true);
+    setDraggedImageIdx(null);
+    setDragOverImageIdx(null);
+    success(targetIndex === 0 ? 'Image placed at PRIMARY showcase position!' : `Image moved to position #${targetIndex + 1}.`);
+  };
+
+  const handleImageDragEnd = () => {
+    setDraggedImageIdx(null);
+    setDragOverImageIdx(null);
+  };
+
+  const moveImage = (index: number, direction: 'left' | 'right') => {
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= images.length) return;
+    const updated = [...images];
+    const [moved] = updated.splice(index, 1);
+    updated.splice(targetIndex, 0, moved);
+    setImages(updated);
+    setIsDirty(true);
+    success(targetIndex === 0 ? 'Primary showcase photo updated.' : 'Image order updated.');
+  };
+
   const setPrimaryImage = (index: number) => {
     if (index === 0 || index >= images.length) return;
     const updated = [...images];
@@ -460,69 +517,6 @@ export const AdminProductEditor: React.FC = () => {
   const removeImage = (index: number) => {
     setImages(prev => prev.filter((_, i) => i !== index));
     setIsDirty(true);
-  };
-
-  // Drag-and-drop & Sequence Reordering state
-  const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
-  const [dragOverImageIndex, setDragOverImageIndex] = useState<number | null>(null);
-
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    setDraggedImageIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(index));
-  };
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragOverImageIndex !== index) {
-      setDragOverImageIndex(index);
-    }
-  };
-
-  const handleDragLeave = (_e: React.DragEvent, index: number) => {
-    if (dragOverImageIndex === index) {
-      setDragOverImageIndex(null);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
-    e.preventDefault();
-    const sourceIdxStr = e.dataTransfer.getData('text/plain');
-    const sourceIndex = sourceIdxStr !== '' ? parseInt(sourceIdxStr, 10) : draggedImageIndex;
-
-    if (sourceIndex !== null && !isNaN(sourceIndex) && sourceIndex !== targetIndex) {
-      setImages(prev => {
-        const next = [...prev];
-        const [movedItem] = next.splice(sourceIndex, 1);
-        next.splice(targetIndex, 0, movedItem);
-        return next;
-      });
-      setIsDirty(true);
-      success(`Image sequence updated (moved to position ${targetIndex + 1}).`);
-    }
-
-    setDraggedImageIndex(null);
-    setDragOverImageIndex(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedImageIndex(null);
-    setDragOverImageIndex(null);
-  };
-
-  const moveImage = (index: number, direction: 'left' | 'right') => {
-    const targetIndex = direction === 'left' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= images.length) return;
-    setImages(prev => {
-      const next = [...prev];
-      const temp = next[index];
-      next[index] = next[targetIndex];
-      next[targetIndex] = temp;
-      return next;
-    });
-    setIsDirty(true);
-    success(`Image sequence updated (position ${targetIndex + 1}).`);
   };
 
   // Section completion calculations
@@ -655,11 +649,6 @@ export const AdminProductEditor: React.FC = () => {
         stockStatus,
         images: finalImages,
         primaryImage: finalImages[0],
-        imageOrder: finalImages.map((url, idx) => ({
-          imageUrl: url,
-          position: idx,
-          isPrimary: idx === 0
-        })),
         colors,
         sizes,
         silkType: silkType.trim() || 'Pure Silk',
@@ -758,7 +747,11 @@ export const AdminProductEditor: React.FC = () => {
 
       setIsDirty(false);
       success(editingProduct ? `Saved changes for "${name}".` : `Product created successfully with SKU ${savedProduct.sku}.`);
-      navigate('/admin/products');
+      if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate('/admin/products');
+      }
     } catch (err: any) {
       error(err?.message || 'Failed to save product details.');
     } finally {
@@ -770,7 +763,11 @@ export const AdminProductEditor: React.FC = () => {
     if (isDirty && !window.confirm('Discard unsaved changes and return to Products catalog?')) {
       return;
     }
-    navigate('/admin/products');
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/admin/products');
+    }
   };
 
   if (isLoadingProduct) {
@@ -1217,121 +1214,135 @@ export const AdminProductEditor: React.FC = () => {
               </div>
             </div>
 
-            {/* Gallery Preview Grid with Drag-and-Drop Reordering */}
+            {/* Gallery Preview Grid */}
             {images.length > 0 && (
               <div>
-                <div style={{
-                  fontSize: '0.78rem',
-                  color: '#64748b',
-                  marginBottom: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  backgroundColor: '#f8fafc',
-                  padding: '6px 10px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid #e2e8f0'
-                }}>
-                  <GripVertical size={15} color="#d4af37" style={{ flexShrink: 0 }} />
-                  <span>
-                    <strong>Drag and drop</strong> images to reorder display sequence on storefront, or use the navigation arrows. <strong>Position 1 is automatically the Primary storefront image.</strong>
-                  </span>
-                </div>
+                <p style={{ margin: '0 0 10px 0', fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>⠿</span>
+                  <span><strong>Storefront Order:</strong> Drag &amp; drop photos or use <strong>◀ ▶</strong> buttons to arrange order. <strong>#1 PRIMARY</strong> is the main card image, and <strong>#2</strong> is the hover preview.</span>
+                </p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '1rem' }}>
                   {images.map((imgUrl, idx) => {
-                    const isDraggingThis = draggedImageIndex === idx;
-                    const isOverThis = dragOverImageIndex === idx && !isDraggingThis;
+                    const isDragging = draggedImageIdx === idx;
+                    const isDragOver = dragOverImageIdx === idx;
 
                     return (
                       <div 
                         key={`${imgUrl}-${idx}`}
-                        draggable={true}
-                        onDragStart={(e) => handleDragStart(e, idx)}
-                        onDragOver={(e) => handleDragOver(e, idx)}
-                        onDragLeave={(e) => handleDragLeave(e, idx)}
-                        onDrop={(e) => handleDrop(e, idx)}
-                        onDragEnd={handleDragEnd}
+                        draggable
+                        onDragStart={(e) => handleImageDragStart(e, idx)}
+                        onDragOver={(e) => handleImageDragOver(e, idx)}
+                        onDragEnter={(e) => handleImageDragOver(e, idx)}
+                        onDragLeave={() => handleImageDragLeave(idx)}
+                        onDrop={(e) => handleImageDrop(e, idx)}
+                        onDragEnd={handleImageDragEnd}
                         style={{
                           position: 'relative',
-                          borderRadius: 'var(--radius-md)',
+                          borderRadius: 'var(--radius-md, 8px)',
                           overflow: 'hidden',
-                          border: idx === 0 
+                          border: isDragOver 
+                            ? '2.5px dashed #2563eb' 
+                            : idx === 0 
                             ? '2.5px solid #d4af37' 
-                            : isOverThis 
-                              ? '2.5px dashed #d4af37' 
-                              : '1.5px solid var(--brand-border)',
+                            : '1.5px solid var(--brand-border, #cbd5e1)',
                           backgroundColor: '#f1f5f9',
                           aspectRatio: '3/4',
                           cursor: 'grab',
-                          opacity: isDraggingThis ? 0.4 : 1,
-                          transform: isOverThis ? 'scale(1.03)' : 'scale(1)',
-                          boxShadow: isOverThis ? '0 0 14px rgba(212, 175, 55, 0.45)' : (idx === 0 ? '0 2px 8px rgba(212, 175, 55, 0.25)' : 'none'),
-                          transition: 'transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease'
+                          opacity: isDragging ? 0.35 : 1,
+                          transform: isDragOver ? 'scale(1.04)' : 'scale(1)',
+                          transition: 'transform 0.15s ease, border-color 0.15s ease, opacity 0.15s ease',
+                          boxShadow: isDragOver ? '0 6px 14px rgba(37, 99, 235, 0.25)' : 'none'
                         }}
-                        title={`Image #${idx + 1}. Drag to reorder or click arrows below.`}
+                        title="Drag photo to reorder storefront display sequence"
                       >
                         <img 
                           src={imgUrl} 
                           alt={`Product photo ${idx + 1}`} 
                           style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} 
                         />
-
-                        {/* Top-Right Drag Handle Visual Indicator */}
-                        <div
-                          className="drag-handle-badge"
-                          title="Drag to reorder"
-                          style={{
-                            position: 'absolute',
-                            top: '6px',
-                            right: '6px',
-                            backgroundColor: 'rgba(15, 23, 42, 0.78)',
-                            color: '#ffffff',
-                            borderRadius: '4px',
-                            padding: '3px 4px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'grab',
-                            zIndex: 3
-                          }}
-                        >
-                          <GripVertical size={14} />
-                        </div>
                         
-                        {/* Primary Badge or Sequence Pill */}
-                        {idx === 0 ? (
+                        {/* Top-Left Order Badge with Grip Handle */}
+                        <div style={{
+                          position: 'absolute',
+                          top: '6px',
+                          left: '6px',
+                          zIndex: 2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
                           <span style={{
-                            position: 'absolute',
-                            top: '6px',
-                            left: '6px',
-                            backgroundColor: '#d4af37',
-                            color: '#0f172a',
+                            backgroundColor: idx === 0 ? '#d4af37' : idx === 1 ? '#0284c7' : 'rgba(15, 23, 42, 0.8)',
+                            color: idx === 0 ? '#0f172a' : '#ffffff',
                             fontSize: '0.68rem',
                             fontWeight: 800,
                             padding: '2px 6px',
                             borderRadius: '4px',
-                            zIndex: 3,
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                           }}>
-                            PRIMARY
+                            <GripVertical size={11} />
+                            {idx === 0 ? 'PRIMARY' : idx === 1 ? '2. HOVER' : `#${idx + 1}`}
                           </span>
-                        ) : (
-                          <span style={{
-                            position: 'absolute',
-                            top: '6px',
-                            left: '6px',
-                            backgroundColor: 'rgba(15, 23, 42, 0.78)',
-                            color: '#cbd5e1',
-                            fontSize: '0.68rem',
-                            fontWeight: 700,
-                            padding: '2px 5px',
-                            borderRadius: '4px',
-                            zIndex: 3
-                          }}>
-                            #{idx + 1}
-                          </span>
-                        )}
+                        </div>
+
+                        {/* Top-Right Move Buttons (Accessible 1-click reorder) */}
+                        <div style={{
+                          position: 'absolute',
+                          top: '6px',
+                          right: '6px',
+                          display: 'flex',
+                          gap: '3px',
+                          zIndex: 2
+                        }}>
+                          {idx > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); moveImage(idx, 'left'); }}
+                              title="Move left (higher showcase order)"
+                              style={{
+                                background: 'rgba(15, 23, 42, 0.85)',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '4px',
+                                width: '22px',
+                                height: '22px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                fontSize: '0.65rem'
+                              }}
+                            >
+                              ◀
+                            </button>
+                          )}
+                          {idx < images.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); moveImage(idx, 'right'); }}
+                              title="Move right"
+                              style={{
+                                background: 'rgba(15, 23, 42, 0.85)',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '4px',
+                                width: '22px',
+                                height: '22px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                fontSize: '0.65rem'
+                              }}
+                            >
+                              ▶
+                            </button>
+                          )}
+                        </div>
 
                         {/* Bottom Actions Bar */}
                         <div style={{
@@ -1342,48 +1353,26 @@ export const AdminProductEditor: React.FC = () => {
                           backgroundColor: 'rgba(9, 13, 22, 0.88)',
                           padding: '4px 6px',
                           display: 'flex',
+                          justifyContent: 'space-between',
                           alignItems: 'center',
-                          gap: '4px',
-                          zIndex: 3
+                          zIndex: 2
                         }}>
-                          {idx > 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); moveImage(idx, 'left'); }}
-                              style={{ color: '#ffffff', background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                              title="Move Left (Earlier in sequence)"
-                            >
-                              <MoveLeft size={13} />
-                            </button>
-                          )}
-
                           {idx !== 0 ? (
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); setPrimaryImage(idx); }}
-                              style={{ color: '#d4af37', background: 'none', border: 'none', fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', padding: '0 2px' }}
+                              onClick={() => setPrimaryImage(idx)}
+                              style={{ color: '#d4af37', fontSize: '0.7rem', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                              title="Make this the primary showcase image"
                             >
                               Set Primary
                             </button>
                           ) : (
-                            <span style={{ color: '#d4af37', fontSize: '0.68rem', fontWeight: 700 }}>Cover</span>
+                            <span style={{ color: '#d4af37', fontSize: '0.68rem', fontWeight: 700 }}>Storefront Main</span>
                           )}
-
-                          {idx < images.length - 1 && (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); moveImage(idx, 'right'); }}
-                              style={{ color: '#ffffff', background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                              title="Move Right (Later in sequence)"
-                            >
-                              <MoveRight size={13} />
-                            </button>
-                          )}
-
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
-                            style={{ color: '#ef4444', background: 'none', border: 'none', marginLeft: 'auto', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                            onClick={() => removeImage(idx)}
+                            style={{ color: '#ef4444', marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
                             title="Remove photo"
                           >
                             <Trash2 size={14} />

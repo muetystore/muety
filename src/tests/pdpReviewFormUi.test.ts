@@ -1,92 +1,151 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import { reviewService } from '@/features/reviews/services/reviewService';
+import { storageService } from '@/lib/storage/storageService';
+import { PatronReview } from '@/types';
 
-describe('Product Detail Page (PDP) — MUETY Review Form UI System', () => {
+describe('Ecommerce Review Workflow & Home Page Featured Invariants (Flipkart/Meesho Pattern)', () => {
   const pdpCode = fs.readFileSync(
     path.join(process.cwd(), 'src/features/catalog/pages/ProductDetailPage.tsx'),
     'utf-8'
   );
-  const cssCode = fs.readFileSync(
-    path.join(process.cwd(), 'src/styles/index.css'),
+  const homeCode = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/catalog/pages/HomePage.tsx'),
+    'utf-8'
+  );
+  const accountCode = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/customers/pages/AccountPage.tsx'),
     'utf-8'
   );
 
-  describe('1. Card Architecture & Header Row', () => {
-    it('uses clean luxury card architecture with subtle top gold accent border and white background', () => {
-      expect(cssCode).toContain('.pdp-muety-form-wrapper');
-      expect(cssCode).toContain('background-color: #ffffff');
-      expect(cssCode).toContain('border: 1px solid var(--brand-border)');
-      expect(cssCode).toContain('border-top: 3px solid var(--brand-accent, #c9a227)');
-      expect(pdpCode).toContain('className="pdp-muety-form-wrapper animate-fade-in"');
+  beforeEach(() => {
+    const store: Record<string, string> = {};
+    globalThis.localStorage = {
+      getItem: (key: string) => store[key] || null,
+      setItem: (key: string, value: string) => { store[key] = value; },
+      removeItem: (key: string) => { delete store[key]; },
+      clear: () => { Object.keys(store).forEach(k => delete store[k]); },
+      key: (i: number) => Object.keys(store)[i] || null,
+      length: Object.keys(store).length
+    } as any;
+
+    if (typeof globalThis.window === 'undefined') {
+      (globalThis as any).window = {
+        dispatchEvent: () => true,
+        addEventListener: () => {},
+        removeEventListener: () => {}
+      };
+    }
+
+    storageService.saveReviews([]);
+  });
+
+  describe('1. Product Detail Page (PDP) — Read-Only Patron Impressions', () => {
+    it('does NOT contain a Write a Review button or inline submission form on PDP', () => {
+      // Confirms PDP does not ask users to review
+      expect(pdpCode).not.toContain('<span>Write a Review</span>');
+      expect(pdpCode).not.toContain('pdp-muety-form-wrapper');
+      expect(pdpCode).not.toContain('handleAddReview');
     });
 
-    it('provides an integrated close button in the header row', () => {
-      expect(pdpCode).toContain('className="pdp-muety-form-header-row"');
-      expect(pdpCode).toContain('className="pdp-muety-form-close-btn"');
-      expect(pdpCode).toContain('onClick={() => setShowReviewForm(false)}');
-      expect(cssCode).toContain('.pdp-muety-form-close-btn');
+    it('displays the Verified Buyer badge to signify verified reviews', () => {
+      expect(pdpCode).toContain('Verified Buyer Reviews Only');
     });
 
-    it('renders the refined MUETY Patron Sanctuary badge without tacky hashtags', () => {
-      expect(pdpCode).toContain('className="pdp-muety-form-badge"');
-      expect(pdpCode).toContain('<span>MUETY Patron Sanctuary</span>');
-      expect(pdpCode).not.toContain('# MUETY PATRON SANCTUARY');
-      expect(cssCode).toContain('.pdp-muety-form-badge');
+    it('guides patrons in empty state to review from the Orders page after delivery', () => {
+      expect(pdpCode).toContain('Verified patrons can share their experience from their Orders page after delivery.');
     });
   });
 
-  describe('2. Unified Form Controls & Labels', () => {
-    it('uses standard MUETY form-group and form-label styling with sentence case', () => {
-      expect(pdpCode).toContain('className="form-group pdp-muety-form-group"');
-      expect(pdpCode).toContain('className="form-label pdp-muety-form-label"');
-      expect(pdpCode).toContain('<span>Your Full Name</span>');
-      expect(pdpCode).toContain('<span className="pdp-req-star">*</span>');
-      expect(pdpCode).toContain('<span className="pdp-opt-tag">(Optional)</span>');
+  describe('2. Homepage Featured Reviews & Zero-State Hiding', () => {
+    it('strictly filters for approved reviews marked as featured', () => {
+      expect(homeCode).toContain('approvedReviews');
+      expect(homeCode).toContain('Boolean(r.isFeatured)');
+      // Confirms no fallback to unfeatured or seed mock reviews
+      expect(homeCode).not.toContain("Priyamvada Sundaram");
     });
 
-    it('applies standard form-input styling with gold focus glow', () => {
-      expect(pdpCode).toContain('className="form-input pdp-muety-form-input"');
-      expect(cssCode).toContain('.pdp-muety-form-input:focus');
-      expect(cssCode).toContain('border-color: var(--brand-accent, #c9a227)');
-      expect(cssCode).toContain('box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.16)');
+    it('completely omits customer-reviews-section when featured reviews count is 0', () => {
+      expect(homeCode).toContain('{displayReviews.length > 0 && (');
+    });
+
+    it('reviewService.getFeaturedReviews() returns only approved and featured items', () => {
+      const unfeatured: PatronReview = {
+        id: 'rev-unfeat',
+        productId: 'prod-1',
+        productName: 'Silk Saree',
+        authorName: 'Patron A',
+        authorLocation: 'Chennai',
+        rating: 5,
+        quote: 'Beautiful drape',
+        verifiedPurchase: true,
+        isFeatured: false,
+        status: 'approved',
+        createdAt: '2026-10-31T12:00:00.000Z'
+      };
+
+      const featured: PatronReview = {
+        id: 'rev-feat',
+        productId: 'prod-2',
+        productName: 'Gold Tissue Saree',
+        authorName: 'Patron B',
+        authorLocation: 'Bengaluru',
+        rating: 5,
+        quote: 'Royal luster',
+        verifiedPurchase: true,
+        isFeatured: true,
+        status: 'approved',
+        createdAt: '2026-10-31T12:00:00.000Z'
+      };
+
+      storageService.saveReviews([unfeatured, featured]);
+      const result = reviewService.getFeaturedReviews();
+
+      expect(result.length).toBe(1);
+      expect(result[0].id).toBe('rev-feat');
+      expect(result[0].isFeatured).toBe(true);
     });
   });
 
-  describe('3. Patron Star Rating & Feedback Badge', () => {
-    it('provides interactive 5-star rating with hover preview', () => {
-      expect(pdpCode).toContain('className="pdp-muety-stars-box"');
-      expect(pdpCode).toContain('className="pdp-muety-star-btn"');
-      expect(cssCode).toContain('.pdp-muety-star-btn:hover');
-      expect(cssCode).toContain('transform: scale(1.18)');
+  describe('3. Order Details Review Flow (Meesho / Flipkart Architecture)', () => {
+    it('provides Rate & Review Product action in order details for delivered items', () => {
+      expect(accountCode).toContain('isDelivered');
+      expect(accountCode).toContain('Rate & Review Product');
     });
 
-    it('displays modern rating feedback badge with score and drape description', () => {
-      expect(pdpCode).toContain('className="pdp-muety-rating-badge"');
-      expect(pdpCode).toContain('className="pdp-muety-rating-score"');
-      expect(pdpCode).toContain('className="pdp-muety-rating-desc"');
-      expect(pdpCode).toContain('Exceptional Drape');
-      expect(cssCode).toContain('.pdp-muety-rating-badge');
+    it('informs that review unlocks upon delivery for in-transit orders', () => {
+      expect(accountCode).toContain('Rate & review unlocks on delivery');
+    });
+
+    it('allows editing an existing review and displays the previously awarded star rating', () => {
+      expect(accountCode).toContain('Reviewed');
+      expect(accountCode).toContain('Edit Review');
     });
   });
 
-  describe('4. Atelier Photo Dropzone & Action Buttons', () => {
-    it('provides styled drape photograph upload button and preview box', () => {
-      expect(pdpCode).toContain('className="pdp-muety-photo-dropzone"');
-      expect(pdpCode).toContain('className="pdp-muety-photo-upload-btn"');
-      expect(pdpCode).toContain('className="pdp-muety-photo-del-btn"');
-      expect(cssCode).toContain('.pdp-muety-photo-dropzone');
-      expect(cssCode).toContain('.pdp-muety-photo-upload-btn');
-    });
+  describe('4. Review Statistics & NaN Safety', () => {
+    it('safely handles missing ratings or division by zero without returning NaN', () => {
+      const oddReview: any = {
+        id: 'rev-odd',
+        productId: 'prod-3',
+        productName: 'Kanchi Saree',
+        authorName: 'Patron C',
+        authorLocation: 'Salem',
+        rating: undefined, // Missing rating
+        quote: 'Great',
+        verifiedPurchase: true,
+        status: 'approved',
+        isFeatured: false
+      };
 
-    it('renders unified actions row with primary submit button, cancel button, and trust badge', () => {
-      expect(pdpCode).toContain('className="pdp-muety-form-actions-row"');
-      expect(pdpCode).toContain('className="btn btn-primary pdp-muety-submit-btn"');
-      expect(pdpCode).toContain('className="btn btn-outline pdp-muety-cancel-btn"');
-      expect(pdpCode).toContain('className="pdp-muety-trust-badge"');
-      expect(cssCode).toContain('.pdp-muety-form-actions-row');
-      expect(cssCode).toContain('.pdp-muety-submit-btn');
-      expect(cssCode).toContain('.pdp-muety-cancel-btn');
+      storageService.saveReviews([oddReview]);
+      const stats = reviewService.getStatistics();
+
+      expect(stats.averageRating).not.toBe('NaN');
+      expect(stats.averageRating).toBe('5.0');
+      expect(stats.approvedCount).toBe(1);
+      expect(stats.featuredCount).toBe(0);
     });
   });
 });

@@ -12,6 +12,8 @@ export interface ContactInquiry {
   message: string;
   status: InquiryStatus;
   adminNotes?: string;
+  archived?: boolean;
+  archivedAt?: string;
   createdAt: string;
   updatedAt?: string;
 }

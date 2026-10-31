@@ -21,6 +21,12 @@ import { ensureLiveAdminAuth } from './catalogAuthHelper';
 
 const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
 
+// Shared In-Memory Categories Cache & Singleton Snapshot Listener to minimize Firestore reads
+let activeCategoryUnsubscribe: Unsubscribe | null = null;
+const categorySubscribers = new Set<(categories: Category[]) => void>();
+let cachedCategoryList: Category[] | null = null;
+let categoryTeardownTimer: any = null;
+
 /**
  * Normalizes a category title into a clean, URL-safe slug.
  * Deterministic: lowercases, converts non-alphanumeric to hyphens, strips edge hyphens.
@@ -262,52 +268,87 @@ class CategoryService {
     onError?: (err: Error) => void
   ): Unsubscribe {
     if (db && !isTestEnv) {
-      try {
-        const unsubscribe = onSnapshot(collection(db, 'categories'), (snapshot) => {
-          const cloudCats: Category[] = [];
-          if (!snapshot.empty) {
-            snapshot.forEach(docSnap => {
-              const raw = docSnap.data() as any;
-              if (raw && (raw.id || docSnap.id)) {
-                let imgUrl = raw.imageUrl || raw.image || raw.coverImage || raw.coverImageUrl || '/saree_model_individual.jpg';
-                if (imgUrl.startsWith('data:') || imgUrl.startsWith('blob:') || imgUrl.startsWith('file:')) {
-                  imgUrl = 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1200&q=80';
-                }
-                const name = (raw.name || '').trim();
-                const slug = normalizeCategorySlug(raw.slug || name);
-                const code = (raw.categoryCode || generateCategoryCodeSuggestion(name) || 'XX').trim().toUpperCase();
-
-                cloudCats.push({
-                  ...raw,
-                  id: docSnap.id || raw.id,
-                  name,
-                  slug,
-                  categoryCode: code,
-                  code,
-                  image: imgUrl,
-                  imageUrl: imgUrl,
-                  coverImage: imgUrl,
-                  coverImageUrl: imgUrl,
-                  active: raw.active !== false,
-                  isActive: raw.active !== false
-                });
-              }
-            });
-          }
-
-          storageService.saveCategories(cloudCats);
-          callback(cloudCats);
-        }, (err) => {
-          console.error('[CategoryService] Firestore live category subscription error:', err);
-          if (onError) onError(err as Error);
-          else callback(storageService.getCategories());
-        });
-
-        return unsubscribe;
-      } catch (err: any) {
-        console.error('[CategoryService] Live subscription init error:', err);
-        if (onError) onError(err as Error);
+      if (categoryTeardownTimer) {
+        clearTimeout(categoryTeardownTimer);
+        categoryTeardownTimer = null;
       }
+
+      categorySubscribers.add(callback);
+
+      if (cachedCategoryList && cachedCategoryList.length > 0) {
+        try {
+          callback(cachedCategoryList);
+        } catch (e) {
+          console.warn('[CategoryService] Callback note:', e);
+        }
+      }
+
+      if (!activeCategoryUnsubscribe) {
+        try {
+          activeCategoryUnsubscribe = onSnapshot(collection(db, 'categories'), (snapshot) => {
+            const cloudCats: Category[] = [];
+            if (!snapshot.empty) {
+              snapshot.forEach(docSnap => {
+                const raw = docSnap.data() as any;
+                if (raw && (raw.id || docSnap.id)) {
+                  let imgUrl = raw.imageUrl || raw.image || raw.coverImage || raw.coverImageUrl || '/saree_model_individual.jpg';
+                  if (imgUrl.startsWith('data:') || imgUrl.startsWith('blob:') || imgUrl.startsWith('file:')) {
+                    imgUrl = 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1200&q=80';
+                  }
+                  const name = (raw.name || '').trim();
+                  const slug = normalizeCategorySlug(raw.slug || name);
+                  const code = (raw.categoryCode || generateCategoryCodeSuggestion(name) || 'XX').trim().toUpperCase();
+
+                  cloudCats.push({
+                    ...raw,
+                    id: docSnap.id || raw.id,
+                    name,
+                    slug,
+                    categoryCode: code,
+                    code,
+                    image: imgUrl,
+                    imageUrl: imgUrl,
+                    coverImage: imgUrl,
+                    coverImageUrl: imgUrl,
+                    active: raw.active !== false,
+                    isActive: raw.active !== false
+                  });
+                }
+              });
+            }
+
+            cachedCategoryList = cloudCats;
+            storageService.saveCategories(cloudCats);
+            categorySubscribers.forEach(sub => {
+              try { sub(cloudCats); } catch {}
+            });
+          }, (err) => {
+            console.error('[CategoryService] Firestore live category subscription error:', err);
+            if (onError) onError(err as Error);
+            else {
+              const fallback = storageService.getCategories();
+              categorySubscribers.forEach(sub => {
+                try { sub(fallback); } catch {}
+              });
+            }
+          });
+        } catch (err: any) {
+          console.error('[CategoryService] Live subscription init error:', err);
+          if (onError) onError(err as Error);
+        }
+      }
+
+      return () => {
+        categorySubscribers.delete(callback);
+        if (categorySubscribers.size === 0) {
+          categoryTeardownTimer = setTimeout(() => {
+            if (categorySubscribers.size === 0 && activeCategoryUnsubscribe) {
+              activeCategoryUnsubscribe();
+              activeCategoryUnsubscribe = null;
+            }
+          }, 30000);
+        }
+      };
     }
 
     callback(storageService.getCategories());

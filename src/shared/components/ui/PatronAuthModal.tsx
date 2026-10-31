@@ -496,7 +496,7 @@ export const PatronAuthModal: React.FC = () => {
             <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--brand-primary, #10182d)', display: 'block', marginBottom: '6px' }}>
-                  Mobile Phone Number
+                  Phone Verification
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <select
@@ -527,7 +527,7 @@ export const PatronAuthModal: React.FC = () => {
                     autoFocus
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value.replace(/[^\d\s-]/g, ''))}
-                    placeholder={countryCode === '+91' ? '98765 43210' : 'Mobile number'}
+                    placeholder="Enter mobile number"
                     style={{
                       flex: 1,
                       height: '46px',

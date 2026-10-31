@@ -32,7 +32,7 @@ export const CustomerReviewsSection: React.FC = () => {
     try {
       unsubscribe = reviewService.subscribeToApprovedReviews((all: PatronReview[]) => {
         const feat = all
-          .filter((r: PatronReview) => r.isFeatured || r.showOnHome)
+          .filter((r: PatronReview) => Boolean(r.isFeatured))
           .sort((a: PatronReview, b: PatronReview) => (a.displayOrder || 999) - (b.displayOrder || 999));
         setReviews(feat);
       });

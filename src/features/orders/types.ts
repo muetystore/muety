@@ -73,6 +73,8 @@ export interface Order {
   notes?: string;
   cancellationRequested?: boolean;
   cancellationReason?: string;
+  archived?: boolean;
+  archivedAt?: string;
   createdAt: string;
   updatedAt: string;
   fulfilledAt?: string;

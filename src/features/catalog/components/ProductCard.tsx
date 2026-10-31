@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Product } from '@/types';
 import { useCart } from '@/shared/context/CartContext';
-import { personalizationService } from '@/features/catalog/services/personalizationService';
+import { recommendationService } from '@/features/catalog/services/recommendationService';
 import { Heart, ShoppingBag, Eye, Star, Check } from 'lucide-react';
 
 interface ProductCardProps {
@@ -30,12 +30,29 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
   const isSoldOut = product.availability === 'sold_out' || product.stock === 0;
   const isManualSoldOut = product.availability === 'sold_out';
 
+  const handleProductNavigation = () => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      try {
+        let currentVisible = 20;
+        const raw = sessionStorage.getItem('muety_storefront_catalog_state');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.visibleCount) currentVisible = parsed.visibleCount;
+        }
+        sessionStorage.setItem('muety_storefront_catalog_state', JSON.stringify({
+          scrollY: window.scrollY,
+          visibleCount: currentVisible
+        }));
+      } catch {}
+    }
+  };
+
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (isSoldOut) return;
     addToCart(product, 1);
-    personalizationService.recordCartAdd(product.id);
+    recommendationService.recordAddToCart(product);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1400);
   };
@@ -75,6 +92,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
       >
         <Link 
           to={`/products/${product.slug || product.id}`}
+          onClick={handleProductNavigation}
           style={{
             position: 'absolute',
             inset: 0,
@@ -205,9 +223,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
               e.preventDefault();
               e.stopPropagation();
               if (!isSaved) {
-                personalizationService.recordWishlistAdd(product.id);
+                recommendationService.recordWishlist(product, true);
               } else {
-                personalizationService.recordWishlistRemove(product.id);
+                recommendationService.recordWishlist(product, false);
               }
               toggleWishlist(product.id);
             }}
@@ -314,6 +332,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
         {/* Product Title (Compact 2-line clamp) */}
         <Link 
           to={`/products/${product.slug || product.id}`} 
+          onClick={handleProductNavigation}
           style={{ textDecoration: 'none', color: 'var(--brand-primary)' }}
         >
           <h3 style={{ 

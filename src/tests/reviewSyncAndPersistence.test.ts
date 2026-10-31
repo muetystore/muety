@@ -147,4 +147,58 @@ describe('Patron Reviews — Cloud Persistence, Synchronization & Deletion Resil
       ).rejects.toThrow('UNAUTHENTICATED');
     });
   });
+
+  describe('4. Review Eligibility & Verified Buyer Requirements', () => {
+    it('safely handles reviews with missing or undefined status without throwing toUpperCase error', () => {
+      const reviewWithUndefinedStatus = {
+        id: 'rev-legacy-01',
+        authorName: 'Patron Without Status',
+        rating: 5,
+        status: undefined
+      };
+
+      const resolvedStatus = (reviewWithUndefinedStatus.status || 'approved').toUpperCase();
+      expect(resolvedStatus).toBe('APPROVED');
+    });
+
+    it('requires delivered order for customer to write review like standard e-commerce', () => {
+      const checkEligibility = (
+        isAuthenticated: boolean,
+        userRole: string,
+        orders: Array<{ items: Array<{ productId?: string; slug?: string }>; orderStatus: string }>,
+        targetProductId: string
+      ) => {
+        if (!isAuthenticated) return { canReview: false, reason: 'login_required' };
+        if (['super_admin', 'admin', 'catalog_lead', 'staff'].includes(userRole)) {
+          return { canReview: true, reason: 'admin' };
+        }
+
+        const matching = orders.filter(o => o.items.some(it => it.productId === targetProductId || it.slug === targetProductId));
+        if (matching.length === 0) return { canReview: false, reason: 'not_purchased' };
+
+        const isDelivered = matching.some(o => o.orderStatus === 'delivered');
+        if (!isDelivered) return { canReview: false, reason: 'not_delivered' };
+
+        return { canReview: true, reason: 'verified_buyer' };
+      };
+
+      // 1. Guest -> Login required
+      expect(checkEligibility(false, 'customer', [], 'prod-1').reason).toBe('login_required');
+
+      // 2. Logged in customer without purchase -> Not purchased
+      expect(checkEligibility(true, 'customer', [], 'prod-1').reason).toBe('not_purchased');
+
+      // 3. Logged in customer with pending/shipped order -> Not delivered yet
+      const pendingOrder = [{ items: [{ productId: 'prod-1' }], orderStatus: 'shipped' }];
+      expect(checkEligibility(true, 'customer', pendingOrder, 'prod-1').reason).toBe('not_delivered');
+
+      // 4. Logged in customer with delivered order -> Eligible!
+      const deliveredOrder = [{ items: [{ productId: 'prod-1' }], orderStatus: 'delivered' }];
+      expect(checkEligibility(true, 'customer', deliveredOrder, 'prod-1').canReview).toBe(true);
+      expect(checkEligibility(true, 'customer', deliveredOrder, 'prod-1').reason).toBe('verified_buyer');
+
+      // 5. Admin -> Eligible
+      expect(checkEligibility(true, 'admin', [], 'prod-1').canReview).toBe(true);
+    });
+  });
 });

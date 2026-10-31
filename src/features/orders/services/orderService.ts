@@ -700,16 +700,61 @@ export const orderService = {
     };
   },
 
-  async deleteOrder(id: string): Promise<boolean> {
-    storageService.deleteOrder(id);
+  async archiveOrder(id: string, reason?: string): Promise<Order | undefined> {
+    const existing = this.getOrderById(id);
+    if (!existing) return undefined;
+
+    const updated: Order = {
+      ...existing,
+      archived: true,
+      archivedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    storageService.updateOrder(updated);
 
     if (db && !isTestEnv()) {
       try {
-        await deleteDoc(doc(db, 'orders', id));
-      } catch {}
+        await setDoc(doc(db, 'orders', id), updated, { merge: true });
+      } catch (err) {
+        console.warn('Firestore archive order note:', err);
+      }
     }
 
-    this.broadcastUpdate({ id } as any);
+    this.broadcastUpdate(updated);
+    return updated;
+  },
+
+  async unarchiveOrder(id: string): Promise<Order | undefined> {
+    const existing = this.getOrderById(id);
+    if (!existing) return undefined;
+
+    const updated: Order = {
+      ...existing,
+      archived: false,
+      updatedAt: new Date().toISOString()
+    };
+    delete updated.archivedAt;
+
+    storageService.updateOrder(updated);
+
+    if (db && !isTestEnv()) {
+      try {
+        const payload: Record<string, any> = { ...updated };
+        delete payload.archivedAt;
+        await setDoc(doc(db, 'orders', id), payload, { merge: true });
+      } catch (err) {
+        console.warn('Firestore unarchive order note:', err);
+      }
+    }
+
+    this.broadcastUpdate(updated);
+    return updated;
+  },
+
+  async deleteOrder(id: string): Promise<boolean> {
+    // For user data privacy & legal compliance, orders must not be permanently deleted. Archive instead.
+    await this.archiveOrder(id);
     return true;
   },
 

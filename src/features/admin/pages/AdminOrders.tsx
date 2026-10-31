@@ -13,6 +13,8 @@ import {
   X, 
   Loader2, 
   Trash2,
+  Archive,
+  ArchiveRestore,
   Truck,
   PackageCheck,
   Clock,
@@ -249,30 +251,48 @@ export const AdminOrders: React.FC = () => {
     }
   };
 
-  const handleDeleteOrder = async (orderId: string, orderNum: string) => {
-    const confirmed = window.confirm(`Permanently remove Order #${orderNum} from store records? This action cannot be reversed.`);
+  const handleArchiveOrder = async (orderId: string, orderNum: string) => {
+    const confirmed = window.confirm(`Archive Order #${orderNum}?\n\nThis order will be safely archived from active processing, while preserving all customer information, privacy, and financial audit history.`);
     if (!confirmed) return;
 
     try {
-      await orderService.deleteOrder(orderId);
-      setOrders(prev => prev.filter(o => o.id !== orderId));
-      if (selectedOrderId === orderId) {
-        setSelectedOrderId(null);
-      }
+      await orderService.archiveOrder(orderId);
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, archived: true, archivedAt: new Date().toISOString() } : o));
 
       await auditService.logAction({
         actorUid: user?.uid || 'system',
         actorEmail: user?.email || 'order_manager',
         actorRole: getUserRoles(user)[0] || 'order_manager',
-        action: 'ORDER_DELETED',
+        action: 'ORDER_ARCHIVED',
         entityType: 'ORDER',
         entityId: orderId,
-        reason: `Admin deleted order #${orderNum}`
+        reason: `Admin archived order #${orderNum}`
       });
 
-      success(`Order #${orderNum} successfully removed from records.`);
+      success(`Order #${orderNum} moved to archives.`);
     } catch (err: any) {
-      error(err?.message || 'Failed to delete order.');
+      error(err?.message || 'Failed to archive order.');
+    }
+  };
+
+  const handleUnarchiveOrder = async (orderId: string, orderNum: string) => {
+    try {
+      await orderService.unarchiveOrder(orderId);
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, archived: false, archivedAt: undefined } : o));
+
+      await auditService.logAction({
+        actorUid: user?.uid || 'system',
+        actorEmail: user?.email || 'order_manager',
+        actorRole: getUserRoles(user)[0] || 'order_manager',
+        action: 'ORDER_UNARCHIVED',
+        entityType: 'ORDER',
+        entityId: orderId,
+        reason: `Admin restored order #${orderNum} from archives`
+      });
+
+      success(`Order #${orderNum} restored from archives to active list.`);
+    } catch (err: any) {
+      error(err?.message || 'Failed to restore order.');
     }
   };
 
@@ -352,31 +372,34 @@ export const AdminOrders: React.FC = () => {
       success('No mock or automated test orders detected in database.');
       return;
     }
-    const confirmed = window.confirm(`Found ${testOrders.length} automated test order(s). Purge them all now?`);
+    const confirmed = window.confirm(`Found ${testOrders.length} automated test order(s). Archive them all now to preserve history?`);
     if (!confirmed) return;
 
     try {
       for (const tOrd of testOrders) {
-        await orderService.deleteOrder(tOrd.id);
+        await orderService.archiveOrder(tOrd.id);
       }
-      setOrders(prev => prev.filter(o => !testOrders.some(t => t.id === o.id)));
-      if (testOrders.some(t => t.id === selectedOrderId)) {
-        setSelectedOrderId(null);
-      }
-      success(`Successfully purged ${testOrders.length} test order(s).`);
+      setOrders(prev => prev.map(o => testOrders.some(t => t.id === o.id) ? { ...o, archived: true, archivedAt: new Date().toISOString() } : o));
+      success(`Successfully archived ${testOrders.length} test order(s).`);
     } catch (err: any) {
-      error(err?.message || 'Failed to purge test orders.');
+      error(err?.message || 'Failed to archive test orders.');
     }
   };
 
   const filteredOrders = orders.filter(o => {
-    const matchesStatus = statusFilter === 'all' || o.orderStatus === statusFilter;
+    const isArchived = Boolean(o.archived);
+    if (statusFilter === 'archived') {
+      if (!isArchived) return false;
+    } else {
+      if (isArchived) return false;
+      if (statusFilter !== 'all' && o.orderStatus !== statusFilter) return false;
+    }
     const q = search.toLowerCase().trim();
     const matchesSearch = !q ||
       (o.orderNumber || '').toLowerCase().includes(q) ||
       (o.customerName || '').toLowerCase().includes(q) ||
       (o.customerEmail || '').toLowerCase().includes(q);
-    return matchesStatus && matchesSearch;
+    return matchesSearch;
   });
 
   // Calculate lifecycle stepper index
@@ -480,9 +503,9 @@ export const AdminOrders: React.FC = () => {
             type="button"
             onClick={handlePurgeTestOrders}
             className="btn btn-sm"
-            style={{ backgroundColor: '#dc2626', color: '#ffffff', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            style={{ backgroundColor: '#b45309', color: '#ffffff', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
-            <Trash2 size={14} /> Purge Automated Test Orders
+            <Archive size={14} /> Archive Automated Test Orders
           </button>
         </div>
       )}
@@ -505,9 +528,9 @@ export const AdminOrders: React.FC = () => {
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value)}
           className="form-input"
-          style={{ width: '220px', margin: 0 }}
+          style={{ width: '240px', margin: 0 }}
         >
-          <option value="all">All Order Statuses ({orders.length})</option>
+          <option value="all">Active Orders ({orders.filter(o => !o.archived).length})</option>
           <option value="pending_payment">Pending Payment</option>
           <option value="confirmed">Confirmed</option>
           <option value="processing">Processing</option>
@@ -516,6 +539,7 @@ export const AdminOrders: React.FC = () => {
           <option value="out_for_delivery">Out For Delivery</option>
           <option value="delivered">Delivered</option>
           <option value="cancelled">Cancelled</option>
+          <option value="archived">📦 Archived Orders ({orders.filter(o => Boolean(o.archived)).length})</option>
         </select>
       </div>
 
@@ -649,16 +673,34 @@ export const AdminOrders: React.FC = () => {
                     </td>
 
                     <td style={{ padding: '14px 18px' }}>
-                      <span style={{
-                        padding: '4px 10px',
-                        borderRadius: '12px',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        backgroundColor: ord.orderStatus === 'delivered' ? '#dcfce7' : ord.orderStatus === 'shipped' ? '#e0f2fe' : ord.orderStatus === 'cancelled' ? '#fee2e2' : '#fef3c7',
-                        color: ord.orderStatus === 'delivered' ? '#15803d' : ord.orderStatus === 'shipped' ? '#0369a1' : ord.orderStatus === 'cancelled' ? '#b91c1c' : '#b45309'
-                      }}>
-                        {ord.orderStatus.replace('_', ' ').toUpperCase()}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                        <span style={{
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          backgroundColor: ord.orderStatus === 'delivered' ? '#dcfce7' : ord.orderStatus === 'shipped' ? '#e0f2fe' : ord.orderStatus === 'cancelled' ? '#fee2e2' : '#fef3c7',
+                          color: ord.orderStatus === 'delivered' ? '#15803d' : ord.orderStatus === 'shipped' ? '#0369a1' : ord.orderStatus === 'cancelled' ? '#b91c1c' : '#b45309'
+                        }}>
+                          {ord.orderStatus.replace('_', ' ').toUpperCase()}
+                        </span>
+                        {ord.archived && (
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: '10px',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            backgroundColor: '#fef3c7',
+                            color: '#92400e',
+                            border: '1px solid #fde68a',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px'
+                          }}>
+                            <Archive size={10} /> ARCHIVED
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     <td style={{ padding: '14px 18px', textAlign: 'right' }}>
@@ -666,20 +708,43 @@ export const AdminOrders: React.FC = () => {
                         <button onClick={() => openOrderDetails(ord)} className="btn btn-primary btn-sm">
                           <Eye size={14} /> View Order
                         </button>
-                        <button 
-                          onClick={() => handleDeleteOrder(ord.id, ord.orderNumber)} 
-                          className="btn btn-sm"
-                          title="Delete Order"
-                          style={{
-                            backgroundColor: '#fee2e2',
-                            color: '#b91c1c',
-                            border: '1px solid #fecaca',
-                            padding: '6px 8px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {ord.archived ? (
+                          <button 
+                            onClick={() => handleUnarchiveOrder(ord.id, ord.orderNumber)} 
+                            className="btn btn-sm"
+                            title="Restore Order from Archives"
+                            style={{
+                              backgroundColor: '#e0f2fe',
+                              color: '#0369a1',
+                              border: '1px solid #bae6fd',
+                              padding: '6px 8px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <ArchiveRestore size={14} />
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => handleArchiveOrder(ord.id, ord.orderNumber)} 
+                            className="btn btn-sm"
+                            title="Archive Order (Preserve Customer & Financial Records)"
+                            style={{
+                              backgroundColor: '#fef3c7',
+                              color: '#b45309',
+                              border: '1px solid #fde68a',
+                              padding: '6px 8px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <Archive size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1453,23 +1518,43 @@ export const AdminOrders: React.FC = () => {
             gap: '10px',
             flexShrink: 0
           }}>
-            <button 
-              type="button" 
-              onClick={() => handleDeleteOrder(selectedOrder.id, selectedOrder.orderNumber)} 
-              className="btn btn-sm"
-              style={{
-                backgroundColor: '#fee2e2',
-                color: '#b91c1c',
-                border: '1px solid #fecaca',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-            >
-              <Trash2 size={14} /> Delete Order Record
-            </button>
+            {selectedOrder.archived ? (
+              <button 
+                type="button" 
+                onClick={() => handleUnarchiveOrder(selectedOrder.id, selectedOrder.orderNumber)} 
+                className="btn btn-sm"
+                style={{
+                  backgroundColor: '#e0f2fe',
+                  color: '#0369a1',
+                  border: '1px solid #bae6fd',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                <ArchiveRestore size={14} /> Restore Order from Archives
+              </button>
+            ) : (
+              <button 
+                type="button" 
+                onClick={() => handleArchiveOrder(selectedOrder.id, selectedOrder.orderNumber)} 
+                className="btn btn-sm"
+                style={{
+                  backgroundColor: '#fef3c7',
+                  color: '#b45309',
+                  border: '1px solid #fde68a',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                <Archive size={14} /> Archive Order Record
+              </button>
+            )}
 
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <button 

@@ -8,6 +8,8 @@ import {
   Search, 
   Mail, 
   Trash2, 
+  Archive,
+  ArchiveRestore,
   CheckCircle, 
   Clock, 
   AlertCircle, 
@@ -58,14 +60,22 @@ export const AdminInquiries: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string, num: string) => {
-    if (window.confirm(`Are you sure you want to delete Inquiry #${num}?`)) {
-      await inquiryService.deleteInquiry(id);
+  const handleArchive = async (id: string, num: string) => {
+    if (window.confirm(`Archive Inquiry #${num}?\n\nThis will remove it from active inbox while securely preserving patron communication records for privacy and compliance.`)) {
+      await inquiryService.archiveInquiry(id);
       if (selectedInquiry?.id === id) {
-        setSelectedInquiry(null);
+        setSelectedInquiry(prev => prev ? { ...prev, archived: true, archivedAt: new Date().toISOString() } : null);
       }
-      success(`Inquiry #${num} removed from records.`, 'Deleted');
+      success(`Inquiry #${num} moved to archives.`, 'Archived');
     }
+  };
+
+  const handleUnarchive = async (id: string, num: string) => {
+    await inquiryService.unarchiveInquiry(id);
+    if (selectedInquiry?.id === id) {
+      setSelectedInquiry(prev => prev ? { ...prev, archived: false, archivedAt: undefined } : null);
+    }
+    success(`Inquiry #${num} restored from archives to active list.`, 'Restored');
   };
 
   const openWhatsAppReply = (inquiry: ContactInquiry) => {
@@ -83,6 +93,14 @@ export const AdminInquiries: React.FC = () => {
   };
 
   const filteredInquiries = inquiries.filter(i => {
+    const isArchived = Boolean(i.archived);
+    if (statusFilter === 'archived') {
+      if (!isArchived) return false;
+    } else {
+      if (isArchived) return false;
+      if (statusFilter !== 'all' && i.status !== statusFilter) return false;
+    }
+
     const q = search.toLowerCase().trim();
     const matchesSearch = !q ||
       (i.name || '').toLowerCase().includes(q) ||
@@ -91,15 +109,16 @@ export const AdminInquiries: React.FC = () => {
       (i.subject || '').toLowerCase().includes(q) ||
       (i.message || '').toLowerCase().includes(q);
 
-    const matchesStatus = statusFilter === 'all' || i.status === statusFilter;
     const matchesCategory = categoryFilter === 'all' || i.category === categoryFilter;
 
-    return matchesSearch && matchesStatus && matchesCategory;
+    return matchesSearch && matchesCategory;
   });
 
-  const unreadCount = inquiries.filter(i => i.status === 'unread').length;
-  const repliedCount = inquiries.filter(i => i.status === 'replied').length;
-  const resolvedCount = inquiries.filter(i => i.status === 'resolved').length;
+  const activeInquiries = inquiries.filter(i => !i.archived);
+  const archivedCount = inquiries.filter(i => Boolean(i.archived)).length;
+  const unreadCount = activeInquiries.filter(i => i.status === 'unread').length;
+  const repliedCount = activeInquiries.filter(i => i.status === 'replied').length;
+  const resolvedCount = activeInquiries.filter(i => i.status === 'resolved').length;
 
   return (
     <div className="admin-inquiries-page animate-fade-in" style={{ padding: '2rem' }}>
@@ -174,11 +193,12 @@ export const AdminInquiries: React.FC = () => {
               className="form-input"
               style={{ margin: 0, width: 'auto', minWidth: '140px' }}
             >
-              <option value="all">All Statuses</option>
+              <option value="all">Active Inquiries ({activeInquiries.length})</option>
               <option value="unread">🔴 Unread Only</option>
               <option value="read">👁️ Read</option>
               <option value="replied">💬 Replied</option>
               <option value="resolved">✅ Resolved</option>
+              <option value="archived">📦 Archived ({archivedCount})</option>
             </select>
 
             <select
@@ -278,25 +298,40 @@ export const AdminInquiries: React.FC = () => {
                       </td>
 
                       <td style={{ padding: '14px 16px' }}>
-                        <select
-                          value={inq.status}
-                          onChange={(e) => handleStatusChange(inq.id, e.target.value as InquiryStatus)}
-                          style={{
-                            fontSize: '0.75rem',
-                            fontWeight: 700,
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            backgroundColor: statusBg,
-                            color: statusColor,
-                            border: 'none',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <option value="unread">UNREAD</option>
-                          <option value="read">READ</option>
-                          <option value="replied">REPLIED</option>
-                          <option value="resolved">RESOLVED</option>
-                        </select>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                          <select
+                            value={inq.status}
+                            onChange={(e) => handleStatusChange(inq.id, e.target.value as InquiryStatus)}
+                            style={{
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              backgroundColor: statusBg,
+                              color: statusColor,
+                              border: 'none',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <option value="unread">UNREAD</option>
+                            <option value="read">READ</option>
+                            <option value="replied">REPLIED</option>
+                            <option value="resolved">RESOLVED</option>
+                          </select>
+                          {inq.archived && (
+                            <span style={{
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '0.68rem',
+                              fontWeight: 700,
+                              backgroundColor: '#fef3c7',
+                              color: '#92400e',
+                              border: '1px solid #fde68a'
+                            }}>
+                              ARCHIVED
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td style={{ padding: '14px 16px', fontSize: '0.8rem', color: '#64748b' }}>
@@ -337,13 +372,23 @@ export const AdminInquiries: React.FC = () => {
                             Email
                           </button>
 
-                          <button
-                            onClick={() => handleDelete(inq.id, inq.inquiryNumber)}
-                            style={{ backgroundColor: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {inq.archived ? (
+                            <button
+                              onClick={() => handleUnarchive(inq.id, inq.inquiryNumber)}
+                              style={{ backgroundColor: 'transparent', border: 'none', color: '#0284c7', cursor: 'pointer', padding: '4px' }}
+                              title="Restore Inquiry from Archives"
+                            >
+                              <ArchiveRestore size={16} />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleArchive(inq.id, inq.inquiryNumber)}
+                              style={{ backgroundColor: 'transparent', border: 'none', color: '#b45309', cursor: 'pointer', padding: '4px' }}
+                              title="Archive Inquiry (Preserve Records)"
+                            >
+                              <Archive size={16} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

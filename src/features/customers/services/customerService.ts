@@ -778,35 +778,73 @@ export const customerService = {
     return this.updateCustomerAddress(uid, addressId, { isDefault: true });
   },
 
-  async deleteCustomer(uid: string): Promise<boolean> {
-    const users = storageService.getUsers().filter(u => u.uid !== uid);
-    storageService.saveUsers(users);
+  async archiveCustomer(uid: string): Promise<UserProfile | null> {
+    const users = storageService.getUsers();
+    const idx = users.findIndex(u => u.uid === uid);
+    if (idx === -1) return null;
 
-    if (typeof window !== 'undefined') {
-      try {
-        const headers = await getAuthHeaders();
-        await fetch('/api/customers/delete', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ uid })
-        });
-      } catch (apiErr: any) {
-        console.warn('[customerService] Server delete API note:', apiErr?.message || apiErr);
-      }
-    }
+    const updated: UserProfile = {
+      ...users[idx],
+      archived: true,
+      archivedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    users[idx] = updated;
+    storageService.saveUsers(users);
 
     if (db) {
       try {
         await Promise.race([
           Promise.all([
-            deleteDoc(doc(db, 'users', uid)),
-            deleteDoc(doc(db, 'customers', uid))
+            setDoc(doc(db, 'users', uid), updated, { merge: true }),
+            setDoc(doc(db, 'customers', uid), updated, { merge: true })
           ]),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore delete timeout')), 1200))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore archive timeout')), 2500))
         ]);
-      } catch {}
+      } catch (err) {
+        console.warn('[customerService] Firestore archive customer note:', err);
+      }
     }
 
+    return updated;
+  },
+
+  async unarchiveCustomer(uid: string): Promise<UserProfile | null> {
+    const users = storageService.getUsers();
+    const idx = users.findIndex(u => u.uid === uid);
+    if (idx === -1) return null;
+
+    const userToUpdate: UserProfile = { ...users[idx] };
+    userToUpdate.archived = false;
+    delete userToUpdate.archivedAt;
+    userToUpdate.updatedAt = new Date().toISOString();
+
+    users[idx] = userToUpdate;
+    storageService.saveUsers(users);
+
+    if (db) {
+      try {
+        const payload: Record<string, any> = { ...userToUpdate };
+        delete payload.archivedAt;
+
+        await Promise.race([
+          Promise.all([
+            setDoc(doc(db, 'users', uid), payload, { merge: true }),
+            setDoc(doc(db, 'customers', uid), payload, { merge: true })
+          ]),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore unarchive timeout')), 2500))
+        ]);
+      } catch (err) {
+        console.warn('[customerService] Firestore unarchive customer note:', err);
+      }
+    }
+
+    return userToUpdate;
+  },
+
+  async deleteCustomer(uid: string): Promise<boolean> {
+    // For user data privacy & compliance, customer records must not be deleted. Archive instead.
+    await this.archiveCustomer(uid);
     return true;
   },
 

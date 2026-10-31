@@ -52,87 +52,14 @@ export const HomePage: React.FC = () => {
   const [approvedReviews, setApprovedReviews] = useState<PatronReview[]>([]);
   const [activeReviewIdx, setActiveReviewIdx] = useState<number>(0);
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(() => storageService.getRecentlyViewed());
-  const [selectedOccasion, setSelectedOccasion] = useState<string>('bridal');
+  const [selectedOccasion, setSelectedOccasion] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(() => storageService.getProducts().length === 0);
 
   const displayReviews: PatronReview[] = useMemo(() => {
-    // 1. Only approved reviews where admin enabled "Featured on Homepage" (isFeatured or showOnHome)
-    const featured = approvedReviews
-      .filter(r => r.status === 'approved' && (r.isFeatured || r.showOnHome))
+    // STRICT: Only display approved reviews where admin specifically enabled "Featured on Homepage" (isFeatured === true)
+    return approvedReviews
+      .filter(r => (r.status || 'approved') === 'approved' && Boolean(r.isFeatured))
       .sort((a, b) => (a.displayOrder || 999) - (b.displayOrder || 999));
-    if (featured.length > 0) return featured;
-
-    // 2. Fallback to approved reviews
-    const approved = approvedReviews.filter(r => r.status === 'approved');
-    if (approved.length > 0) return approved;
-
-    // 3. Fallback to verified seed impressions
-    return [
-      {
-        id: 'rev-1',
-        authorName: 'Priyamvada Sundaram',
-        authorLocation: 'Chennai, Tamil Nadu',
-        rating: 5,
-        quote: 'Getting ready felt like a royal moment draped in MUETY pure silk ✨🤍',
-        comment: 'The Salem handloom pit-loom weave and pure zari temple border had such luminous drape. Everyone remarked on the authentic Silk Mark craftsmanship.',
-        verifiedPurchase: true,
-        status: 'approved' as const,
-        isFeatured: true,
-        showOnHome: true,
-        displayOrder: 1,
-        productName: 'Royal Crimson Korvai Saree',
-        photoUrl: '/saree_model_individual.webp',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'rev-2',
-        authorName: 'Meenakshi Iyer',
-        authorLocation: 'Bengaluru, Karnataka',
-        rating: 5,
-        quote: 'The gold zari luster and pure mulberry silk texture were unmatched.',
-        comment: 'Arrived in pristine gold-foil packaging within 48 hours. The flat ₹89 nationwide delivery and authentic handloom weight made this my finest festive drape.',
-        verifiedPurchase: true,
-        status: 'approved' as const,
-        isFeatured: true,
-        showOnHome: true,
-        displayOrder: 2,
-        productName: 'Kanchipuram Mustard Zari Drape',
-        photoUrl: '/saree_model_drape.webp',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'rev-3',
-        authorName: 'Dr. Radhika Menon',
-        authorLocation: 'Kochi, Kerala',
-        rating: 5,
-        quote: 'Heirloom quality that my daughter will treasure for generations.',
-        comment: 'The pit-loom artisans in Salem have preserved temple borders with breathtaking precision. Outstanding client support via WhatsApp as well.',
-        verifiedPurchase: true,
-        status: 'approved' as const,
-        isFeatured: true,
-        showOnHome: true,
-        displayOrder: 3,
-        productName: 'Emerald Temple Border Saree',
-        photoUrl: '/saree_fabric_detail.webp',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'rev-4',
-        authorName: 'Ananya Deshmukh',
-        authorLocation: 'Pune, Maharashtra',
-        rating: 5,
-        quote: 'The Korvai border precision is a masterclass in South Indian weaving.',
-        comment: 'Wore it for Diwali pooja. Received compliments from everyone. Truly an heirloom drape.',
-        verifiedPurchase: true,
-        status: 'approved' as const,
-        isFeatured: true,
-        showOnHome: true,
-        displayOrder: 4,
-        productName: 'Salem Royal Gold Tissue Saree',
-        photoUrl: '/saree_model_individual.webp',
-        createdAt: new Date().toISOString()
-      }
-    ];
   }, [approvedReviews]);
 
   const getReviewPhoto = (rev?: PatronReview, fallbackIdx: number = 0) => {
@@ -206,8 +133,9 @@ export const HomePage: React.FC = () => {
 
   // Section 9 Tabs: Festive Edits by Occasion (Admin-managed)
   const festiveOccasions = useMemo(() => {
+    // Show ALL collections where admin enabled "Festive Edits (Home): ✓ On Home Tabs" (showInFestiveEdits !== false)
     const list = collections
-      .filter(c => c.showInFestiveEdits !== false && (c.type === 'occasion' || !c.type))
+      .filter(c => c.showInFestiveEdits !== false)
       .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
 
     if (list.length > 0) return list;
@@ -223,9 +151,9 @@ export const HomePage: React.FC = () => {
 
   useEffect(() => {
     if (festiveOccasions.length > 0) {
-      const exists = festiveOccasions.some(t => (t.slug || t.id) === selectedOccasion || t.id === selectedOccasion);
+      const exists = festiveOccasions.some(t => t.id === selectedOccasion || (t.slug && t.slug === selectedOccasion));
       if (!exists) {
-        setSelectedOccasion(festiveOccasions[0].slug || festiveOccasions[0].id);
+        setSelectedOccasion(festiveOccasions[0].id);
       }
     }
   }, [festiveOccasions, selectedOccasion]);
@@ -274,61 +202,73 @@ export const HomePage: React.FC = () => {
     return allProducts.filter(p => p.published !== false);
   }, [allProducts, wishlist]);
 
-  // Section 9: Festive Edits by Occasion (Admin-managed authority)
+  // Section 9: Festive Edits by Occasion (Strict Admin-managed assignment)
   const occasionProducts = useMemo(() => {
-    if (allProducts.length === 0) return [];
-    const target = (selectedOccasion || '').toLowerCase().trim();
+    if (allProducts.length === 0 || festiveOccasions.length === 0) return [];
     
-    // Explicit admin assignment match (by collectionId, occasion string, or occasions array)
-    const adminSelected = allProducts.filter(p => 
-      p.published !== false && (
-        (p.collectionId || '').toLowerCase() === target ||
-        (p.occasion || '').toLowerCase().includes(target) || 
-        (p.occasions && p.occasions.some(o => o.toLowerCase().includes(target)))
-      )
-    );
-    if (adminSelected.length > 0) return adminSelected;
+    // Identify active collection from festiveOccasions
+    const activeCol = festiveOccasions.find(c => 
+      c.id === selectedOccasion || 
+      (c.slug && c.slug.toLowerCase() === (selectedOccasion || '').toLowerCase())
+    ) || festiveOccasions[0];
 
-    // Semantic fallback heuristics
-    if (target.includes('bridal') || target.includes('wedding')) {
-      const bridal = allProducts.filter(p => 
-        p.published !== false && (
-          (p.categorySlug || '').includes('bridal') || 
-          (p.name || '').toLowerCase().includes('kanchipuram') ||
-          (p.tags || []).some(t => t.toLowerCase().includes('bridal') || t.toLowerCase().includes('zari'))
-        )
-      );
-      return bridal.length > 0 ? bridal : allProducts;
-    } else if (target.includes('temple')) {
-      const temple = allProducts.filter(p => 
-        p.published !== false && (
-          (p.name || '').toLowerCase().includes('temple') || 
-          (p.tags || []).some(t => t.toLowerCase().includes('temple') || t.toLowerCase().includes('korvai') || t.toLowerCase().includes('traditional'))
-        )
-      );
-      return temple.length > 0 ? temple : allProducts;
-    } else if (target.includes('reception')) {
-      const reception = allProducts.filter(p => 
-        p.published !== false && (
-          (p.categorySlug || '').includes('handloom') ||
-          (p.fabric || '').toLowerCase().includes('organza') ||
-          (p.fabric || '').toLowerCase().includes('soft') ||
-          (p.tags || []).some(t => t.toLowerCase().includes('reception') || t.toLowerCase().includes('party'))
-        )
-      );
-      return reception.length > 0 ? reception : allProducts;
-    } else {
-      // festive / family celebrations
-      const festive = allProducts.filter(p => 
-        p.published !== false && (
-          (p.tags || []).some(t => t.toLowerCase().includes('festive') || t.toLowerCase().includes('diwali') || t.toLowerCase().includes('salem') || t.toLowerCase().includes(target)) ||
-          (p.categorySlug || '').includes('sarees') ||
-          (p.name || '').toLowerCase().includes(target)
-        )
-      );
-      return festive.length > 0 ? festive : allProducts;
-    }
-  }, [allProducts, selectedOccasion]);
+    if (!activeCol) return [];
+
+    const colId = (activeCol.id || '').toLowerCase().trim();
+    const colSlug = (activeCol.slug || '').toLowerCase().trim();
+    const colName = (activeCol.name || '').toLowerCase().trim();
+
+    // Match products strictly assigned to this collection using the exact AdminCollections ERP logic
+    const assigned = allProducts.filter(p => {
+      if (p.published === false) return false;
+
+      // 1. Check collectionIds array (saved by AdminCollections modal)
+      if (Array.isArray(p.collectionIds)) {
+        if (p.collectionIds.some(id => {
+          const clean = String(id).toLowerCase().trim();
+          return clean === colId || (colSlug && clean === colSlug);
+        })) {
+          return true;
+        }
+      }
+
+      // 2. Check single collectionId field
+      if (p.collectionId) {
+        const pCol = String(p.collectionId).toLowerCase().trim();
+        if (pCol === colId || (colSlug && pCol === colSlug)) {
+          return true;
+        }
+      }
+
+      // 3. Check product tags matching collection slug
+      if (Array.isArray(p.tags) && colSlug) {
+        if (p.tags.some(t => String(t).toLowerCase().trim() === colSlug)) {
+          return true;
+        }
+      }
+
+      // 4. Check product occasion metadata matching collection slug, id, or exact name
+      if (p.occasion) {
+        const pOcc = String(p.occasion).toLowerCase().trim();
+        if ((colSlug && pOcc === colSlug) || pOcc === colId || (colName && pOcc === colName)) {
+          return true;
+        }
+      }
+      if (Array.isArray(p.occasions)) {
+        if (p.occasions.some(o => {
+          const oClean = String(o).toLowerCase().trim();
+          return (colSlug && oClean === colSlug) || oClean === colId || (colName && oClean === colName);
+        })) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    // Strictly return only products assigned to this collection by admin
+    return assigned;
+  }, [allProducts, festiveOccasions, selectedOccasion]);
 
   // Section 10: Recently Viewed Products
   const recentlyViewedProducts = useMemo(() => {
@@ -602,102 +542,126 @@ export const HomePage: React.FC = () => {
       {/* =========================================================================
           SECTION 9: FESTIVE EDITS AND OCCASION-BASED SHOPPING
           ========================================================================= */}
-      <section 
-        className="section-padding"
-        aria-label="Festive Edits and Occasion-Based Shopping"
-        style={{ backgroundColor: '#ffffff', borderTop: '1px solid var(--brand-border)', borderBottom: '1px solid var(--brand-border)' }}
-      >
-        <div className="container">
-          <SectionHeader 
-            eyebrow="Ceremonial Dressing"
-            title="Festive Edits by Occasion"
-            subtitle="Curated handlooms tailored for sacred wedding muhurthams, temple festivities, and celebratory evenings."
-            actionLink={{ to: '/products', label: 'View All Edits' }}
-          />
+      {festiveOccasions.length > 0 && (
+        <section 
+          className="section-padding"
+          aria-label="Festive Edits and Occasion-Based Shopping"
+          style={{ backgroundColor: '#ffffff', borderTop: '1px solid var(--brand-border)', borderBottom: '1px solid var(--brand-border)' }}
+        >
+          <div className="container">
+            <SectionHeader 
+              eyebrow="Ceremonial Dressing"
+              title="Festive Edits by Occasion"
+              subtitle="Curated handlooms tailored for sacred wedding muhurthams, temple festivities, and celebratory evenings."
+              actionLink={{ to: '/products', label: 'View All Edits' }}
+            />
 
-          {/* Occasion Switcher Tabs */}
-          <div 
-            style={{
-              display: 'flex',
-              gap: '8px',
-              overflowX: 'auto',
-              WebkitOverflowScrolling: 'touch',
-              paddingBottom: '8px',
-              marginBottom: '1.5rem',
-              scrollbarWidth: 'none'
-            }}
-          >
-            {festiveOccasions.map(tab => {
-              const tabId = tab.slug || tab.id;
-              const isSelected = selectedOccasion === tabId || selectedOccasion === tab.id;
-              return (
-                <button
-                  key={tab.id || tabId}
-                  onClick={() => setSelectedOccasion(tabId)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '9px 20px',
-                    borderRadius: 'var(--radius-full)',
-                    fontSize: '0.86rem',
-                    fontWeight: 700,
-                    whiteSpace: 'nowrap',
-                    border: '1px solid',
-                    borderColor: isSelected ? 'var(--brand-primary)' : 'var(--brand-border)',
-                    backgroundColor: isSelected ? 'var(--brand-primary)' : '#ffffff',
-                    color: isSelected ? '#ffffff' : 'var(--brand-primary)',
-                    cursor: 'pointer',
-                    boxShadow: isSelected ? '0 2px 8px rgba(16, 24, 45, 0.15)' : 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <span>{tab.name || (tab as any).label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Festive Edits Single-Row Scrolling Display */}
-          <div className="product-row-showcase">
-            {occasionProducts.length > 4 && (
-              <button
-                type="button"
-                onClick={() => scrollProductRow(occasionScrollRef, 'left')}
-                aria-label="Scroll left"
-                className="product-nav-arrow product-nav-left"
-              >
-                <ChevronLeft size={20} />
-              </button>
-            )}
-
+            {/* Occasion Switcher Tabs */}
             <div 
-              ref={occasionScrollRef}
-              className="products-carousel-track"
+              style={{
+                display: 'flex',
+                gap: '8px',
+                overflowX: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                paddingBottom: '8px',
+                marginBottom: '1.5rem',
+                scrollbarWidth: 'none'
+              }}
             >
-              {occasionProducts.map((p, pIdx) => (
-                <div key={p.id} className="product-scroll-item">
-                  <ProductCard 
-                    product={p} 
-                    priority={pIdx < 4}
-                    onQuickView={(prod) => setQuickViewProduct(prod)} 
-                  />
-                </div>
-              ))}
+              {festiveOccasions.map(tab => {
+                const isSelected = selectedOccasion === tab.id || (tab.slug && selectedOccasion === tab.slug);
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSelectedOccasion(tab.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '9px 20px',
+                      borderRadius: 'var(--radius-full)',
+                      fontSize: '0.86rem',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      border: '1px solid',
+                      borderColor: isSelected ? 'var(--brand-primary)' : 'var(--brand-border)',
+                      backgroundColor: isSelected ? 'var(--brand-primary)' : '#ffffff',
+                      color: isSelected ? '#ffffff' : 'var(--brand-primary)',
+                      cursor: 'pointer',
+                      boxShadow: isSelected ? '0 2px 8px rgba(16, 24, 45, 0.15)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span>{tab.name || (tab as any).label}</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {occasionProducts.length > 4 && (
-              <button
-                type="button"
-                onClick={() => scrollProductRow(occasionScrollRef, 'right')}
-                aria-label="Scroll right"
-                className="product-nav-arrow product-nav-right"
-              >
-                <ChevronRight size={20} />
-              </button>
+            {/* Festive Edits Single-Row Scrolling Display */}
+            {occasionProducts.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '3rem 1.5rem',
+                backgroundColor: '#faf8f5',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px dashed var(--brand-border)',
+                margin: '1rem 0'
+              }}>
+                <Sparkles size={28} color="var(--brand-accent)" style={{ margin: '0 auto 0.75rem' }} />
+                <h4 style={{ fontSize: '1.05rem', color: 'var(--brand-primary)', margin: '0 0 0.35rem', fontWeight: 600 }}>
+                  Atelier Handlooms in Curation
+                </h4>
+                <p style={{ fontSize: '0.86rem', color: 'var(--brand-muted)', margin: 0, maxWidth: '440px', marginInline: 'auto' }}>
+                  Exclusive creations are currently being curated for this edit. Explore our full collection in the atelier catalog.
+                </p>
+                <Link to="/products" className="btn btn-outline btn-sm" style={{ marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <span>Explore All Handlooms</span>
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+            ) : (
+              <div className="product-row-showcase">
+                {occasionProducts.length > 4 && (
+                  <button
+                    type="button"
+                    onClick={() => scrollProductRow(occasionScrollRef, 'left')}
+                    aria-label="Scroll left"
+                    className="product-nav-arrow product-nav-left"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                )}
+
+                <div 
+                  ref={occasionScrollRef}
+                  className="products-carousel-track"
+                >
+                  {occasionProducts.map((p, pIdx) => (
+                    <div key={p.id} className="product-scroll-item">
+                      <ProductCard 
+                        product={p} 
+                        priority={pIdx < 4}
+                        onQuickView={(prod) => setQuickViewProduct(prod)} 
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {occasionProducts.length > 4 && (
+                  <button
+                    type="button"
+                    onClick={() => scrollProductRow(occasionScrollRef, 'right')}
+                    aria-label="Scroll right"
+                    className="product-nav-arrow product-nav-right"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                )}
+              </div>
             )}
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* =========================================================================
           SECTION 10: RECENTLY VIEWED (Deduplicated, bounded list)
@@ -791,13 +755,15 @@ export const HomePage: React.FC = () => {
 
       {/* =========================================================================
           SECTION 12: CUSTOMER REVIEWS (Libas-inspired storytelling carousel)
+          Strictly displayed only when admin features approved reviews
           ========================================================================= */}
-      <section 
-        id="customer-reviews-section"
-        className="section-padding"
-        aria-label="Customer Reviews"
-        style={{ backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--brand-border)' }}
-      >
+      {displayReviews.length > 0 && (
+        <section 
+          id="customer-reviews-section"
+          className="section-padding"
+          aria-label="Customer Reviews"
+          style={{ backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--brand-border)' }}
+        >
         <div className="container" style={{ maxWidth: '1240px', margin: '0 auto', textAlign: 'center' }}>
           <SectionHeader 
             eyebrow="Patron Impressions"
@@ -1218,6 +1184,7 @@ export const HomePage: React.FC = () => {
           }
         `}</style>
       </section>
+      )}
 
       {/* =========================================================================
           SECTION 14: CONCIERGE SUPPORT AND FOOTER LEAD-IN

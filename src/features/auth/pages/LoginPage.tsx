@@ -489,7 +489,7 @@ export const LoginPage: React.FC = () => {
                 htmlFor="phone-input"
                 style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--brand-primary, #10182d)', display: 'block', marginBottom: '6px' }}
               >
-                Mobile Phone Number
+                Phone Verification
               </label>
 
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -529,7 +529,7 @@ export const LoginPage: React.FC = () => {
                     const clean = e.target.value.replace(/[^\d\s-]/g, '');
                     setPhoneNumber(clean);
                   }}
-                  placeholder={countryCode === '+91' ? '98765 43210' : 'Mobile number'}
+                  placeholder="Enter mobile number"
                   style={{
                     flex: 1,
                     height: '48px',

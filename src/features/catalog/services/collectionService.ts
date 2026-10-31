@@ -28,7 +28,7 @@ class CollectionService {
   getOccasionCollections(): SareeCollection[] {
     const list = this.getCollections();
     return list
-      .filter(c => c.showInFestiveEdits !== false && (c.type === 'occasion' || !c.type))
+      .filter(c => c.showInFestiveEdits !== false)
       .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
   }
 

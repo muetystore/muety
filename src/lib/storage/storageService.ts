@@ -351,7 +351,7 @@ class StorageService {
   // --- COUPONS ---
   getCoupons(): Coupon[] {
     try {
-      if (typeof window === 'undefined') return [];
+      if (typeof localStorage === 'undefined') return [];
       const data = localStorage.getItem(KEYS.COUPONS);
       return data ? JSON.parse(data) : [];
     } catch {
@@ -509,6 +509,18 @@ class StorageService {
       return order;
     }
     return undefined;
+  }
+
+  updateOrder(order: Order): Order {
+    const orders = this.getOrders();
+    const index = orders.findIndex(o => o.id === order.id || o.orderNumber === order.orderNumber);
+    if (index !== -1) {
+      orders[index] = { ...orders[index], ...order };
+    } else {
+      orders.push(order);
+    }
+    this.saveOrders(orders);
+    return order;
   }
 
   deleteOrder(id: string): boolean {
@@ -680,7 +692,9 @@ class StorageService {
 
   saveReviews(reviews: PatronReview[]): void {
     localStorage.setItem(KEYS.REVIEWS, JSON.stringify(reviews));
-    window.dispatchEvent(new Event('muety_reviews_updated'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('muety_reviews_updated'));
+    }
   }
 
   addReview(review: PatronReview): PatronReview {

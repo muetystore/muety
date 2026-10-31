@@ -37,6 +37,8 @@ import {
   Send,
   Plus,
   Trash2,
+  Archive,
+  ArchiveRestore,
   Edit2,
   CheckCircle2,
   ExternalLink,
@@ -206,32 +208,41 @@ export const AdminCustomers: React.FC = () => {
   const ordersSummary = useMemo(() => calculateOrdersSummary(orders), [orders]);
 
   // CRM Aggregate KPI Metrics
-  const totalCustomers = customers.length;
-  const activeAccounts = customers.filter(u => !u.isBlocked).length;
-  const patronCircleCount = customers.filter(u => Boolean(u.patronCircleMember || (u as any).joinCircle || (u as any).isPatronCircle)).length;
-  const vipCustomersCount = customers.filter(u => {
+  const archivedCustomersCount = customers.filter(u => Boolean(u.archived)).length;
+  const activeCustomers = customers.filter(u => !u.archived);
+  const totalCustomers = activeCustomers.length;
+  const activeAccounts = activeCustomers.filter(u => !u.isBlocked).length;
+  const patronCircleCount = activeCustomers.filter(u => Boolean(u.patronCircleMember || (u as any).joinCircle || (u as any).isPatronCircle)).length;
+  const vipCustomersCount = activeCustomers.filter(u => {
     const m = customerMetricsMap.get(u.uid);
     return u.customerStatus === 'VIP' || (m && m.isVip);
   }).length;
-  const suspendedAccountsCount = customers.filter(u => !!u.isBlocked).length;
+  const suspendedAccountsCount = activeCustomers.filter(u => !!u.isBlocked).length;
   const totalLTV = ordersSummary.cumulativeSpend;
 
   const thirtyDaysAgo = useMemo(() => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), []);
 
   const newPatronsCount = useMemo(() => {
-    return customers.filter(u => Boolean(u.createdAt && u.createdAt >= thirtyDaysAgo)).length;
-  }, [customers, thirtyDaysAgo]);
+    return activeCustomers.filter(u => Boolean(u.createdAt && u.createdAt >= thirtyDaysAgo)).length;
+  }, [activeCustomers, thirtyDaysAgo]);
 
   const verifiedPatronsCount = useMemo(() => {
-    return customers.filter(u => {
+    return activeCustomers.filter(u => {
       const m = customerMetricsMap.get(u.uid);
       return Boolean((m && (m.verifiedOrdersCount > 0 || m.totalValidOrders > 0)) || Number(u.ordersCount) > 0);
     }).length;
-  }, [customers, customerMetricsMap]);
+  }, [activeCustomers, customerMetricsMap]);
 
   // Filtered customer directory
   const filteredCustomers = useMemo(() => {
     return customers.filter(u => {
+      const isArchived = Boolean(u.archived);
+      if (statusFilter === 'archived') {
+        if (!isArchived) return false;
+      } else {
+        if (isArchived) return false;
+      }
+
       const q = search.toLowerCase().trim();
       const matchesQuery = !q || 
         (u.displayName || '').toLowerCase().includes(q) ||
@@ -254,6 +265,7 @@ export const AdminCustomers: React.FC = () => {
       else if (statusFilter === 'VIP') matchesStatus = !!isVip;
       else if (statusFilter === 'verified_patrons') matchesStatus = isVerifiedPatron;
       else if (statusFilter === 'blocked') matchesStatus = !!u.isBlocked;
+      else if (statusFilter === 'archived') matchesStatus = isArchived;
 
       return matchesQuery && matchesStatus;
     });
@@ -412,27 +424,47 @@ export const AdminCustomers: React.FC = () => {
     }
   };
 
-  // Permanent Delete Patron Account Handler
-  const handleDeleteCustomer = async (cust?: UserProfile) => {
+  // Archive / Restore Patron Account Handlers (Preserves User Data Privacy)
+  const handleArchiveCustomer = async (cust?: UserProfile) => {
     const target = cust || selectedCustomer;
     if (!target) return;
 
     const patronName = target.displayName || target.fullName || target.email || target.uid;
     const confirmed = window.confirm(
-      `Permanently delete patron "${patronName}" from Firebase?\n\nThis will completely purge this patron from Firebase Authentication, Cloud Firestore, and the Patron CRM.`
+      `Archive patron "${patronName}"?\n\nThis will remove the patron from active directory lists while securely preserving all personal profile details, orders, and addresses for user data privacy and legal compliance.`
     );
     if (!confirmed) return;
 
     setIsDeletingCustomer(true);
     try {
-      await customerService.deleteCustomer(target.uid);
-      setCustomers(prev => prev.filter(c => c.uid !== target.uid));
+      await customerService.archiveCustomer(target.uid);
+      setCustomers(prev => prev.map(c => c.uid === target.uid ? { ...c, archived: true, archivedAt: new Date().toISOString() } : c));
       if (selectedCustomer?.uid === target.uid) {
-        setSelectedCustomer(null);
+        setSelectedCustomer(prev => prev ? { ...prev, archived: true, archivedAt: new Date().toISOString() } : null);
       }
-      success(`Patron "${patronName}" permanently deleted from Firebase.`);
+      success(`Patron "${patronName}" archived. Data preserved in archives.`);
     } catch (err: any) {
-      notifyError(err?.message || 'Failed to delete patron.');
+      notifyError(err?.message || 'Failed to archive patron.');
+    } finally {
+      setIsDeletingCustomer(false);
+    }
+  };
+
+  const handleUnarchiveCustomer = async (cust?: UserProfile) => {
+    const target = cust || selectedCustomer;
+    if (!target) return;
+
+    const patronName = target.displayName || target.fullName || target.email || target.uid;
+    setIsDeletingCustomer(true);
+    try {
+      await customerService.unarchiveCustomer(target.uid);
+      setCustomers(prev => prev.map(c => c.uid === target.uid ? { ...c, archived: false, archivedAt: undefined } : c));
+      if (selectedCustomer?.uid === target.uid) {
+        setSelectedCustomer(prev => prev ? { ...prev, archived: false, archivedAt: undefined } : null);
+      }
+      success(`Patron "${patronName}" restored from archives.`);
+    } catch (err: any) {
+      notifyError(err?.message || 'Failed to restore patron.');
     } finally {
       setIsDeletingCustomer(false);
     }
@@ -816,6 +848,7 @@ export const AdminCustomers: React.FC = () => {
               <option value="verified_patrons">📦 Verified Order Patrons ({verifiedPatronsCount})</option>
               <option value="active">Active Accounts ({activeAccounts})</option>
               <option value="blocked">Suspended Accounts ({suspendedAccountsCount})</option>
+              <option value="archived">📦 Archived Patron Records ({archivedCustomersCount})</option>
             </select>
 
             <button
@@ -922,9 +955,24 @@ export const AdminCustomers: React.FC = () => {
                             {displayName.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <strong style={{ color: 'var(--brand-primary)', display: 'block', fontSize: '0.92rem' }}>
-                              {displayName}
-                            </strong>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <strong style={{ color: 'var(--brand-primary)', display: 'block', fontSize: '0.92rem' }}>
+                                {displayName}
+                              </strong>
+                              {customer.archived && (
+                                <span style={{
+                                  fontSize: '0.66rem',
+                                  backgroundColor: '#fef3c7',
+                                  color: '#92400e',
+                                  padding: '1px 6px',
+                                  borderRadius: '4px',
+                                  fontWeight: 700,
+                                  border: '1px solid #fde68a'
+                                }}>
+                                  ARCHIVED
+                                </span>
+                              )}
+                            </div>
                             <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
                               UID: {customer.uid.substring(0, 10)}...
                             </span>
@@ -1075,15 +1123,27 @@ export const AdminCustomers: React.FC = () => {
                           >
                             CRM Profile
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCustomer(customer)}
-                            className="btn btn-outline btn-sm"
-                            style={{ padding: '6px 8px', color: '#dc2626', borderColor: '#fca5a5' }}
-                            title="Delete patron from Firebase"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          {customer.archived ? (
+                            <button
+                              type="button"
+                              onClick={() => handleUnarchiveCustomer(customer)}
+                              className="btn btn-outline btn-sm"
+                              style={{ padding: '6px 8px', color: '#0369a1', borderColor: '#bae6fd' }}
+                              title="Restore patron account from archives"
+                            >
+                              <ArchiveRestore size={14} />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleArchiveCustomer(customer)}
+                              className="btn btn-outline btn-sm"
+                              style={{ padding: '6px 8px', color: '#b45309', borderColor: '#fde68a' }}
+                              title="Archive patron account (Preserves User Data Privacy & Orders)"
+                            >
+                              <Archive size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1788,26 +1848,41 @@ export const AdminCustomers: React.FC = () => {
                   );
                 })()}
 
-                {/* Permanent Delete Patron Account Card */}
-                <div className="card" style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', backgroundColor: '#fff5f5', borderColor: '#fecdd3' }}>
+                {/* Archive Patron Account Card */}
+                <div className="card" style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', backgroundColor: selectedCustomer.archived ? '#f0f9ff' : '#fffbeb', borderColor: selectedCustomer.archived ? '#bae6fd' : '#fde68a' }}>
                   <div>
-                    <h5 style={{ margin: 0, fontSize: '0.92rem', color: '#b91c1c', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Trash2 size={16} color="#dc2626" /> Permanent Patron Deletion
+                    <h5 style={{ margin: 0, fontSize: '0.92rem', color: selectedCustomer.archived ? '#0369a1' : '#b45309', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {selectedCustomer.archived ? <ArchiveRestore size={16} color="#0369a1" /> : <Archive size={16} color="#b45309" />}
+                      {selectedCustomer.archived ? 'Archived Patron Account' : 'Archive Patron Account'}
                     </h5>
                     <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                      Permanently purge this patron account, credentials, and profile records from Firebase Authentication and Cloud Firestore.
+                      {selectedCustomer.archived
+                        ? 'This patron is currently archived. All user profile data, orders, and addresses are preserved.'
+                        : 'Archive this patron to remove them from active CRM marketing lists while preserving all contact, order, and address history for user privacy and compliance.'}
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={isDeletingCustomer}
-                    onClick={() => handleDeleteCustomer()}
-                    className="btn btn-danger btn-sm"
-                    style={{ fontWeight: 700 }}
-                  >
-                    {isDeletingCustomer ? 'Deleting...' : 'Delete Patron Account'}
-                  </button>
+                  {selectedCustomer.archived ? (
+                    <button
+                      type="button"
+                      disabled={isDeletingCustomer}
+                      onClick={() => handleUnarchiveCustomer()}
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontWeight: 700, color: '#0369a1', borderColor: '#bae6fd' }}
+                    >
+                      {isDeletingCustomer ? 'Restoring...' : 'Restore Patron Account'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isDeletingCustomer}
+                      onClick={() => handleArchiveCustomer()}
+                      className="btn btn-sm"
+                      style={{ fontWeight: 700, backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}
+                    >
+                      {isDeletingCustomer ? 'Archiving...' : 'Archive Patron Account'}
+                    </button>
+                  )}
                 </div>
 
               </div>

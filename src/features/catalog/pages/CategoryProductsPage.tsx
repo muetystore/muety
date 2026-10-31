@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { productService } from '@/features/catalog/services/productService';
 import { storageService } from '@/lib/storage/storageService';
-import { personalizationService } from '@/features/catalog/services/personalizationService';
+import { recommendationService } from '@/features/catalog/services/recommendationService';
 import { ProductCard } from '@/features/catalog/components/ProductCard';
 import { QuickViewModal } from '@/features/catalog/components/QuickViewModal';
 import { Product, Category } from '@/types';
@@ -12,30 +12,22 @@ import { ChevronRight, Sparkles, ArrowLeft } from 'lucide-react';
 export const CategoryProductsPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
 
+  const scrollStorageKey = `muety_cat_scroll_${slug || 'all'}`;
+  const savedScroll = useRef((() => {
+    try {
+      const val = sessionStorage.getItem(`muety_cat_scroll_${slug || 'all'}`);
+      return val ? parseInt(val, 10) : 0;
+    } catch {}
+    return 0;
+  })()).current;
+
   const [categories, setCategories] = useState<Category[]>(() => storageService.getCategories());
   const [allProducts, setAllProducts] = useState<Product[]>(() => storageService.getProducts());
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
-  const scrollRestoredRef = useRef(false);
-
-  const scrollStorageKey = `muety_category_scroll_${slug || 'all'}`;
-
-  // Save scroll position on unmount / beforeunload
-  useEffect(() => {
-    const handleSave = () => {
-      try {
-        sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
-      } catch {}
-    };
-    window.addEventListener('beforeunload', handleSave);
-    return () => {
-      window.removeEventListener('beforeunload', handleSave);
-      handleSave();
-    };
-  }, [scrollStorageKey]);
 
   useEffect(() => {
     if (slug) {
-      personalizationService.recordCategoryView(slug);
+      recommendationService.recordCategoryBrowse(slug);
     }
   }, [slug]);
 
@@ -77,26 +69,32 @@ export const CategoryProductsPage: React.FC = () => {
   });
 
   const displayedProducts = useMemo(() => {
-    return personalizationService.sortPersonalized(products);
+    return recommendationService.rankAndShuffleProducts(products);
   }, [products]);
 
-  // Restore scroll position after category products are rendered
+  // Persist scroll position
   useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(scrollStorageKey);
-      if (saved && !scrollRestoredRef.current && displayedProducts.length > 0) {
-        const top = parseInt(saved, 10);
-        if (!isNaN(top) && top > 0) {
-          scrollRestoredRef.current = true;
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              window.scrollTo({ top, behavior: 'instant' as ScrollBehavior });
-            });
-          });
-        }
-      }
-    } catch {}
-  }, [displayedProducts.length, scrollStorageKey]);
+    const handleScroll = () => {
+      try {
+        sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
+      } catch {}
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [scrollStorageKey]);
+
+  // Restore scroll position when returning from PDP
+  useEffect(() => {
+    if (savedScroll && savedScroll > 0) {
+      const timer = setTimeout(() => {
+        window.scrollTo({
+          top: savedScroll,
+          behavior: 'instant'
+        });
+      }, 70);
+      return () => clearTimeout(timer);
+    }
+  }, [savedScroll]);
 
   useDocumentTitle(category?.name || 'Category');
 
@@ -223,7 +221,10 @@ export const CategoryProductsPage: React.FC = () => {
               <ProductCard 
                 key={p.id} 
                 product={p} 
-                onQuickView={(prod) => setQuickViewProduct(prod)} 
+                onQuickView={(prod) => {
+                  recommendationService.recordProductView(prod);
+                  setQuickViewProduct(prod);
+                }} 
               />
             ))}
           </div>

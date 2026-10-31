@@ -1,4 +1,5 @@
 import { Product, Category } from '../types';
+import { recommendationService } from '../services/recommendationService';
 
 export type SortOption = 'featured' | 'newest' | 'price-low' | 'price-high' | 'rating';
 
@@ -30,7 +31,7 @@ export interface ProductFilterState {
 }
 
 export const SORT_LABELS: Record<SortOption, string> = {
-  'featured': 'Featured Picks',
+  'featured': 'Featured & Recommended',
   'newest': 'Newest Arrivals',
   'price-low': 'Price: Low to High',
   'price-high': 'Price: High to Low',
@@ -593,16 +594,8 @@ export function sortProducts(products: Product[], sortBy: SortOption): Product[]
 
   switch (sortBy) {
     case 'featured': {
-      return list.sort((a, b) => {
-        const aFeat = a.featured ? 1 : 0;
-        const bFeat = b.featured ? 1 : 0;
-        if (bFeat !== aFeat) return bFeat - aFeat;
-
-        const dateDiff = new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-        if (dateDiff !== 0) return dateDiff;
-
-        return tieBreaker(a, b);
-      });
+      // Dynamic recommendation & behavioral shuffle based on user interest
+      return recommendationService.rankAndShuffleProducts(list);
     }
 
     case 'newest': {

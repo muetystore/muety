@@ -1,4 +1,4 @@
-import { Coupon } from '@/types';
+import { Coupon, CouponUserContext, CouponRedemption } from '@/types';
 import { storageService } from '@/lib/storage/storageService';
 import { db } from '@/lib/firebase/firebase';
 import { 
@@ -27,7 +27,58 @@ export const couponService = {
     });
   },
 
-  validateCoupon(code: string, cartSubtotal: number): { valid: boolean; coupon?: Coupon; discountAmount: number; message: string } {
+  getUserCouponUsageCount(coupon: Coupon, userContext?: CouponUserContext): number {
+    if (!userContext) return 0;
+    const uid = (userContext.userId || '').toLowerCase().trim();
+    const email = (userContext.email || '').toLowerCase().trim();
+    const cleanPhone = (userContext.phone || '').replace(/\D/g, '');
+
+    if (!uid && !email && !cleanPhone) return 0;
+
+    let count = 0;
+
+    // 1. Check coupon redemptions log
+    if (Array.isArray(coupon.redemptions)) {
+      coupon.redemptions.forEach(r => {
+        const rUid = (r.userId || '').toLowerCase().trim();
+        const rEmail = (r.email || '').toLowerCase().trim();
+        const rPhone = (r.phone || '').replace(/\D/g, '');
+
+        if ((uid && rUid === uid) || (email && rEmail === email) || (cleanPhone && rPhone && rPhone === cleanPhone)) {
+          count++;
+        }
+      });
+    }
+
+    // 2. Cross-verify with completed orders in storage for this coupon code
+    try {
+      const orders = storageService.getOrders();
+      const codeUpper = coupon.code.toUpperCase().trim();
+      const userOrders = orders.filter(o => {
+        if (!o.appliedCoupon || o.appliedCoupon.toUpperCase().trim() !== codeUpper) return false;
+        // Don't count cancelled/refunded orders
+        if (o.orderStatus === 'cancelled') return false;
+
+        const oCustId = (o.customerId || '').toLowerCase().trim();
+        const oEmail = (o.customerEmail || '').toLowerCase().trim();
+        const oPhone = (o.customerPhone || '').replace(/\D/g, '');
+
+        return (uid && oCustId === uid) || (email && oEmail === email) || (cleanPhone && oPhone && oPhone === cleanPhone);
+      });
+
+      count = Math.max(count, userOrders.length);
+    } catch {
+      // fallback to redemption count
+    }
+
+    return count;
+  },
+
+  validateCoupon(
+    code: string, 
+    cartSubtotal: number, 
+    userContext?: CouponUserContext
+  ): { valid: boolean; coupon?: Coupon; discountAmount: number; message: string } {
     const coupons = storageService.getCoupons();
     const coupon = coupons.find(c => c.code.toUpperCase() === code.trim().toUpperCase());
 
@@ -48,8 +99,20 @@ export const couponService = {
       return { valid: false, discountAmount: 0, message: 'This promo code has expired' };
     }
 
+    // Overall / Total usage limit check across all customers
     if (coupon.usageLimit && (coupon.usageCount || 0) >= coupon.usageLimit) {
-      return { valid: false, discountAmount: 0, message: 'This promo code has reached its maximum redemption limit' };
+      return { valid: false, discountAmount: 0, message: 'This promo code has reached its maximum total redemptions' };
+    }
+
+    // Per-user usage limit check (one code which time to use one user, e.g. 1 use per customer)
+    if (coupon.perCustomerLimit && coupon.perCustomerLimit > 0 && userContext) {
+      const userUsage = this.getUserCouponUsageCount(coupon, userContext);
+      if (userUsage >= coupon.perCustomerLimit) {
+        const msg = coupon.perCustomerLimit === 1
+          ? 'This exclusive one-time promo code has already been redeemed for your account/phone.'
+          : `You have reached the maximum limit (${coupon.perCustomerLimit} times) for this promo code.`;
+        return { valid: false, discountAmount: 0, message: msg };
+      }
     }
 
     if (cartSubtotal < coupon.minSpend) {
@@ -76,6 +139,38 @@ export const couponService = {
       discountAmount: Number(discountAmount.toFixed(2)),
       message: `Coupon ${coupon.code} applied successfully!`
     };
+  },
+
+  async recordCouponUsage(
+    code: string, 
+    userContext?: CouponUserContext & { orderId?: string }
+  ): Promise<boolean> {
+    const coupons = storageService.getCoupons();
+    const idx = coupons.findIndex(c => c.code.toUpperCase() === code.trim().toUpperCase());
+    if (idx === -1) return false;
+
+    const coupon = { ...coupons[idx] };
+    coupon.usageCount = (coupon.usageCount || 0) + 1;
+
+    const redemption: CouponRedemption = {
+      userId: userContext?.userId,
+      email: userContext?.email,
+      phone: userContext?.phone,
+      orderId: userContext?.orderId,
+      usedAt: new Date().toISOString()
+    };
+
+    const redemptions = Array.isArray(coupon.redemptions) ? [...coupon.redemptions, redemption] : [redemption];
+    coupon.redemptions = redemptions;
+
+    const usedBySet = new Set(Array.isArray(coupon.usedByUsers) ? coupon.usedByUsers : []);
+    if (userContext?.userId) usedBySet.add(userContext.userId.toLowerCase().trim());
+    if (userContext?.email) usedBySet.add(userContext.email.toLowerCase().trim());
+    if (userContext?.phone) usedBySet.add(userContext.phone.replace(/\D/g, ''));
+    coupon.usedByUsers = Array.from(usedBySet);
+
+    await this.updateCoupon(coupon);
+    return true;
   },
 
   async addCoupon(coupon: Coupon): Promise<Coupon> {

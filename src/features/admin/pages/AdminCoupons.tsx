@@ -28,6 +28,7 @@ export const AdminCoupons: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [expiresAt, setExpiresAt] = useState('2027-12-31');
   const [usageLimit, setUsageLimit] = useState<number | undefined>(undefined);
+  const [perCustomerLimit, setPerCustomerLimit] = useState<number | undefined>(1);
   const [isStackable, setIsStackable] = useState(false);
   const [description, setDescription] = useState('');
   const [isActive, setIsActive] = useState(true);
@@ -54,6 +55,7 @@ export const AdminCoupons: React.FC = () => {
     setStartDate(new Date().toISOString().split('T')[0]);
     setExpiresAt('2027-12-31');
     setUsageLimit(undefined);
+    setPerCustomerLimit(1);
     setIsStackable(false);
     setDescription('Exclusive promotional discount code.');
     setIsActive(true);
@@ -72,6 +74,7 @@ export const AdminCoupons: React.FC = () => {
     setStartDate(c.startDate ? c.startDate.split('T')[0] : '');
     setExpiresAt(c.expiresAt ? c.expiresAt.split('T')[0] : '');
     setUsageLimit(c.usageLimit);
+    setPerCustomerLimit(c.perCustomerLimit !== undefined ? c.perCustomerLimit : 1);
     setIsStackable(Boolean(c.isStackable));
     setDescription(c.description || '');
     setIsActive(c.isActive);
@@ -129,6 +132,7 @@ export const AdminCoupons: React.FC = () => {
         startDate: startDate ? new Date(startDate).toISOString() : undefined,
         expiresAt: expiresAt ? (expiresAt.includes('T') ? expiresAt : `${expiresAt}T23:59:59.000Z`) : '2027-12-31T23:59:59.000Z',
         usageLimit: usageLimit !== undefined && usageLimit > 0 ? Number(usageLimit) : undefined,
+        perCustomerLimit: perCustomerLimit !== undefined && perCustomerLimit > 0 ? Number(perCustomerLimit) : undefined,
         isStackable,
         description,
         isActive
@@ -160,6 +164,7 @@ export const AdminCoupons: React.FC = () => {
         startDate: startDate ? new Date(startDate).toISOString() : undefined,
         expiresAt: expiresAt ? (expiresAt.includes('T') ? expiresAt : `${expiresAt}T23:59:59.000Z`) : '2027-12-31T23:59:59.000Z',
         usageLimit: usageLimit !== undefined && usageLimit > 0 ? Number(usageLimit) : undefined,
+        perCustomerLimit: perCustomerLimit !== undefined && perCustomerLimit > 0 ? Number(perCustomerLimit) : undefined,
         isStackable,
         description,
         isActive,
@@ -215,8 +220,8 @@ export const AdminCoupons: React.FC = () => {
               <th style={{ padding: '10px 12px' }}>Code</th>
               <th style={{ padding: '10px 12px' }}>Discount</th>
               <th style={{ padding: '10px 12px' }}>Min Spend</th>
-              <th style={{ padding: '10px 12px' }}>Usage Count</th>
-              <th style={{ padding: '10px 12px' }}>Expiry Date</th>
+              <th style={{ padding: '10px 12px' }}>Redemptions & Limits</th>
+              <th style={{ padding: '10px 12px' }}>Validity</th>
               <th style={{ padding: '10px 12px' }}>Status</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>Actions</th>
             </tr>
@@ -245,11 +250,33 @@ export const AdminCoupons: React.FC = () => {
                 <td style={{ padding: '14px 12px', color: 'var(--text-secondary)' }}>
                   ₹{c.minSpend}
                 </td>
-                <td style={{ padding: '14px 12px', fontWeight: 600 }}>
-                  {c.usageCount} times
+                <td style={{ padding: '14px 12px' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--brand-primary)', fontSize: '0.9rem' }}>
+                    {c.usageCount || 0} {c.usageLimit ? `/ ${c.usageLimit} max` : 'used'}
+                  </div>
+                  <div style={{ marginTop: '3px' }}>
+                    {c.perCustomerLimit === 1 ? (
+                      <span style={{ fontSize: '0.68rem', backgroundColor: '#e0e7ff', color: '#3730a3', fontWeight: 700, padding: '2px 6px', borderRadius: '4px' }}>
+                        1 per patron (One-Time)
+                      </span>
+                    ) : c.perCustomerLimit ? (
+                      <span style={{ fontSize: '0.68rem', backgroundColor: '#f1f5f9', color: '#475569', fontWeight: 600, padding: '2px 6px', borderRadius: '4px' }}>
+                        Max {c.perCustomerLimit} / patron
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '0.68rem', backgroundColor: '#f8fafc', color: '#64748b', fontWeight: 500, padding: '2px 6px', borderRadius: '4px' }}>
+                        Unlimited / patron
+                      </span>
+                    )}
+                  </div>
                 </td>
-                <td style={{ padding: '14px 12px', color: 'var(--text-secondary)' }}>
-                  {c.expiresAt}
+                <td style={{ padding: '14px 12px', color: 'var(--text-secondary)', fontSize: '0.84rem' }}>
+                  <div>Until: {c.expiresAt ? c.expiresAt.split('T')[0] : 'No Expiry'}</div>
+                  {c.startDate && (
+                    <div style={{ fontSize: '0.74rem', color: 'var(--brand-muted)', marginTop: '2px' }}>
+                      From: {c.startDate.split('T')[0]}
+                    </div>
+                  )}
                 </td>
                 <td style={{ padding: '14px 12px' }}>
                   <button
@@ -364,28 +391,46 @@ export const AdminCoupons: React.FC = () => {
               </div>
             </div>
 
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Minimum Order Spend (₹)</label>
+              <input 
+                type="number" 
+                min={0} 
+                value={minSpend} 
+                onChange={e => setMinSpend(Number(e.target.value))} 
+                className="form-input" 
+              />
+            </div>
+
             <div className="grid-2" style={{ gap: '1rem' }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Minimum Order Spend (₹)</label>
-                <input 
-                  type="number" 
-                  min={0} 
-                  value={minSpend} 
-                  onChange={e => setMinSpend(Number(e.target.value))} 
-                  className="form-input" 
-                />
-              </div>
-
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Max Usage Limit</label>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Total Store Redemptions Limit</label>
                 <input 
                   type="number" 
                   min={1} 
-                  placeholder="Optional overall limit"
+                  placeholder="Optional overall store limit (e.g. 100)"
                   value={usageLimit ?? ''} 
                   onChange={e => setUsageLimit(e.target.value ? Number(e.target.value) : undefined)} 
                   className="form-input" 
                 />
+                <span style={{ fontSize: '0.72rem', color: 'var(--brand-muted)', marginTop: '2px', display: 'block' }}>
+                  Total times this code can be used across all customers.
+                </span>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, color: '#1e293b' }}>Per-Customer Limit (One-Time Offer)</label>
+                <input 
+                  type="number" 
+                  min={1} 
+                  placeholder="1 (Default: One-time use per customer)"
+                  value={perCustomerLimit ?? ''} 
+                  onChange={e => setPerCustomerLimit(e.target.value ? Number(e.target.value) : undefined)} 
+                  className="form-input" 
+                />
+                <span style={{ fontSize: '0.72rem', color: 'var(--brand-muted)', marginTop: '2px', display: 'block' }}>
+                  Set to 1 so each customer can only redeem once.
+                </span>
               </div>
             </div>
 

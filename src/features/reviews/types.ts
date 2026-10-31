@@ -17,6 +17,8 @@ export interface PatronReview {
   showOnHome?: boolean;
   displayOrder?: number;
   photoUrl?: string;
+  archived?: boolean;
+  archivedAt?: string;
   createdAt: string;
   updatedAt?: string;
 }

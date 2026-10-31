@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { productService } from '@/features/catalog/services/productService';
@@ -28,80 +28,95 @@ import {
   Filter
 } from 'lucide-react';
 
-const ADMIN_PRODUCTS_STATE_KEY = 'muety_admin_products_listing_state';
-
-interface SavedAdminListingState {
-  search: string;
-  selectedCat: string;
-  availabilityFilter: 'all' | 'available' | 'sold_out';
-  scrollY: number;
-  timestamp: number;
-}
-
 export const AdminProducts: React.FC = () => {
   useDocumentTitle('Products Catalog ERP');
   const navigate = useNavigate();
   const { user } = useAuth();
   const { success, error } = useNotification();
 
-  // 1. Retrieve any saved listing state (search, filters, scroll position)
-  const savedState = useMemo<SavedAdminListingState | null>(() => {
+  // Restore previous filters & scroll position when returning from product edit page
+  const savedState = useRef((() => {
     try {
-      const raw = sessionStorage.getItem(ADMIN_PRODUCTS_STATE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        // Expire if older than 2 hours
-        if (Date.now() - parsed.timestamp < 2 * 60 * 60 * 1000) {
-          return parsed;
-        }
-      }
+      const raw = sessionStorage.getItem('muety_admin_products_view_state');
+      if (raw) return JSON.parse(raw);
     } catch {}
     return null;
-  }, []);
+  })()).current;
 
-  const [products, setProducts] = useState<Product[]>(() => storageService.getProducts());
-  const [categories, setCategories] = useState<Category[]>(() => storageService.getCategories());
-  const [search, setSearch] = useState<string>(() => savedState?.search || '');
-  const [selectedCat, setSelectedCat] = useState<string>(() => savedState?.selectedCat || 'all');
-  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'sold_out'>(
-    () => savedState?.availabilityFilter || 'all'
-  );
+  const [products, setProducts] = useState<Product[]>(storageService.getProducts());
+  const [categories, setCategories] = useState<Category[]>(storageService.getCategories());
+  const [search, setSearch] = useState(savedState?.search || '');
+  const [selectedCat, setSelectedCat] = useState(savedState?.selectedCat || 'all');
+  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'sold_out'>(savedState?.availabilityFilter || 'all');
   const [togglingAvailabilityId, setTogglingAvailabilityId] = useState<string | null>(null);
   const [togglingFlagKey, setTogglingFlagKey] = useState<string | null>(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const isRestoringAdminScroll = useRef<boolean>(Boolean(savedState?.scrollY && savedState.scrollY > 0));
 
-  const scrollRestoredRef = useRef(false);
+  // Continuously track filters and scroll position to sessionStorage
+  useEffect(() => {
+    const persistState = () => {
+      // Do not overwrite with 0 while restoring previous position
+      if (isRestoringAdminScroll.current) return;
+      try {
+        sessionStorage.setItem('muety_admin_products_view_state', JSON.stringify({
+          search,
+          selectedCat,
+          availabilityFilter,
+          scrollY: window.scrollY
+        }));
+      } catch {}
+    };
 
-  // Helper to persist current listing state
-  const saveCurrentListingState = useCallback((targetScrollY?: number) => {
+    window.addEventListener('scroll', persistState, { passive: true });
+    return () => window.removeEventListener('scroll', persistState);
+  }, [search, selectedCat, availabilityFilter]);
+
+  // Restore scroll position after initial render smoothly without jumping
+  useLayoutEffect(() => {
+    if (!savedState?.scrollY || savedState.scrollY <= 0) {
+      isRestoringAdminScroll.current = false;
+      return;
+    }
+
+    const targetY = savedState.scrollY;
+    let frameId: number;
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    const attemptScroll = () => {
+      attempts++;
+      const currentHeight = document.documentElement.scrollHeight;
+      const viewportHeight = window.innerHeight;
+
+      if (currentHeight >= targetY + (viewportHeight * 0.1) || attempts >= maxAttempts) {
+        window.scrollTo({
+          top: targetY,
+          behavior: 'instant'
+        });
+        setTimeout(() => {
+          isRestoringAdminScroll.current = false;
+        }, 120);
+      } else {
+        frameId = requestAnimationFrame(attemptScroll);
+      }
+    };
+
+    frameId = requestAnimationFrame(attemptScroll);
+    return () => cancelAnimationFrame(frameId);
+  }, []);
+
+  const handleEditProduct = (prodId: string) => {
     try {
-      const stateToSave: SavedAdminListingState = {
+      sessionStorage.setItem('muety_admin_products_view_state', JSON.stringify({
         search,
         selectedCat,
         availabilityFilter,
-        scrollY: targetScrollY !== undefined ? targetScrollY : window.scrollY,
-        timestamp: Date.now()
-      };
-      sessionStorage.setItem(ADMIN_PRODUCTS_STATE_KEY, JSON.stringify(stateToSave));
+        scrollY: window.scrollY
+      }));
     } catch {}
-  }, [search, selectedCat, availabilityFilter]);
-
-  // Navigate to editor preserving state & scroll
-  const handleNavigateToEditor = (url: string) => {
-    saveCurrentListingState(window.scrollY);
-    navigate(url);
+    navigate(`/admin/products/${prodId}/edit`);
   };
-
-  // Keep state updated in sessionStorage on filter changes and unmount
-  useEffect(() => {
-    saveCurrentListingState();
-    const handleBeforeUnload = () => saveCurrentListingState(window.scrollY);
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      saveCurrentListingState(window.scrollY);
-    };
-  }, [saveCurrentListingState]);
 
   const loadCatalogData = () => {
     setProducts(productService.getAllProducts());
@@ -123,21 +138,6 @@ export const AdminProducts: React.FC = () => {
       if (typeof unsubProds === 'function') unsubProds();
     };
   }, []);
-
-  // Restore scroll position after products are populated
-  useEffect(() => {
-    if (savedState?.scrollY && savedState.scrollY > 0 && !scrollRestoredRef.current && products.length > 0) {
-      scrollRestoredRef.current = true;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.scrollTo({
-            top: savedState.scrollY,
-            behavior: 'instant' as ScrollBehavior
-          });
-        });
-      });
-    }
-  }, [products.length, savedState]);
 
   const handleToggleAvailability = async (prod: Product, targetAvailability: 'available' | 'sold_out') => {
     const confirmMsg = targetAvailability === 'sold_out'
@@ -246,7 +246,7 @@ export const AdminProducts: React.FC = () => {
         </div>
 
         <button 
-          onClick={() => handleNavigateToEditor('/admin/products/new')} 
+          onClick={() => navigate('/admin/products/new')} 
           className="btn btn-primary btn-md" 
           style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
         >
@@ -581,7 +581,7 @@ export const AdminProducts: React.FC = () => {
                     <td style={{ padding: '14px 18px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                         <button 
-                          onClick={() => handleNavigateToEditor(`/admin/products/${prod.id}/edit`)} 
+                          onClick={() => handleEditProduct(prod.id)} 
                           className="btn btn-outline btn-sm"
                         >
                           <Edit3 size={14} /> Edit
@@ -724,7 +724,7 @@ export const AdminProducts: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => handleNavigateToEditor(`/admin/products/${prod.id}/edit`)}
+                  onClick={() => handleEditProduct(prod.id)}
                   className="btn btn-primary btn-sm"
                   style={{ fontSize: '0.75rem', padding: '4px 12px' }}
                 >

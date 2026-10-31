@@ -5,6 +5,7 @@ import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { productService } from '@/features/catalog/services/productService';
 import { reviewService } from '@/features/reviews/services/reviewService';
 import { storageService } from '@/lib/storage/storageService';
+import { recommendationService } from '@/features/catalog/services/recommendationService';
 import { useCart } from '@/shared/context/CartContext';
 import { useNotification } from '@/shared/context/NotificationContext';
 import { ProductCard } from '@/features/catalog/components/ProductCard';
@@ -54,7 +55,8 @@ import { useAuth } from '@/shared/context/AuthContext';
 import { Product, PatronReview, Coupon } from '@/types';
 import { couponService } from '@/features/coupons/services/couponService';
 import { uploadToCloudinary } from '@/lib/media/cloudinary';
-import { personalizationService } from '@/features/catalog/services/personalizationService';
+import { orderService } from '@/features/orders/services/orderService';
+import { getUserRoles } from '@/shared/utils/permissions';
 
 export const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -723,15 +725,6 @@ export const ProductDetailPage: React.FC = () => {
     }));
   };
 
-  const [reviewerName, setReviewerName] = useState(user?.displayName || '');
-  const [reviewerLocation, setReviewerLocation] = useState('India');
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewTitle, setReviewTitle] = useState('');
-  const [reviewComment, setReviewComment] = useState('');
-  const [reviewPhotoFile, setReviewPhotoFile] = useState<File | null>(null);
-  const [reviewPhotoPreview, setReviewPhotoPreview] = useState<string | null>(null);
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
-  const [showReviewForm, setShowReviewForm] = useState(false);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<{ url: string; author: string } | null>(null);
   const [selectedRatingFilter, setSelectedRatingFilter] = useState<number | 'all'>('all');
   const [hoverRating, setHoverRating] = useState<number | null>(null);
@@ -761,13 +754,13 @@ export const ProductDetailPage: React.FC = () => {
         setProduct(cached);
         setIsLoading(false);
         storageService.addRecentlyViewed(cached.id);
-        personalizationService.recordProductView(cached);
+        recommendationService.recordProductView(cached);
         setSelectedImage(0);
         resetZoom();
         if (cached.colors && cached.colors.length > 0) setSelectedColor(cached.colors[0]);
         if (cached.sizes && cached.sizes.length > 0) setSelectedSize(cached.sizes[0]);
         setQuantity(1);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: 'instant' });
       } else {
         setIsLoading(true);
       }
@@ -777,14 +770,14 @@ export const ProductDetailPage: React.FC = () => {
           if (found) {
             setProduct(found);
             storageService.addRecentlyViewed(found.id);
-            personalizationService.recordProductView(found);
+            recommendationService.recordProductView(found);
             if (!cached) {
               setSelectedImage(0);
               resetZoom();
               if (found.colors && found.colors.length > 0) setSelectedColor(found.colors[0]);
               if (found.sizes && found.sizes.length > 0) setSelectedSize(found.sizes[0]);
               setQuantity(1);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              window.scrollTo({ top: 0, behavior: 'instant' });
             }
           }
           setIsLoading(false);
@@ -946,98 +939,6 @@ export const ProductDetailPage: React.FC = () => {
       </div>
     );
   }
-
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      warning('Photo size must be under 10MB.', 'File Too Large');
-      return;
-    }
-    setReviewPhotoFile(file);
-    const reader = new FileReader();
-    reader.onload = (uploadEvt) => {
-      setReviewPhotoPreview(uploadEvt.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleAddReview = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanAuthor = reviewerName.trim();
-    const cleanComment = reviewComment.trim();
-    const cleanTitle = reviewTitle.trim() || 'Patron Review';
-
-    if (!cleanAuthor || !cleanComment) {
-      warning('Please provide your name and review comment.', 'Missing Information');
-      return;
-    }
-
-    setIsSubmittingReview(true);
-    let uploadedPhotoUrl: string | undefined = undefined;
-
-    if (reviewPhotoFile) {
-      try {
-        const uploadRes = await uploadToCloudinary(reviewPhotoFile, {
-          folder: 'muety/reviews',
-          publicId: `patron_rev_${Date.now()}`
-        });
-        if (uploadRes && uploadRes.url) {
-          uploadedPhotoUrl = uploadRes.url;
-        }
-      } catch (err: any) {
-        console.warn('PDP review photo upload note:', err);
-        if (reviewPhotoPreview) {
-          uploadedPhotoUrl = reviewPhotoPreview;
-        }
-      }
-    }
-
-    try {
-      const createdReview = await reviewService.addReview({
-        productId: product.id,
-        productSlug: product.slug,
-        productName: product.name,
-        authorName: cleanAuthor,
-        authorLocation: reviewerLocation.trim() || 'India',
-        rating: reviewRating,
-        title: cleanTitle,
-        quote: cleanComment,
-        comment: cleanComment,
-        status: 'approved',
-        isFeatured: false,
-        verifiedPurchase: true,
-        photoUrl: uploadedPhotoUrl || ''
-      });
-
-      setLiveReviews(prev => [createdReview, ...prev.filter(r => r.id !== createdReview.id)]);
-
-      // Audit Log for REVIEW_CREATED
-      await auditService.logAction({
-        actorUid: user?.uid || 'patron-guest',
-        actorEmail: user?.email || 'patron@muety.in',
-        actorRole: (user?.roles?.[0] as any) || 'customer',
-        action: 'REVIEW_CREATED',
-        entityType: 'PRODUCT',
-        entityId: createdReview.id,
-        after: createdReview,
-        reason: `Submitted review for ${product.name}`
-      });
-
-      success('Thank you! Your testimonial and photograph have been published.', 'Review Added');
-      setReviewerName(user?.displayName || '');
-      setReviewerLocation('India');
-      setReviewTitle('');
-      setReviewComment('');
-      setReviewPhotoFile(null);
-      setReviewPhotoPreview(null);
-      setShowReviewForm(false);
-    } catch (err: any) {
-      warning(err?.message || 'Failed to submit review.');
-    } finally {
-      setIsSubmittingReview(false);
-    }
-  };
 
   const isSoldOut = product.availability === 'sold_out' || product.stock === 0;
   const isManualSoldOut = product.availability === 'sold_out';
@@ -1355,18 +1256,9 @@ export const ProductDetailPage: React.FC = () => {
                   <Sparkles size={13} style={{ color: 'var(--brand-accent)' }} />
                   <span>Handcrafted Pure Silk &bull; Salem Atelier</span>
                 </span>
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setOpenAccordion(prev => ({ ...prev, reviews: true }));
-                    setShowReviewForm(true);
-                    const el = document.getElementById('pdp-accordion-reviews') || document.getElementById('pdp-tabs-section');
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className="pdp-review-count pdp-flipkart-review-link"
-                >
-                  Be the first to review
-                </button>
+                <span className="pdp-review-count" style={{ color: 'var(--brand-muted)', fontSize: '0.82rem' }}>
+                  Newly Added Masterpiece
+                </span>
               </div>
             )}
 
@@ -1963,246 +1855,24 @@ export const ProductDetailPage: React.FC = () => {
                     <h3 style={{ fontSize: '1.25rem', color: 'var(--brand-primary)', margin: 0, fontFamily: 'var(--font-heading)' }}>Patron Testimonials</h3>
                     <p style={{ color: 'var(--brand-muted)', fontSize: '0.88rem', margin: '4px 0 0' }}>Authentic reflections from verified patrons draped in MUETY creations.</p>
                   </div>
-                  <button 
-                    onClick={() => setShowReviewForm(!showReviewForm)} 
-                    className="btn btn-outline btn-sm"
-                    style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    {showReviewForm ? (
-                      <>
-                        <X size={15} />
-                        <span>Cancel Review</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={15} color="#c9a227" />
-                        <span>Write a Review</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {showReviewForm && (
-                  <div className="pdp-muety-form-wrapper animate-fade-in">
-                    <div className="pdp-muety-form-body">
-                      <div className="pdp-muety-form-header-row">
-                        <div>
-                          <div className="pdp-muety-form-badge">
-                            <Sparkles size={13} color="var(--brand-accent)" />
-                            <span>MUETY Patron Sanctuary</span>
-                          </div>
-                          <h4 className="pdp-muety-form-title">Submit Your Drape Experience</h4>
-                          <p className="pdp-muety-form-subtitle">
-                            Share your authentic reflections on fabric feel, drape elegance, and artisanal luster.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowReviewForm(false)}
-                          className="pdp-muety-form-close-btn"
-                          aria-label="Close review form"
-                          title="Close"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
-
-                      <form onSubmit={handleAddReview} className="pdp-muety-form">
-                        <div className="pdp-muety-form-row">
-                          <div className="form-group pdp-muety-form-group">
-                            <label className="form-label pdp-muety-form-label">
-                              <span>Your Full Name</span>
-                              <span className="pdp-req-star">*</span>
-                            </label>
-                            <input 
-                              type="text" 
-                              value={reviewerName} 
-                              onChange={e => setReviewerName(e.target.value)} 
-                              required 
-                              className="form-input pdp-muety-form-input" 
-                              placeholder="e.g. Ananya Sharma" 
-                            />
-                          </div>
-
-                          <div className="form-group pdp-muety-form-group">
-                            <label className="form-label pdp-muety-form-label">
-                              <span>City / Location</span>
-                              <span className="pdp-opt-tag">(Optional)</span>
-                            </label>
-                            <input 
-                              type="text" 
-                              value={reviewerLocation} 
-                              onChange={e => setReviewerLocation(e.target.value)} 
-                              className="form-input pdp-muety-form-input" 
-                              placeholder="e.g. Chennai, Tamil Nadu" 
-                            />
-                          </div>
-                        </div>
-
-                        {/* Interactive 5-Star Rating Selector */}
-                        <div className="form-group pdp-muety-form-group">
-                          <label className="form-label pdp-muety-form-label">
-                            <span>Patron Rating</span>
-                            <span className="pdp-req-star">*</span>
-                          </label>
-                          <div className="pdp-muety-rating-container">
-                            <div 
-                              className="pdp-muety-stars-box"
-                              onMouseLeave={() => setHoverRating(null)}
-                            >
-                              {[1, 2, 3, 4, 5].map((val) => {
-                                const activeStarRating = hoverRating !== null ? hoverRating : reviewRating;
-                                const isFilled = val <= activeStarRating;
-                                return (
-                                  <button
-                                    key={val}
-                                    type="button"
-                                    onClick={() => setReviewRating(val)}
-                                    onMouseEnter={() => setHoverRating(val)}
-                                    className="pdp-muety-star-btn"
-                                    title={`${val} Star${val > 1 ? 's' : ''}`}
-                                    aria-label={`Select ${val} star rating`}
-                                  >
-                                    <Star 
-                                      size={24} 
-                                      fill={isFilled ? '#f59e0b' : 'none'} 
-                                      color={isFilled ? '#f59e0b' : '#cbd5e1'} 
-                                      strokeWidth={1.5}
-                                    />
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            <div className="pdp-muety-rating-badge">
-                              <Star size={13} fill="#c9a227" color="#c9a227" />
-                              <span className="pdp-muety-rating-score">{(hoverRating ?? reviewRating)}.0</span>
-                              <span className="pdp-muety-rating-desc">
-                                {(hoverRating ?? reviewRating) === 5 && 'Exceptional Drape'}
-                                {(hoverRating ?? reviewRating) === 4 && 'Very Good Quality'}
-                                {(hoverRating ?? reviewRating) === 3 && 'Pleasing Experience'}
-                                {(hoverRating ?? reviewRating) === 2 && 'Fair Drape'}
-                                {(hoverRating ?? reviewRating) === 1 && 'Needs Improvement'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="form-group pdp-muety-form-group">
-                          <label className="form-label pdp-muety-form-label">
-                            <span>Review Title</span>
-                            <span className="pdp-opt-tag">(Optional)</span>
-                          </label>
-                          <input 
-                            type="text" 
-                            value={reviewTitle} 
-                            onChange={e => setReviewTitle(e.target.value)} 
-                            className="form-input pdp-muety-form-input" 
-                            placeholder="e.g. Royal luster and exquisite zari craftsmanship" 
-                          />
-                        </div>
-
-                        <div className="form-group pdp-muety-form-group">
-                          <label className="form-label pdp-muety-form-label">
-                            <span>Review Comment</span>
-                            <span className="pdp-req-star">*</span>
-                          </label>
-                          <textarea 
-                            value={reviewComment} 
-                            onChange={e => setReviewComment(e.target.value)} 
-                            required 
-                            rows={3} 
-                            className="form-input form-textarea pdp-muety-form-input" 
-                            placeholder="Describe your drape experience with this creation..." 
-                            style={{ resize: 'vertical' }}
-                          />
-                        </div>
-
-                        {/* Patron Photograph Upload */}
-                        <div className="form-group pdp-muety-form-group">
-                          <label className="form-label pdp-muety-form-label">
-                            <span>Attach Drape / Saree Photo</span>
-                            <span className="pdp-opt-tag">(Optional)</span>
-                          </label>
-                          <div className="pdp-muety-photo-dropzone">
-                            <label className="pdp-muety-photo-upload-btn">
-                              <Upload size={16} color="var(--brand-accent)" />
-                              <span>{reviewPhotoFile ? 'Change Drape Photo' : 'Upload Drape Photo'}</span>
-                              <input 
-                                type="file" 
-                                accept="image/*" 
-                                onChange={handlePhotoSelect} 
-                                style={{ display: 'none' }} 
-                              />
-                            </label>
-
-                            {reviewPhotoPreview ? (
-                              <div className="pdp-muety-photo-preview-item">
-                                <img 
-                                  src={reviewPhotoPreview} 
-                                  alt="Preview" 
-                                  className="pdp-muety-photo-thumb"
-                                />
-                                <div className="pdp-muety-photo-details">
-                                  <span className="pdp-muety-photo-name">
-                                    {reviewPhotoFile?.name}
-                                  </span>
-                                  <span className="pdp-muety-photo-status">Ready to publish</span>
-                                </div>
-                                <button 
-                                  type="button" 
-                                  onClick={() => { setReviewPhotoFile(null); setReviewPhotoPreview(null); }}
-                                  className="pdp-muety-photo-del-btn"
-                                  title="Remove photo"
-                                  aria-label="Remove photo"
-                                >
-                                  <X size={15} />
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="pdp-muety-photo-guideline">
-                                PNG, JPG or WebP up to 10MB • Showcases authentic luster
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Actions Row */}
-                        <div className="pdp-muety-form-actions-row">
-                          <button 
-                            type="submit" 
-                            disabled={isSubmittingReview}
-                            className="btn btn-primary pdp-muety-submit-btn"
-                          >
-                            {isSubmittingReview ? (
-                              <>
-                                <Loader2 size={16} className="animate-spin" />
-                                <span>Publishing Reflection...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles size={16} />
-                                <span>Submit Patron Review</span>
-                              </>
-                            )}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setShowReviewForm(false)}
-                            className="btn btn-outline pdp-muety-cancel-btn"
-                          >
-                            Cancel
-                          </button>
-
-                          <div className="pdp-muety-trust-badge">
-                            <ShieldCheck size={15} color="var(--brand-accent)" />
-                            <span>Verified Patron Submission</span>
-                          </div>
-                        </div>
-                      </form>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      color: '#065f46',
+                      backgroundColor: '#ecfdf5',
+                      border: '1px solid #a7f3d0',
+                      padding: '4px 12px',
+                      borderRadius: 'var(--radius-full)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}>
+                      <ShieldCheck size={14} color="#059669" />
+                      <span>Verified Buyer Reviews Only</span>
+                    </span>
                   </div>
-                )}
+                </div>
 
                 {/* Star Filter Bar & Horizontal Carousel Controls */}
                 {allProductReviews.length > 0 && (
@@ -2258,7 +1928,7 @@ export const ProductDetailPage: React.FC = () => {
                 {filteredReviews.length === 0 ? (
                   <div style={{ padding: '2.5rem', textAlign: 'center', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px dashed #e7e2dc', color: 'var(--text-secondary)' }}>
                     {allProductReviews.length === 0 
-                      ? 'No testimonials published yet for this piece. Be the first patron to share your experience.'
+                      ? 'No testimonials published yet for this piece. Verified patrons can share their experience from their Orders page after delivery.'
                       : `No ${selectedRatingFilter}-star reviews found. Try selecting "All Reviews".`}
                   </div>
                 ) : (

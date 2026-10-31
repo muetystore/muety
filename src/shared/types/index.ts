@@ -87,6 +87,8 @@ export interface UserProfile {
   updatedAt?: string;
   lastLoginAt?: string;
   isBlocked?: boolean;
+  archived?: boolean;
+  archivedAt?: string;
   ordersCount?: number;
   totalSpent?: number;
   customerStatus?: CustomerStatus;

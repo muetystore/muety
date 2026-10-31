@@ -41,12 +41,12 @@ class ReviewService {
 
   getFeaturedReviews(): PatronReview[] {
     return storageService.getReviews()
-      .filter(r => r.status === 'approved' && (r.isFeatured || r.showOnHome))
+      .filter(r => !r.archived && (r.status || 'approved') === 'approved' && Boolean(r.isFeatured))
       .sort((a, b) => (a.displayOrder || 999) - (b.displayOrder || 999));
   }
 
   getApprovedReviews(productId?: string): PatronReview[] {
-    const reviews = storageService.getReviews().filter(r => r.status === 'approved');
+    const reviews = storageService.getReviews().filter(r => !r.archived && r.status === 'approved');
     if (productId) {
       const cleanTarget = productId.trim().toLowerCase();
       return reviews.filter(r => {
@@ -312,40 +312,35 @@ class ReviewService {
     return updated;
   }
 
+  async archiveReview(id: string): Promise<PatronReview | undefined> {
+    const existing = this.getReviewById(id);
+    if (!existing) return undefined;
+    const updated: PatronReview = {
+      ...existing,
+      archived: true,
+      archivedAt: new Date().toISOString(),
+      isFeatured: false,
+      showOnHome: false,
+      updatedAt: new Date().toISOString()
+    };
+    return this.updateReview(id, updated);
+  }
+
+  async unarchiveReview(id: string): Promise<PatronReview | undefined> {
+    const existing = this.getReviewById(id);
+    if (!existing) return undefined;
+    const updated: PatronReview = {
+      ...existing,
+      archived: false,
+      archivedAt: undefined,
+      updatedAt: new Date().toISOString()
+    };
+    return this.updateReview(id, updated);
+  }
+
   async deleteReview(id: string): Promise<boolean> {
-    const target = this.getReviewById(id);
-    
-    // 1. Client-side Firestore deleteDoc
-    if (db) {
-      try {
-        await deleteDoc(doc(db, 'reviews', id));
-        console.log(`MUETY Cloud: Review ${id} deleted from Firestore`);
-      } catch (err) {
-        console.warn('Firestore client review delete note:', err);
-      }
-    }
-
-    // 2. Server-side authoritative API delete to ensure cloud deletion succeeds
-    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
-      try {
-        const headers = await getAuthHeaders();
-        await fetch(getApiUrl('/api/reviews/delete'), {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ id })
-        });
-      } catch (apiErr) {
-        console.warn('Server review deletion note:', apiErr);
-      }
-    }
-
-    storageService.deleteReview(id);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('muety_reviews_updated'));
-    }
-    if (target?.productId) {
-      await this.syncProductRatingAndCount(target.productId);
-    }
+    // For user data privacy, archive instead of permanently purging
+    await this.archiveReview(id);
     return true;
   }
 
@@ -384,7 +379,11 @@ class ReviewService {
             snapshot.forEach(docSnap => {
               const raw = docSnap.data() as PatronReview;
               if (raw && (raw.id || docSnap.id)) {
-                cloudReviews.push({ ...raw, id: docSnap.id || raw.id });
+                cloudReviews.push({
+                  ...raw,
+                  id: docSnap.id || raw.id,
+                  status: raw.status || 'approved'
+                });
               }
             });
             cloudReviews.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -434,7 +433,11 @@ class ReviewService {
             snapshot.forEach(docSnap => {
               const raw = docSnap.data() as PatronReview;
               if (raw && (raw.id || docSnap.id)) {
-                cloudReviews.push({ ...raw, id: docSnap.id || raw.id });
+                cloudReviews.push({
+                  ...raw,
+                  id: docSnap.id || raw.id,
+                  status: raw.status || 'approved'
+                });
               }
             });
 
@@ -485,20 +488,31 @@ class ReviewService {
 
   getStatistics() {
     const reviews = this.getAllReviews();
-    const approved = reviews.filter(r => r.status === 'approved');
-    const pending = reviews.filter(r => r.status === 'pending');
-    const featured = reviews.filter(r => r.isFeatured && r.status === 'approved');
-    const verified = reviews.filter(r => r.verifiedPurchase);
+    const active = reviews.filter(r => !r.archived);
+    const archived = reviews.filter(r => Boolean(r.archived));
+    const approved = active.filter(r => (r.status || 'approved') === 'approved');
+    const pending = active.filter(r => r.status === 'pending');
+    const rejected = active.filter(r => r.status === 'rejected');
+    const featured = active.filter(r => Boolean(r.isFeatured) && (r.status || 'approved') === 'approved');
+    const verified = active.filter(r => Boolean(r.verifiedPurchase));
     
-    const totalRating = approved.reduce((sum, r) => sum + r.rating, 0);
-    const avgRating = approved.length > 0 ? (totalRating / approved.length).toFixed(1) : '5.0';
+    const validRatings = approved
+      .map(r => Number(r.rating))
+      .filter(n => !isNaN(n) && n > 0);
+    const totalRating = validRatings.reduce((sum, r) => sum + r, 0);
+    const calculatedAvg = validRatings.length > 0 ? (totalRating / validRatings.length) : 5.0;
+    const avgRating = !isNaN(calculatedAvg) && calculatedAvg > 0 ? calculatedAvg.toFixed(1) : '5.0';
 
     return {
-      total: reviews.length,
+      total: active.length,
       approved: approved.length,
       approvedCount: approved.length,
       pending: pending.length,
       pendingCount: pending.length,
+      rejected: rejected.length,
+      rejectedCount: rejected.length,
+      archived: archived.length,
+      archivedCount: archived.length,
       featured: featured.length,
       featuredCount: featured.length,
       verifiedPurchases: verified.length,

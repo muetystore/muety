@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Product, CartItem, Coupon } from '@/types';
+import { Product, CartItem, Coupon, CouponUserContext } from '@/types';
 import { couponService } from '@/features/coupons/services/couponService';
 import { storageService, subscribeLocalProducts } from '@/lib/storage/storageService';
 import { useNotification } from './NotificationContext';
+import { useAuth } from './AuthContext';
 import { calculateOrderFinancials } from '@/shared/utils/pricingEngine';
+import { recommendationService } from '@/features/catalog/services/recommendationService';
 
 interface CartContextType {
   items: CartItem[];
@@ -15,7 +17,7 @@ interface CartContextType {
   subtotal: number;
   appliedCoupon: Coupon | null;
   discountAmount: number;
-  applyCoupon: (code: string, contextSubtotal?: number) => { success: boolean; message: string };
+  applyCoupon: (code: string, contextSubtotal?: number, userContext?: CouponUserContext) => { success: boolean; message: string };
   removeCoupon: () => void;
   shippingFee: number;
   taxAmount: number;
@@ -37,6 +39,7 @@ const COUPON_STORAGE_KEY = 'muety_applied_coupon_v1';
 
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { success, info, warning } = useNotification();
+  const { user } = useAuth();
   
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
@@ -137,6 +140,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const selectedColor = color || (product.colors && product.colors.length > 0 ? product.colors[0] : undefined);
     const selectedSize = size || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
 
+    recommendationService.recordAddToCart(product);
+
     setItems(prev => {
       const existingIndex = prev.findIndex(
         item => item.product.id === product.id && 
@@ -231,9 +236,14 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const taxAmount = financials.tax;
   const grandTotal = financials.total;
 
-  const applyCoupon = (code: string, contextSubtotal?: number) => {
+  const applyCoupon = (code: string, contextSubtotal?: number, userContextOverride?: CouponUserContext) => {
     const effectiveSubtotal = (contextSubtotal !== undefined && contextSubtotal > 0) ? contextSubtotal : subtotal;
-    const result = couponService.validateCoupon(code, effectiveSubtotal);
+    const ctx = userContextOverride || {
+      userId: user?.uid,
+      email: user?.email,
+      phone: user?.phoneNumber || (user as any)?.phone
+    };
+    const result = couponService.validateCoupon(code, effectiveSubtotal, ctx);
     if (result.valid && result.coupon) {
       setAppliedCoupon(result.coupon);
       success(result.message, 'Coupon Applied');
@@ -274,6 +284,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return prev;
         }
         success('Saved to your MUETY wishlist', 'Wishlist');
+        recommendationService.recordWishlist(prod, true);
         return [...prev, productId];
       }
     });

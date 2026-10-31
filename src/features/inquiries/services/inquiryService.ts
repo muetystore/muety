@@ -58,7 +58,7 @@ class InquiryService {
     return this.inquiriesCache;
   }
 
-  private saveInquiries(inquiries: ContactInquiry[]) {
+  saveInquiries(inquiries: ContactInquiry[]) {
     this.inquiriesCache = inquiries;
     try {
       if (typeof localStorage !== 'undefined') {
@@ -252,22 +252,69 @@ class InquiryService {
     return list[idx];
   }
 
-  async deleteInquiry(id: string): Promise<boolean> {
+  async archiveInquiry(id: string): Promise<ContactInquiry | null> {
     const list = this.getInquiries();
-    const filtered = list.filter(i => i.id !== id && i.inquiryNumber !== id);
-    this.saveInquiries(filtered);
+    const idx = list.findIndex(i => i.id === id || i.inquiryNumber === id);
+    if (idx === -1) return null;
+
+    list[idx] = {
+      ...list[idx],
+      archived: true,
+      archivedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    this.saveInquiries(list);
 
     if (isLiveFirebase && db) {
       try {
-        const docRef = doc(db, 'inquiries', id);
-        withTimeout(deleteDoc(docRef), 3500).catch(err =>
-          console.warn('Firestore delete error:', err)
-        );
+        const docRef = doc(db, 'inquiries', list[idx].id);
+        withTimeout(
+          setDoc(docRef, list[idx], { merge: true }),
+          3500
+        ).catch(err => console.warn('Firestore archive inquiry error:', err));
       } catch (err) {
-        console.warn('Firestore delete init error:', err);
+        console.warn('Firestore archive inquiry init error:', err);
       }
     }
 
+    return list[idx];
+  }
+
+  async unarchiveInquiry(id: string): Promise<ContactInquiry | null> {
+    const list = this.getInquiries();
+    const idx = list.findIndex(i => i.id === id || i.inquiryNumber === id);
+    if (idx === -1) return null;
+
+    const cleanInquiry: ContactInquiry = {
+      ...list[idx],
+      archived: false,
+      updatedAt: new Date().toISOString()
+    };
+    delete cleanInquiry.archivedAt;
+
+    list[idx] = cleanInquiry;
+    this.saveInquiries(list);
+
+    if (isLiveFirebase && db) {
+      try {
+        const payload: Record<string, any> = { ...cleanInquiry };
+        delete payload.archivedAt;
+        const docRef = doc(db, 'inquiries', list[idx].id);
+        withTimeout(
+          setDoc(docRef, payload, { merge: true }),
+          3500
+        ).catch(err => console.warn('Firestore unarchive inquiry error:', err));
+      } catch (err) {
+        console.warn('Firestore unarchive inquiry init error:', err);
+      }
+    }
+
+    return list[idx];
+  }
+
+  async deleteInquiry(id: string): Promise<boolean> {
+    // For user data privacy & customer record retention, archive instead of deleting
+    await this.archiveInquiry(id);
     return true;
   }
 }

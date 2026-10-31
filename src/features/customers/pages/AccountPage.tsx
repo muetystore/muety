@@ -33,7 +33,8 @@ import {
   AlertCircle,
   Phone,
   Sparkles,
-  Lock
+  Lock,
+  Clock
 } from 'lucide-react';
 import { uploadToCloudinary } from '@/lib/media/cloudinary';
 import { Order, Product } from '@/types';
@@ -159,7 +160,7 @@ export const AccountPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [phoneLinkCooldown]);
 
-  // Review submission modal state
+  // Review submission modal state & Flipkart/Meesho order review workflow
   const [reviewModalItem, setReviewModalItem] = useState<{
     orderId: string;
     product: Product;
@@ -167,25 +168,80 @@ export const AccountPage: React.FC = () => {
     country: string;
   } | null>(null);
 
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
   const [revRating, setRevRating] = useState(5);
+  const [revHoverRating, setRevHoverRating] = useState<number | null>(null);
   const [revTitle, setRevTitle] = useState('');
   const [revQuote, setRevQuote] = useState('');
   const [revPhotoFile, setRevPhotoFile] = useState<File | null>(null);
   const [revPhotoPreview, setRevPhotoPreview] = useState<string | null>(null);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [userReviews, setUserReviews] = useState<any[]>(() => reviewService.getAllReviews());
 
-  const handleOpenReviewModal = (ord: Order, prod: Product) => {
+  useEffect(() => {
+    const loadReviews = () => {
+      setUserReviews(reviewService.getAllReviews());
+    };
+    loadReviews();
+    const unsub = reviewService.subscribeToReviews((all) => {
+      setUserReviews(all);
+    });
+    window.addEventListener('muety_reviews_updated', loadReviews);
+    return () => {
+      if (unsub) unsub();
+      window.removeEventListener('muety_reviews_updated', loadReviews);
+    };
+  }, []);
+
+  const findExistingReview = (ord: Order, prod: any) => {
+    if (!prod) return undefined;
+    const pId = String(prod.id || '').toLowerCase().trim();
+    const pSlug = String(prod.slug || '').toLowerCase().trim();
+    const pName = String(prod.name || '').toLowerCase().trim();
+    const ordId = String(ord.id || '').toLowerCase().trim();
+    const ordNum = String(ord.orderNumber || '').toLowerCase().trim();
+
+    return userReviews.find((r: any) => {
+      const rProdId = String(r.productId || '').toLowerCase().trim();
+      const rSlug = String(r.productSlug || '').toLowerCase().trim();
+      const rName = String(r.productName || '').toLowerCase().trim();
+      const matchesProduct = (pId && rProdId === pId) || 
+                             (pSlug && rSlug === pSlug) || 
+                             (pName && rName === pName);
+      if (!matchesProduct) return false;
+
+      const rOrdId = String(r.orderId || r.orderNumber || '').toLowerCase().trim();
+      const matchesOrder = rOrdId && (rOrdId === ordId || rOrdId === ordNum);
+      const matchesUser = Boolean(user?.uid && r.userId === user.uid);
+
+      return matchesOrder || matchesUser;
+    });
+  };
+
+  const handleOpenReviewModal = (ord: Order, prod: any, existingReview?: any) => {
+    const rawProd: Product = prod?.product || prod;
     setReviewModalItem({
       orderId: ord.orderNumber || ord.id,
-      product: prod,
+      product: rawProd,
       city: ord.shippingAddress?.city || 'Salem',
       country: ord.shippingAddress?.country || 'India'
     });
-    setRevRating(5);
-    setRevTitle('');
-    setRevQuote('');
-    setRevPhotoFile(null);
-    setRevPhotoPreview(null);
+    if (existingReview) {
+      setEditingReviewId(existingReview.id);
+      setRevRating(Number(existingReview.rating) || 5);
+      setRevTitle(existingReview.title || '');
+      setRevQuote(existingReview.quote || existingReview.comment || '');
+      setRevPhotoFile(null);
+      setRevPhotoPreview(existingReview.photoUrl || null);
+    } else {
+      setEditingReviewId(null);
+      setRevRating(5);
+      setRevTitle('');
+      setRevQuote('');
+      setRevPhotoFile(null);
+      setRevPhotoPreview(null);
+    }
+    setRevHoverRating(null);
   };
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,7 +275,7 @@ export const AccountPage: React.FC = () => {
     }
 
     setIsSubmittingReview(true);
-    let uploadedPhotoUrl: string | undefined = undefined;
+    let uploadedPhotoUrl: string | undefined = revPhotoPreview || undefined;
 
     if (revPhotoFile) {
       try {
@@ -232,33 +288,44 @@ export const AccountPage: React.FC = () => {
         }
       } catch (err: any) {
         console.warn('Review photo Cloudinary upload note:', err);
-        // Fallback to local preview data URL if upload service is unreachable in dev/offline
-        if (revPhotoPreview) {
-          uploadedPhotoUrl = revPhotoPreview;
-        }
       }
     }
 
     try {
-      await reviewService.addReview({
+      const author = user?.displayName && !isGeneratedPatronName(user.displayName) 
+        ? user.displayName 
+        : (user?.displayName || 'MUETY Patron');
+
+      const reviewPayload = {
         userId: user?.uid,
         orderId: reviewModalItem.orderId,
         productId: reviewModalItem.product.id,
+        productSlug: reviewModalItem.product.slug,
         productName: reviewModalItem.product.name,
-        authorName: user?.displayName || 'MUETY Patron',
+        authorName: author,
         authorLocation: `${reviewModalItem.city}, ${reviewModalItem.country}`,
         rating: revRating,
         title: revTitle.trim() || 'Exceptional Quality',
         quote: revQuote.trim(),
+        comment: revQuote.trim(),
         verifiedPurchase: true,
-        status: 'approved',
+        status: 'approved' as const,
         isFeatured: false,
         showOnHome: false,
         photoUrl: uploadedPhotoUrl
-      });
+      };
 
-      success('Thank you! Your verified patron impressions and photograph have been recorded.', 'Review Published');
+      if (editingReviewId) {
+        await reviewService.updateReview(editingReviewId, reviewPayload);
+        success('Thank you! Your verified product review has been updated.', 'Review Updated');
+      } else {
+        await reviewService.addReview(reviewPayload);
+        success('Thank you! Your verified product rating and review have been recorded.', 'Review Published');
+      }
+
+      setUserReviews(reviewService.getAllReviews());
       setReviewModalItem(null);
+      setEditingReviewId(null);
     } catch (err: any) {
       warning(err.message || 'Unable to submit review.');
     } finally {
@@ -1200,43 +1267,107 @@ export const AccountPage: React.FC = () => {
 
                   {/* Order Items */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {ord.items.map((item: any, i: number) => (
-                      <div key={i} className="account-order-item" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <img 
-                          src={item.product.images[0]} 
-                          alt={item.product.name} 
-                          style={{ width: '64px', height: '64px', borderRadius: 'var(--radius-md)', objectFit: 'contain', backgroundColor: '#f8fafc', border: '1px solid var(--brand-border)', padding: '3px', flexShrink: 0 }} 
-                        />
-                        <div style={{ flex: '1 1 180px', minWidth: 0 }}>
-                          <h5 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--brand-primary)', wordBreak: 'break-word' }}>{item.product.name}</h5>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
-                            Quantity: {item.quantity} {item.selectedColor ? `• Tone: ${item.selectedColor}` : ''}
-                          </span>
-                        </div>
-                        <div className="account-order-item-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.98rem' }}>
-                            ₹{(item.product.price * item.quantity).toFixed(2)}
+                    {ord.items.map((item: any, i: number) => {
+                      const prod = item.product || item;
+                      const isDelivered = (ord.orderStatus || (ord as any).status || '').toLowerCase() === 'delivered';
+                      const existingReview = findExistingReview(ord, prod);
+                      const prodImage = prod?.images?.[0] || prod?.image || '/saree_fabric_detail.jpg';
+
+                      return (
+                        <div key={i} className="account-order-item" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <img 
+                            src={prodImage} 
+                            alt={prod.name} 
+                            style={{ width: '64px', height: '64px', borderRadius: 'var(--radius-md)', objectFit: 'contain', backgroundColor: '#f8fafc', border: '1px solid var(--brand-border)', padding: '3px', flexShrink: 0 }} 
+                          />
+                          <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+                            <h5 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--brand-primary)', wordBreak: 'break-word', margin: '0 0 4px' }}>
+                              {prod.name}
+                            </h5>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--brand-muted)' }}>
+                              Quantity: {item.quantity} {item.selectedColor ? `• Tone: ${item.selectedColor}` : ''}
+                            </span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenReviewModal(ord, item.product)}
-                            className="btn btn-outline btn-sm"
-                            style={{
-                              fontSize: '0.75rem',
-                              padding: '3px 8px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              color: 'var(--brand-primary)',
-                              borderColor: 'var(--brand-border)'
-                            }}
-                          >
-                            <Star size={12} fill="#f59e0b" color="#f59e0b" />
-                            <span>Share Impression</span>
-                          </button>
+                          <div className="account-order-item-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: '0.98rem' }}>
+                              ₹{((prod.price || 0) * item.quantity).toFixed(2)}
+                            </div>
+
+                            {/* Flipkart / Meesho Review Flow: Strictly for Delivered Orders */}
+                            {isDelivered ? (
+                              existingReview ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                                  <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    backgroundColor: '#ecfdf5',
+                                    color: '#065f46',
+                                    border: '1px solid #a7f3d0',
+                                    borderRadius: '4px',
+                                    padding: '3px 8px',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 600
+                                  }}>
+                                    <Star size={11} fill="#059669" color="#059669" />
+                                    <span>Rated {existingReview.rating}★ &bull; Reviewed</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenReviewModal(ord, prod, existingReview)}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: 'var(--brand-primary)',
+                                      fontSize: '0.74rem',
+                                      fontWeight: 600,
+                                      textDecoration: 'underline',
+                                      cursor: 'pointer',
+                                      padding: '1px 4px'
+                                    }}
+                                  >
+                                    Edit Review
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenReviewModal(ord, prod)}
+                                  className="btn btn-outline btn-sm"
+                                  style={{
+                                    fontSize: '0.78rem',
+                                    fontWeight: 600,
+                                    padding: '5px 12px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    color: '#92400e',
+                                    borderColor: '#f59e0b',
+                                    backgroundColor: '#fffbeb',
+                                    borderRadius: '6px',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                                  }}
+                                >
+                                  <Star size={13} fill="#f59e0b" color="#f59e0b" />
+                                  <span>Rate & Review Product</span>
+                                </button>
+                              )
+                            ) : ['confirmed', 'processing', 'packed', 'shipped', 'out_for_delivery', 'pending'].includes(ord.orderStatus) ? (
+                              <span style={{
+                                fontSize: '0.72rem',
+                                color: 'var(--brand-muted)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '2px 4px'
+                              }}>
+                                <Clock size={11} /> Rate & review unlocks on delivery
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   <div style={{
@@ -1812,7 +1943,7 @@ export const AccountPage: React.FC = () => {
     </div>
   </div>
 
-      {/* Verified Patron Impression Modal */}
+      {/* Flipkart / Meesho Style: Verified Product Review Modal */}
       {reviewModalItem && (
         <div className="admin-modal-overlay">
           <div className="card account-card-fluid" style={{
@@ -1825,12 +1956,18 @@ export const AccountPage: React.FC = () => {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--brand-border)', paddingBottom: '1rem' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--brand-primary)' }}>Share Patron Impressions</h3>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--brand-primary)', fontWeight: 700 }}>
+                  {editingReviewId ? 'Edit Product Review' : 'Rate & Review Product'}
+                </h3>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  Verified Purchase for Order #{reviewModalItem.orderId}
+                  Delivered Order #{reviewModalItem.orderId} &bull; Verified Purchase
                 </span>
               </div>
-              <button onClick={() => setReviewModalItem(null)} style={{ padding: '6px', color: 'var(--brand-muted)' }} aria-label="Close Modal">
+              <button 
+                onClick={() => { setReviewModalItem(null); setEditingReviewId(null); }} 
+                style={{ padding: '6px', color: 'var(--brand-muted)', background: 'none', border: 'none', cursor: 'pointer' }} 
+                aria-label="Close Modal"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -1848,52 +1985,97 @@ export const AccountPage: React.FC = () => {
               boxSizing: 'border-box'
             }}>
               <img 
-                src={reviewModalItem.product.images[0]} 
+                src={reviewModalItem.product.images?.[0] || (reviewModalItem.product as any).image || '/saree_fabric_detail.jpg'} 
                 alt={reviewModalItem.product.name} 
-                style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-sm)', objectFit: 'contain', backgroundColor: '#ffffff', flexShrink: 0 }}
+                style={{ width: '52px', height: '52px', borderRadius: 'var(--radius-sm)', objectFit: 'cover', backgroundColor: '#ffffff', flexShrink: 0, border: '1px solid var(--brand-border)' }}
               />
-              <div style={{ minWidth: 0 }}>
-                <h5 style={{ margin: 0, fontSize: '0.92rem', color: 'var(--brand-primary)', wordBreak: 'break-word' }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <h5 style={{ margin: 0, fontSize: '0.92rem', color: 'var(--brand-primary)', wordBreak: 'break-word', fontWeight: 600 }}>
                   {reviewModalItem.product.name}
                 </h5>
-                <span style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <ShieldCheck size={12} /> Verified Patron Purchase
+                <span style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
+                  <ShieldCheck size={13} color="#059669" /> Delivered &bull; Verified Buyer
                 </span>
               </div>
             </div>
 
             <form onSubmit={handleSubmitReview} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {/* Rating */}
+              {/* Star Rating with Sentiment Badge */}
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Your Rating</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {[1, 2, 3, 4, 5].map((starVal) => (
-                    <button
-                      type="button"
-                      key={starVal}
-                      onClick={() => setRevRating(starVal)}
-                      style={{
-                        padding: '4px',
-                        color: starVal <= revRating ? '#f59e0b' : '#cbd5e1',
-                        transition: 'transform 0.1s ease'
-                      }}
-                      aria-label={`${starVal} Star`}
-                    >
-                      <Star size={26} fill={starVal <= revRating ? '#f59e0b' : 'none'} />
-                    </button>
-                  ))}
-                  <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--brand-primary)', marginLeft: '6px' }}>
-                    {revRating} / 5 Stars
-                  </span>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.88rem' }}>
+                  Your Overall Rating *
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '4px' }}>
+                  <div 
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                    onMouseLeave={() => setRevHoverRating(null)}
+                  >
+                    {[1, 2, 3, 4, 5].map((starVal) => {
+                      const activeScore = revHoverRating !== null ? revHoverRating : revRating;
+                      const isHighlighted = starVal <= activeScore;
+
+                      return (
+                        <button
+                          type="button"
+                          key={starVal}
+                          onClick={() => setRevRating(starVal)}
+                          onMouseEnter={() => setRevHoverRating(starVal)}
+                          style={{
+                            padding: '4px',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: isHighlighted ? '#f59e0b' : '#cbd5e1',
+                            transition: 'transform 0.15s ease'
+                          }}
+                          aria-label={`${starVal} Star`}
+                        >
+                          <Star 
+                            size={28} 
+                            fill={isHighlighted ? '#f59e0b' : 'none'} 
+                            color={isHighlighted ? '#f59e0b' : '#cbd5e1'} 
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {(() => {
+                    const activeScore = revHoverRating !== null ? revHoverRating : revRating;
+                    const sentiments: Record<number, { text: string; color: string; bg: string; border: string }> = {
+                      5: { text: 'Exceptional / Loved It!', color: '#047857', bg: '#ecfdf5', border: '#a7f3d0' },
+                      4: { text: 'Very Good Quality & Weave', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd' },
+                      3: { text: 'Average Experience', color: '#b45309', bg: '#fffbeb', border: '#fde68a' },
+                      2: { text: 'Needs Improvement', color: '#c2410c', bg: '#fff7ed', border: '#fed7aa' },
+                      1: { text: 'Very Dissatisfied', color: '#b91c1c', bg: '#fef2f2', border: '#fecaca' }
+                    };
+                    const s = sentiments[activeScore] || sentiments[5];
+
+                    return (
+                      <span style={{
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        color: s.color,
+                        backgroundColor: s.bg,
+                        border: `1px solid ${s.border}`,
+                        padding: '3px 10px',
+                        borderRadius: '20px'
+                      }}>
+                        {activeScore}.0 ★ {s.text}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
 
               {/* Headline */}
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Headline / Title</label>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.88rem' }}>
+                  Review Title / Headline
+                </label>
                 <input 
                   type="text" 
-                  placeholder="e.g. Masterpiece craftsmanship and exceptional packaging"
+                  placeholder="e.g. Masterpiece craftsmanship, luminous zari, and exquisite drape"
                   value={revTitle} 
                   onChange={e => setRevTitle(e.target.value)} 
                   className="form-input" 
@@ -1903,11 +2085,13 @@ export const AccountPage: React.FC = () => {
 
               {/* Impressions text */}
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Detailed Impressions / Review *</label>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.88rem' }}>
+                  Detailed Product Review *
+                </label>
                 <textarea 
                   required 
                   rows={4}
-                  placeholder="Share your experience with the craftsmanship, fit, delivery, and bespoke details..."
+                  placeholder="Share details about fabric softness, pure zari finish, color accuracy, packaging, and drape fall..."
                   value={revQuote} 
                   onChange={e => setRevQuote(e.target.value)} 
                   className="form-input" 
@@ -1917,9 +2101,9 @@ export const AccountPage: React.FC = () => {
 
               {/* Customer Photo Upload */}
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Customer Photograph (Optional)</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--brand-muted)' }}>JPEG, PNG, WEBP (Max 5MB)</span>
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 600, fontSize: '0.88rem' }}>
+                  <span>Customer Photos (Optional)</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--brand-muted)', fontWeight: 400 }}>JPEG, PNG, WEBP (Max 5MB)</span>
                 </label>
                 
                 {revPhotoPreview ? (
@@ -1979,7 +2163,7 @@ export const AccountPage: React.FC = () => {
                       Upload Your Draped Portrait
                     </span>
                     <span style={{ fontSize: '0.74rem', color: 'var(--brand-muted)', marginTop: '2px' }}>
-                      Share how you styled this MUETY saree to be featured on our homepage
+                      Share how you styled this MUETY saree to inspire fellow patrons
                     </span>
                     <input 
                       type="file" 
@@ -1994,7 +2178,7 @@ export const AccountPage: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '0.5rem', flexWrap: 'wrap' }}>
                 <button 
                   type="button" 
-                  onClick={() => setReviewModalItem(null)} 
+                  onClick={() => { setReviewModalItem(null); setEditingReviewId(null); }} 
                   className="btn btn-outline"
                   disabled={isSubmittingReview}
                 >
@@ -2009,10 +2193,10 @@ export const AccountPage: React.FC = () => {
                   {isSubmittingReview ? (
                     <>
                       <div className="spinner" style={{ width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                      <span>Recording Impression...</span>
+                      <span>Recording Review...</span>
                     </>
                   ) : (
-                    <span>Submit Verified Impression</span>
+                    <span>{editingReviewId ? 'Update Review' : 'Submit Review'}</span>
                   )}
                 </button>
               </div>

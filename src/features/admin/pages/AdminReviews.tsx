@@ -26,7 +26,9 @@ import {
   Image as ImageIcon,
   Edit,
   Upload,
-  Loader2
+  Loader2,
+  Archive,
+  ArchiveRestore
 } from 'lucide-react';
 import { uploadToCloudinary } from '@/lib/media/cloudinary';
 
@@ -36,7 +38,7 @@ export const AdminReviews: React.FC = () => {
   const { success, warning } = useNotification();
 
   const [reviews, setReviews] = useState<PatronReview[]>(() => reviewService.getAllReviews());
-  const [filterTab, setFilterTab] = useState<'all' | 'featured' | 'pending' | 'approved' | 'rejected'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'featured' | 'pending' | 'approved' | 'rejected' | 'archived'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
@@ -137,23 +139,38 @@ export const AdminReviews: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to delete the review by ${name}?`)) {
-      setReviews(prev => prev.filter(r => r.id !== id));
-      await reviewService.deleteReview(id);
+  const handleArchive = async (id: string, name: string) => {
+    if (window.confirm(`Archive review by ${name}?\n\nThis will remove it from active moderation and the storefront, while securely preserving the patron record for privacy and audit compliance.`)) {
+      await reviewService.archiveReview(id);
       await auditService.logAction({
         actorUid: user?.uid || 'system',
         actorEmail: user?.email || 'admin',
         actorRole: getUserRoles(user)[0] || 'admin',
-        action: 'REVIEW_DELETED',
+        action: 'REVIEW_ARCHIVED',
         entityType: 'PRODUCT',
         entityId: id,
-        reason: `Deleted review by ${name}`
+        reason: `Archived review by ${name}`
       });
 
-      success(`Review deleted successfully.`, 'Deleted');
+      success(`Review archived successfully. Preserved in archives.`, 'Archived');
       loadData();
     }
+  };
+
+  const handleUnarchive = async (id: string, name: string) => {
+    await reviewService.unarchiveReview(id);
+    await auditService.logAction({
+      actorUid: user?.uid || 'system',
+      actorEmail: user?.email || 'admin',
+      actorRole: getUserRoles(user)[0] || 'admin',
+      action: 'REVIEW_UNARCHIVED',
+      entityType: 'PRODUCT',
+      entityId: id,
+      reason: `Restored review by ${name} from archives`
+    });
+
+    success(`Review restored from archives to active list.`, 'Restored');
+    loadData();
   };
 
   const handleAddPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -328,11 +345,20 @@ export const AdminReviews: React.FC = () => {
   };
 
   const filteredReviews = reviews.filter(rev => {
+    const status = rev.status || 'approved';
+    const isArchived = Boolean(rev.archived);
+
     // Tab filter
-    if (filterTab === 'featured' && (!rev.isFeatured || rev.status !== 'approved')) return false;
-    if (filterTab === 'pending' && rev.status !== 'pending') return false;
-    if (filterTab === 'approved' && rev.status !== 'approved') return false;
-    if (filterTab === 'rejected' && rev.status !== 'rejected') return false;
+    if (filterTab === 'archived') {
+      if (!isArchived) return false;
+    } else {
+      // Non-archived views strictly hide archived records
+      if (isArchived) return false;
+      if (filterTab === 'featured' && (!rev.isFeatured || status !== 'approved')) return false;
+      if (filterTab === 'pending' && status !== 'pending') return false;
+      if (filterTab === 'approved' && status !== 'approved') return false;
+      if (filterTab === 'rejected' && status !== 'rejected') return false;
+    }
 
     // Search query
     if (searchQuery.trim()) {
@@ -457,11 +483,12 @@ export const AdminReviews: React.FC = () => {
           {/* Tabs */}
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             {[
-              { id: 'all', label: `All (${reviews.length})` },
+              { id: 'all', label: `All (${stats.total || reviews.filter(r => !r.archived).length})` },
               { id: 'featured', label: `⭐ Featured on Home (${stats.featuredCount})` },
               { id: 'pending', label: `Pending (${stats.pendingCount})` },
               { id: 'approved', label: `Approved (${stats.approvedCount})` },
-              { id: 'rejected', label: `Rejected` }
+              { id: 'rejected', label: `Rejected` },
+              { id: 'archived', label: `📦 Archived (${stats.archivedCount || 0})` }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -514,13 +541,15 @@ export const AdminReviews: React.FC = () => {
             </p>
           </div>
         ) : (
-          filteredReviews.map((rev) => (
+          filteredReviews.map((rev) => {
+            const status = rev.status || 'approved';
+            return (
             <div 
               key={rev.id} 
               className="card"
               style={{
                 padding: '1.75rem',
-                borderLeft: rev.isFeatured && rev.status === 'approved' ? '4px solid #d4af37' : '1px solid var(--brand-border)',
+                borderLeft: rev.isFeatured && status === 'approved' ? '4px solid #d4af37' : '1px solid var(--brand-border)',
                 position: 'relative'
               }}
             >
@@ -556,13 +585,30 @@ export const AdminReviews: React.FC = () => {
                       </span>
                     )}
 
+                    {rev.archived && (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        backgroundColor: '#fef3c7',
+                        color: '#92400e',
+                        padding: '2px 8px',
+                        borderRadius: 'var(--radius-full)',
+                        border: '1px solid #fde68a'
+                      }}>
+                        <Archive size={11} /> ARCHIVED (PRESERVED)
+                      </span>
+                    )}
+
                     <span className={`badge badge-${
-                      rev.status === 'approved' ? 'success' : rev.status === 'pending' ? 'warning' : 'danger'
+                      status === 'approved' ? 'success' : status === 'pending' ? 'warning' : 'danger'
                     }`}>
-                      {rev.status.toUpperCase()}
+                      {status.toUpperCase()}
                     </span>
 
-                    {rev.isFeatured && rev.status === 'approved' && (
+                    {rev.isFeatured && status === 'approved' && (
                       <span style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -751,7 +797,7 @@ export const AdminReviews: React.FC = () => {
 
                 {/* Moderation Status Controls */}
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  {rev.status !== 'approved' && (
+                  {status !== 'approved' && (
                     <button
                       onClick={() => handleStatusChange(rev.id, 'approved')}
                       className="btn btn-secondary btn-sm"
@@ -761,7 +807,7 @@ export const AdminReviews: React.FC = () => {
                     </button>
                   )}
 
-                  {rev.status !== 'rejected' && (
+                  {status !== 'rejected' && (
                     <button
                       onClick={() => handleStatusChange(rev.id, 'rejected')}
                       className="btn btn-outline btn-sm"
@@ -780,18 +826,30 @@ export const AdminReviews: React.FC = () => {
                     <Edit size={14} /> <span>Edit</span>
                   </button>
 
-                  <button
-                    onClick={() => handleDelete(rev.id, rev.authorName)}
-                    className="btn btn-outline btn-sm"
-                    style={{ color: '#ef4444' }}
-                    title="Delete Review"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {rev.archived ? (
+                    <button
+                      onClick={() => handleUnarchive(rev.id, rev.authorName)}
+                      className="btn btn-secondary btn-sm"
+                      style={{ color: '#0369a1', borderColor: '#bae6fd', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      title="Restore review from archives"
+                    >
+                      <ArchiveRestore size={14} /> <span>Restore</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleArchive(rev.id, rev.authorName)}
+                      className="btn btn-outline btn-sm"
+                      style={{ color: '#b45309', borderColor: '#fde68a', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      title="Archive Review (Preserve Record for User Privacy & Auditing)"
+                    >
+                      <Archive size={14} /> <span>Archive</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 

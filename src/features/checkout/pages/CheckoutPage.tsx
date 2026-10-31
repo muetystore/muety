@@ -97,7 +97,11 @@ export const CheckoutPage: React.FC = () => {
 
     // Apply through authoritative cart/coupon pipeline
     setTimeout(() => {
-      const res = applyCoupon(targetCode);
+      const res = applyCoupon(targetCode, undefined, {
+        userId: user?.uid,
+        email: email || user?.email,
+        phone: phone || user?.phoneNumber
+      });
       setIsApplyingPromo(false);
       if (res.success) {
         setPromoSuccessMessage(
@@ -316,7 +320,12 @@ export const CheckoutPage: React.FC = () => {
 
     // Authoritative promotion validation prior to payment
     if (appliedCoupon) {
-      const revalidation = couponService.validateCoupon(appliedCoupon.code, financials.subtotal);
+      const userCtx = {
+        userId: user?.uid,
+        email: email || user?.email,
+        phone: phone || user?.phoneNumber
+      };
+      const revalidation = couponService.validateCoupon(appliedCoupon.code, financials.subtotal, userCtx);
       if (!revalidation.valid) {
         removeCoupon();
         setPromoError(revalidation.message);
@@ -386,6 +395,15 @@ export const CheckoutPage: React.FC = () => {
               ? `COD Order: ₹89 advance authorized via Razorpay (${razorpayResponse.razorpay_payment_id}). Balance ₹${financials.remainingAmountDueAtDelivery} due on delivery.`
               : `Razorpay Payment Authorization ID: ${razorpayResponse.razorpay_payment_id}`
           });
+
+          if (appliedCoupon) {
+            await couponService.recordCouponUsage(appliedCoupon.code, {
+              userId: user?.uid,
+              email: email || user?.email,
+              phone: phone || user?.phoneNumber,
+              orderId: newOrder.id
+            });
+          }
 
           clearCart();
           if (isCod) {
