@@ -54,6 +54,7 @@ import { useAuth } from '@/shared/context/AuthContext';
 import { Product, PatronReview, Coupon } from '@/types';
 import { couponService } from '@/features/coupons/services/couponService';
 import { uploadToCloudinary } from '@/lib/media/cloudinary';
+import { personalizationService } from '@/features/catalog/services/personalizationService';
 
 export const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -760,6 +761,7 @@ export const ProductDetailPage: React.FC = () => {
         setProduct(cached);
         setIsLoading(false);
         storageService.addRecentlyViewed(cached.id);
+        personalizationService.recordProductView(cached);
         setSelectedImage(0);
         resetZoom();
         if (cached.colors && cached.colors.length > 0) setSelectedColor(cached.colors[0]);
@@ -775,6 +777,7 @@ export const ProductDetailPage: React.FC = () => {
           if (found) {
             setProduct(found);
             storageService.addRecentlyViewed(found.id);
+            personalizationService.recordProductView(found);
             if (!cached) {
               setSelectedImage(0);
               resetZoom();

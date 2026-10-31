@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Product } from '@/types';
 import { useCart } from '@/shared/context/CartContext';
+import { personalizationService } from '@/features/catalog/services/personalizationService';
 import { Heart, ShoppingBag, Eye, Star, Check } from 'lucide-react';
 
 interface ProductCardProps {
@@ -34,6 +35,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
     e.stopPropagation();
     if (isSoldOut) return;
     addToCart(product, 1);
+    personalizationService.recordCartAdd(product.id);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1400);
   };
@@ -202,6 +204,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              if (!isSaved) {
+                personalizationService.recordWishlistAdd(product.id);
+              } else {
+                personalizationService.recordWishlistRemove(product.id);
+              }
               toggleWishlist(product.id);
             }}
             aria-label={isSaved ? 'Remove from Wishlist' : 'Add to Wishlist'}

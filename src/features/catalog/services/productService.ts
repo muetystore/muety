@@ -1,4 +1,4 @@
-import { Product, Category } from '../types';
+import { Product, Category, PaginatedProductsResult } from '../types';
 import { storageService, subscribeLocalCategories, subscribeLocalProducts } from '@/lib/storage/storageService';
 import { db, app, auth } from '@/lib/firebase/firebase';
 import { env } from '@/lib/config/env';
@@ -14,10 +14,15 @@ import {
   getDocs,
   query,
   where,
+  orderBy,
+  limit as firestoreLimit,
+  startAfter,
+  DocumentSnapshot,
   writeBatch,
   runTransaction,
   Unsubscribe 
 } from 'firebase/firestore';
+import { personalizationService } from './personalizationService';
 import { 
   generateCategoryCodeSuggestion,
   validateCategoryCode,
@@ -165,6 +170,33 @@ export const productService = {
     const category = raw.category || 'Festive Silk Sarees';
     const categorySlug = raw.categorySlug || 'sarees';
 
+    // Image Order & Primary Image resolution
+    let orderedImages: string[] = [];
+    let imageOrderMeta: Array<{ imageUrl: string; position: number; isPrimary: boolean; publicId?: string }> = [];
+
+    if (Array.isArray(raw.imageOrder) && raw.imageOrder.length > 0) {
+      const sorted = [...raw.imageOrder].sort((a: any, b: any) => (Number(a.position) || 0) - (Number(b.position) || 0));
+      orderedImages = sorted.map((item: any) => item.imageUrl || item.url).filter(Boolean);
+      imageOrderMeta = sorted.map((item: any, idx: number) => ({
+        imageUrl: item.imageUrl || item.url,
+        position: idx,
+        isPrimary: idx === 0,
+        publicId: item.publicId
+      }));
+    } else if (Array.isArray(raw.images) && raw.images.length > 0) {
+      orderedImages = [...raw.images];
+      imageOrderMeta = orderedImages.map((url, idx) => ({
+        imageUrl: url,
+        position: idx,
+        isPrimary: idx === 0
+      }));
+    } else {
+      orderedImages = ['/saree_model_individual.jpg'];
+      imageOrderMeta = [{ imageUrl: '/saree_model_individual.jpg', position: 0, isPrimary: true }];
+    }
+
+    const primaryImage = raw.primaryImage || orderedImages[0];
+
     return {
       id: docId || raw.id,
       name: title,
@@ -185,7 +217,9 @@ export const productService = {
       categoryId: raw.categoryId,
       categoryIds: Array.isArray(raw.categoryIds) ? raw.categoryIds : [],
       primaryCategoryId: raw.primaryCategoryId,
-      images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'],
+      images: orderedImages,
+      primaryImage,
+      imageOrder: imageOrderMeta,
       media: Array.isArray(raw.media) ? raw.media : [],
       colors: Array.isArray(raw.colors) && raw.colors.length > 0 ? raw.colors : ['Golden Ochre', 'Crimson Red', 'Royal Emerald'],
       sizes: Array.isArray(raw.sizes) && raw.sizes.length > 0 ? raw.sizes : ['Standard Saree Length (6.3m with Blouse)'],
@@ -799,6 +833,13 @@ export const productService = {
       status,
       availability: productData.availability || 'available',
       images: finalImages,
+      primaryImage: finalImages[0],
+      imageOrder: finalImages.map((url, idx) => ({
+        imageUrl: url,
+        position: idx,
+        isPrimary: idx === 0,
+        publicId: mediaMetadata[idx]?.publicId
+      })),
       media: mediaMetadata,
       description: productData.description || productData.shortDescription || title,
       shortDescription: productData.shortDescription || productData.description || title,
@@ -939,6 +980,13 @@ export const productService = {
       status,
       availability: product.availability || existing?.availability || 'available',
       images: finalImages,
+      primaryImage: finalImages[0],
+      imageOrder: finalImages.map((url, idx) => ({
+        imageUrl: url,
+        position: idx,
+        isPrimary: idx === 0,
+        publicId: mediaMetadata[idx]?.publicId
+      })),
       media: mediaMetadata,
       specifications: (product.specifications && typeof product.specifications === 'object') ? product.specifications : (existing?.specifications || {}),
       createdAt: product.createdAt || existing?.createdAt || nowIso,
@@ -964,6 +1012,13 @@ export const productService = {
           inventory: Number(stock) || 0,
           stock: Number(stock) || 0,
           images: Array.isArray(finalImages) ? finalImages : [],
+          primaryImage: finalImages[0] || '',
+          imageOrder: finalImages.map((url, idx) => ({
+            imageUrl: url,
+            position: idx,
+            isPrimary: idx === 0,
+            publicId: mediaMetadata[idx]?.publicId || ''
+          })),
           media: mediaMetadata,
           description: String(updated.description || ''),
           shortDescription: String(updated.shortDescription || ''),
@@ -1149,7 +1204,16 @@ export const productService = {
                   categoryIds: Array.isArray(raw.categoryIds) ? raw.categoryIds : (raw.categoryId ? [raw.categoryId] : (raw.primaryCategoryId ? [raw.primaryCategoryId] : [])),
                   primaryCategoryId: raw.primaryCategoryId || (Array.isArray(raw.categoryIds) ? raw.categoryIds[0] : raw.categoryId) || '',
                   categoryId: raw.primaryCategoryId || raw.categoryId || '',
-                  images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'],
+                  images: (() => {
+                    if (Array.isArray(raw.imageOrder) && raw.imageOrder.length > 0) {
+                      const sorted = [...raw.imageOrder].sort((a: any, b: any) => (Number(a.position) || 0) - (Number(b.position) || 0));
+                      const urls = sorted.map((item: any) => item.imageUrl || item.url).filter(Boolean);
+                      if (urls.length > 0) return urls;
+                    }
+                    return Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : ['/saree_model_individual.jpg'];
+                  })(),
+                  primaryImage: raw.primaryImage || (Array.isArray(raw.images) && raw.images.length > 0 ? raw.images[0] : '/saree_model_individual.jpg'),
+                  imageOrder: Array.isArray(raw.imageOrder) && raw.imageOrder.length > 0 ? raw.imageOrder : (Array.isArray(raw.images) ? raw.images.map((url: string, idx: number) => ({ imageUrl: url, position: idx, isPrimary: idx === 0 })) : undefined),
                   media: Array.isArray(raw.media) ? raw.media : [],
                   featured: Boolean(raw.featured),
                   isNewArrival: Boolean(raw.isNewArrival || raw.newArrival),
@@ -1238,6 +1302,125 @@ export const productService = {
       };
     }
     return unsubLocal;
+  },
+
+  async fetchProductsPage(options?: {
+    pageSize?: number;
+    cursor?: any;
+    category?: string;
+    sortBy?: string;
+    search?: string;
+    inStockOnly?: boolean;
+    personalize?: boolean;
+  }): Promise<PaginatedProductsResult> {
+    const pageSize = options?.pageSize || 20;
+    const category = options?.category;
+    const sortBy = options?.sortBy || 'featured';
+    const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || Boolean((process.env as any).VITEST));
+
+    // 1. Live Firestore environment cursor querying
+    if (db && !isTestEnv) {
+      try {
+        const qConstraints: any[] = [];
+
+        if (category && category !== 'all') {
+          qConstraints.push(where('categorySlug', '==', category.toLowerCase().trim()));
+        }
+
+        if (options?.cursor && typeof options.cursor === 'object') {
+          qConstraints.push(startAfter(options.cursor));
+        }
+
+        const fetchLimit = pageSize + 1;
+        qConstraints.push(firestoreLimit(fetchLimit));
+
+        const q = query(collection(db, 'products'), ...qConstraints);
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+          const docs = snapshot.docs;
+          const hasMore = docs.length > pageSize;
+          const pageDocs = hasMore ? docs.slice(0, pageSize) : docs;
+          const nextCursor = hasMore ? pageDocs[pageDocs.length - 1] : undefined;
+
+          let products: Product[] = pageDocs.map(d => this.mapFirestoreDocToProduct(d.id, d.data()));
+          products = products.filter(p => p.published !== false && p.status !== 'draft');
+
+          if (options?.personalize && (!sortBy || sortBy === 'featured')) {
+            products = personalizationService.sortPersonalized(products);
+          }
+
+          products.forEach(p => storageService.addProduct(p));
+
+          return {
+            products,
+            nextCursor,
+            hasMore,
+            totalCount: snapshot.size
+          };
+        }
+      } catch (err) {
+        console.warn('[productService] Firestore fetchProductsPage note (using cache):', err);
+      }
+    }
+
+    // 2. Storage / Cache / Test environment fallback
+    let all = storageService.getProducts().filter(p => p.published !== false && p.status !== 'draft');
+
+    if (category && category !== 'all') {
+      const catLower = category.toLowerCase().trim();
+      all = all.filter(p => 
+        (p.categorySlug || '').toLowerCase() === catLower ||
+        (p.category || '').toLowerCase() === catLower ||
+        (Array.isArray(p.categoryIds) && p.categoryIds.some(cid => cid.toLowerCase() === catLower)) ||
+        (p.primaryCategoryId && p.primaryCategoryId.toLowerCase() === catLower)
+      );
+    }
+
+    if (options?.search && options.search.trim()) {
+      const q = options.search.toLowerCase().trim();
+      all = all.filter(p => 
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.title || '').toLowerCase().includes(q) ||
+        (p.sku || '').toLowerCase().includes(q)
+      );
+    }
+
+    if (options?.inStockOnly) {
+      all = all.filter(p => (p.stock || 0) > 0 && p.availability !== 'sold_out');
+    }
+
+    if (sortBy === 'price-low') {
+      all.sort((a, b) => a.price - b.price);
+    } else if (sortBy === 'price-high') {
+      all.sort((a, b) => b.price - a.price);
+    } else if (sortBy === 'rating') {
+      all.sort((a, b) => (b.rating || 5) - (a.rating || 5));
+    } else if (sortBy === 'newest') {
+      all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else if (options?.personalize || sortBy === 'featured') {
+      all = personalizationService.sortPersonalized(all);
+    }
+
+    const totalCount = all.length;
+    let startIndex = 0;
+    if (typeof options?.cursor === 'number') {
+      startIndex = options.cursor;
+    } else if (typeof options?.cursor === 'string') {
+      const foundIdx = all.findIndex(p => p.id === options.cursor);
+      startIndex = foundIdx >= 0 ? foundIdx + 1 : 0;
+    }
+
+    const pageSlice = all.slice(startIndex, startIndex + pageSize);
+    const nextIndex = startIndex + pageSize;
+    const hasMore = nextIndex < totalCount;
+
+    return {
+      products: pageSlice,
+      nextCursor: hasMore ? nextIndex : undefined,
+      hasMore,
+      totalCount
+    };
   },
 
   async checkSkuExists(sku: string, excludeProductId?: string): Promise<boolean> {

@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { productService } from '@/features/catalog/services/productService';
 import { storageService } from '@/lib/storage/storageService';
+import { personalizationService } from '@/features/catalog/services/personalizationService';
 import { ProductCard } from '@/features/catalog/components/ProductCard';
 import { QuickViewModal } from '@/features/catalog/components/QuickViewModal';
 import { SortDropdown } from '@/features/catalog/components/SortDropdown';
@@ -24,11 +25,20 @@ import {
   SlidersHorizontal, 
   Search, 
   X, 
-  Sparkles,
-  RotateCcw,
-  Loader2,
-  Grid
+  Sparkles, 
+  RotateCcw, 
+  Loader2, 
+  Grid 
 } from 'lucide-react';
+
+const STOREFRONT_LISTING_STATE_KEY = 'muety_storefront_listing_state';
+const PAGE_SIZE = 20;
+
+interface SavedStorefrontListingState {
+  scrollY: number;
+  visibleCount: number;
+  timestamp: number;
+}
 
 export const ProductsPage: React.FC = () => {
   useDocumentTitle('Pure Silk Sarees & Ethnic Catalog | MUETY');
@@ -92,6 +102,62 @@ export const ProductsPage: React.FC = () => {
   const [mobileLayout, setMobileLayout] = useState<'2col' | '1col'>('2col');
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [searchInputVal, setSearchInputVal] = useState(queryParam);
+
+  // 1. Retrieve any saved listing position & count from prior navigation
+  const savedState = useMemo<SavedStorefrontListingState | null>(() => {
+    try {
+      const raw = sessionStorage.getItem(STOREFRONT_LISTING_STATE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Date.now() - parsed.timestamp < 2 * 60 * 60 * 1000) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  }, []);
+
+  const [visibleCount, setVisibleCount] = useState<number>(() => {
+    return savedState?.visibleCount && savedState.visibleCount >= PAGE_SIZE
+      ? savedState.visibleCount
+      : PAGE_SIZE;
+  });
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const scrollRestoredRef = useRef<boolean>(false);
+  const isFirstMountRef = useRef<boolean>(true);
+
+  // Save listing state to sessionStorage on unmount & beforeunload
+  const saveListingPosition = useCallback((targetScrollY?: number) => {
+    try {
+      const payload: SavedStorefrontListingState = {
+        scrollY: targetScrollY !== undefined ? targetScrollY : window.scrollY,
+        visibleCount,
+        timestamp: Date.now()
+      };
+      sessionStorage.setItem(STOREFRONT_LISTING_STATE_KEY, JSON.stringify(payload));
+    } catch {}
+  }, [visibleCount]);
+
+  useEffect(() => {
+    saveListingPosition();
+    const handleBeforeUnload = () => saveListingPosition(window.scrollY);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      saveListingPosition(window.scrollY);
+    };
+  }, [saveListingPosition]);
+
+  // Reset pagination batch size when user actively changes search/filters
+  useEffect(() => {
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      return;
+    }
+    setVisibleCount(PAGE_SIZE);
+  }, [filters, sortBy]);
 
   // Subscribe to real-time products and categories
   useEffect(() => {
@@ -310,10 +376,58 @@ export const ProductsPage: React.FC = () => {
     return filterProducts(allProducts, filters);
   }, [allProducts, filters]);
 
-  // Sort filtered products deterministically
+  // Sort filtered products personalizing 'featured' default view while deterministic
   const sortedProducts = useMemo(() => {
+    if (sortBy === 'featured') {
+      return personalizationService.sortPersonalized(filteredProducts);
+    }
     return sortProducts(filteredProducts, sortBy);
   }, [filteredProducts, sortBy]);
+
+  // Visible sliced products for infinite scrolling
+  const visibleProducts = useMemo(() => {
+    return sortedProducts.slice(0, visibleCount);
+  }, [sortedProducts, visibleCount]);
+
+  const hasMore = visibleCount < sortedProducts.length;
+
+  // IntersectionObserver for infinite scrolling sentinel
+  useEffect(() => {
+    if (!hasMore || isLoadingMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0] && entries[0].isIntersecting) {
+        setIsLoadingMore(true);
+        setLoadMoreError(null);
+        setTimeout(() => {
+          setVisibleCount(prev => Math.min(prev + PAGE_SIZE, sortedProducts.length));
+          setIsLoadingMore(false);
+        }, 150);
+      }
+    }, {
+      rootMargin: '250px'
+    });
+
+    if (sentinelRef.current) {
+      observer.observe(sentinelRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, sortedProducts.length]);
+
+  // Scroll restoration after visible products are rendered
+  useEffect(() => {
+    if (savedState?.scrollY && savedState.scrollY > 0 && !scrollRestoredRef.current && visibleProducts.length > 0) {
+      scrollRestoredRef.current = true;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.scrollTo({
+            top: savedState.scrollY,
+            behavior: 'instant' as ScrollBehavior
+          });
+        });
+      });
+    }
+  }, [visibleProducts.length, savedState]);
 
   // Calculate live category counts taking other active filters into account
   const categoryCounts = useMemo(() => {
@@ -550,16 +664,88 @@ export const ProductsPage: React.FC = () => {
                 </button>
               </div>
             ) : (
-              /* Product Grid */
-              <div className={`products-grid-3col ${mobileLayout === '1col' ? 'grid-view-1col' : ''}`}>
-                {sortedProducts.map(product => (
-                  <ProductCard 
-                    key={product.id} 
-                    product={product} 
-                    onQuickView={(p) => setQuickViewProduct(p)} 
-                  />
-                ))}
-              </div>
+              /* Product Grid with Infinite Scroll */
+              <>
+                <div className={`products-grid-3col ${mobileLayout === '1col' ? 'grid-view-1col' : ''}`}>
+                  {visibleProducts.map(product => (
+                    <ProductCard 
+                      key={product.id} 
+                      product={product} 
+                      onQuickView={(p) => setQuickViewProduct(p)} 
+                    />
+                  ))}
+                </div>
+
+                {/* Loading Skeletons when fetching next batch */}
+                {isLoadingMore && (
+                  <div className={`products-grid-3col ${mobileLayout === '1col' ? 'grid-view-1col' : ''}`} style={{ marginTop: '1.25rem' }}>
+                    {[1, 2, 3].map(skIdx => (
+                      <div 
+                        key={`sk-${skIdx}`} 
+                        className="product-card" 
+                        style={{
+                          backgroundColor: '#ffffff',
+                          borderRadius: 'var(--radius-md, 10px)',
+                          border: '1px solid #e2e8f0',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column'
+                        }}
+                      >
+                        <div style={{
+                          width: '100%',
+                          paddingTop: '108%',
+                          backgroundColor: '#f1f5f9',
+                          animation: 'pulse 1.5s infinite ease-in-out'
+                        }} />
+                        <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ width: '40%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px' }} />
+                          <div style={{ width: '85%', height: '16px', backgroundColor: '#e2e8f0', borderRadius: '4px' }} />
+                          <div style={{ width: '30%', height: '18px', backgroundColor: '#e2e8f0', borderRadius: '4px', marginTop: '4px' }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Sentinel Trigger Element */}
+                <div ref={sentinelRef} style={{ height: '30px', margin: '10px 0', pointerEvents: 'none' }} />
+
+                {/* End of Catalog Feed Indicator */}
+                {!hasMore && sortedProducts.length > 0 && (
+                  <div style={{ textAlign: 'center', padding: '2.5rem 1rem 1rem' }}>
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      backgroundColor: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      padding: '8px 20px',
+                      borderRadius: '9999px',
+                      color: '#475569',
+                      fontSize: '0.85rem',
+                      fontWeight: 600
+                    }}>
+                      <Sparkles size={16} color="#c9a227" />
+                      <span>You have viewed all {sortedProducts.length} authentic Salem handloom creations.</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error & Retry Component */}
+                {loadMoreError && (
+                  <div style={{ textAlign: 'center', padding: '1.5rem', color: '#dc2626' }}>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '0.9rem' }}>{loadMoreError}</p>
+                    <button 
+                      type="button" 
+                      onClick={() => { setLoadMoreError(null); setVisibleCount(prev => prev + PAGE_SIZE); }}
+                      className="btn btn-outline btn-sm"
+                    >
+                      Retry Loading More
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </main>
         </div>

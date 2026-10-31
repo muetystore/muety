@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { productService } from '@/features/catalog/services/productService';
 import { storageService } from '@/lib/storage/storageService';
+import { personalizationService } from '@/features/catalog/services/personalizationService';
 import { ProductCard } from '@/features/catalog/components/ProductCard';
 import { QuickViewModal } from '@/features/catalog/components/QuickViewModal';
 import { Product, Category } from '@/types';
@@ -14,6 +15,29 @@ export const CategoryProductsPage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>(() => storageService.getCategories());
   const [allProducts, setAllProducts] = useState<Product[]>(() => storageService.getProducts());
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const scrollRestoredRef = useRef(false);
+
+  const scrollStorageKey = `muety_category_scroll_${slug || 'all'}`;
+
+  // Save scroll position on unmount / beforeunload
+  useEffect(() => {
+    const handleSave = () => {
+      try {
+        sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
+      } catch {}
+    };
+    window.addEventListener('beforeunload', handleSave);
+    return () => {
+      window.removeEventListener('beforeunload', handleSave);
+      handleSave();
+    };
+  }, [scrollStorageKey]);
+
+  useEffect(() => {
+    if (slug) {
+      personalizationService.recordCategoryView(slug);
+    }
+  }, [slug]);
 
   useEffect(() => {
     const unsubCats = productService.subscribeToCategories((cats) => {
@@ -51,6 +75,28 @@ export const CategoryProductsPage: React.FC = () => {
       p.primaryCategoryId === targetId
     );
   });
+
+  const displayedProducts = useMemo(() => {
+    return personalizationService.sortPersonalized(products);
+  }, [products]);
+
+  // Restore scroll position after category products are rendered
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(scrollStorageKey);
+      if (saved && !scrollRestoredRef.current && displayedProducts.length > 0) {
+        const top = parseInt(saved, 10);
+        if (!isNaN(top) && top > 0) {
+          scrollRestoredRef.current = true;
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              window.scrollTo({ top, behavior: 'instant' as ScrollBehavior });
+            });
+          });
+        }
+      }
+    } catch {}
+  }, [displayedProducts.length, scrollStorageKey]);
 
   useDocumentTitle(category?.name || 'Category');
 
@@ -142,7 +188,7 @@ export const CategoryProductsPage: React.FC = () => {
           }}
         >
           <span style={{ fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
-            Showing <strong>{products.length}</strong> masterworks in <strong>{category?.name || 'Category'}</strong>
+            Showing <strong>{displayedProducts.length}</strong> masterworks in <strong>{category?.name || 'Category'}</strong>
           </span>
           <div style={{ display: 'flex', gap: '8px' }}>
             <Link to="/categories" className="btn btn-outline btn-sm">
@@ -154,7 +200,7 @@ export const CategoryProductsPage: React.FC = () => {
           </div>
         </div>
 
-        {products.length === 0 ? (
+        {displayedProducts.length === 0 ? (
           <div 
             style={{
               textAlign: 'center',
@@ -173,7 +219,7 @@ export const CategoryProductsPage: React.FC = () => {
           </div>
         ) : (
           <div className="products-grid">
-            {products.map(p => (
+            {displayedProducts.map(p => (
               <ProductCard 
                 key={p.id} 
                 product={p} 

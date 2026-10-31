@@ -65,6 +65,12 @@ export interface Product {
   // Media (up to 5 images)
   images: string[];
   primaryImage?: string;
+  imageOrder?: Array<{
+    imageUrl: string;
+    position: number;
+    isPrimary: boolean;
+    publicId?: string;
+  }>;
   media?: Array<{
     url: string;
     publicId: string;
@@ -167,5 +173,12 @@ export interface SareeCollection {
   showInFestiveEdits?: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface PaginatedProductsResult {
+  products: Product[];
+  nextCursor?: any;
+  hasMore: boolean;
+  totalCount: number;
 }
 

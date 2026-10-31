@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { productService } from '@/features/catalog/services/productService';
@@ -28,20 +28,80 @@ import {
   Filter
 } from 'lucide-react';
 
+const ADMIN_PRODUCTS_STATE_KEY = 'muety_admin_products_listing_state';
+
+interface SavedAdminListingState {
+  search: string;
+  selectedCat: string;
+  availabilityFilter: 'all' | 'available' | 'sold_out';
+  scrollY: number;
+  timestamp: number;
+}
+
 export const AdminProducts: React.FC = () => {
   useDocumentTitle('Products Catalog ERP');
   const navigate = useNavigate();
   const { user } = useAuth();
   const { success, error } = useNotification();
 
-  const [products, setProducts] = useState<Product[]>(storageService.getProducts());
-  const [categories, setCategories] = useState<Category[]>(storageService.getCategories());
-  const [search, setSearch] = useState('');
-  const [selectedCat, setSelectedCat] = useState('all');
-  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'sold_out'>('all');
+  // 1. Retrieve any saved listing state (search, filters, scroll position)
+  const savedState = useMemo<SavedAdminListingState | null>(() => {
+    try {
+      const raw = sessionStorage.getItem(ADMIN_PRODUCTS_STATE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        // Expire if older than 2 hours
+        if (Date.now() - parsed.timestamp < 2 * 60 * 60 * 1000) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  }, []);
+
+  const [products, setProducts] = useState<Product[]>(() => storageService.getProducts());
+  const [categories, setCategories] = useState<Category[]>(() => storageService.getCategories());
+  const [search, setSearch] = useState<string>(() => savedState?.search || '');
+  const [selectedCat, setSelectedCat] = useState<string>(() => savedState?.selectedCat || 'all');
+  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'sold_out'>(
+    () => savedState?.availabilityFilter || 'all'
+  );
   const [togglingAvailabilityId, setTogglingAvailabilityId] = useState<string | null>(null);
   const [togglingFlagKey, setTogglingFlagKey] = useState<string | null>(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+
+  const scrollRestoredRef = useRef(false);
+
+  // Helper to persist current listing state
+  const saveCurrentListingState = useCallback((targetScrollY?: number) => {
+    try {
+      const stateToSave: SavedAdminListingState = {
+        search,
+        selectedCat,
+        availabilityFilter,
+        scrollY: targetScrollY !== undefined ? targetScrollY : window.scrollY,
+        timestamp: Date.now()
+      };
+      sessionStorage.setItem(ADMIN_PRODUCTS_STATE_KEY, JSON.stringify(stateToSave));
+    } catch {}
+  }, [search, selectedCat, availabilityFilter]);
+
+  // Navigate to editor preserving state & scroll
+  const handleNavigateToEditor = (url: string) => {
+    saveCurrentListingState(window.scrollY);
+    navigate(url);
+  };
+
+  // Keep state updated in sessionStorage on filter changes and unmount
+  useEffect(() => {
+    saveCurrentListingState();
+    const handleBeforeUnload = () => saveCurrentListingState(window.scrollY);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      saveCurrentListingState(window.scrollY);
+    };
+  }, [saveCurrentListingState]);
 
   const loadCatalogData = () => {
     setProducts(productService.getAllProducts());
@@ -63,6 +123,21 @@ export const AdminProducts: React.FC = () => {
       if (typeof unsubProds === 'function') unsubProds();
     };
   }, []);
+
+  // Restore scroll position after products are populated
+  useEffect(() => {
+    if (savedState?.scrollY && savedState.scrollY > 0 && !scrollRestoredRef.current && products.length > 0) {
+      scrollRestoredRef.current = true;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.scrollTo({
+            top: savedState.scrollY,
+            behavior: 'instant' as ScrollBehavior
+          });
+        });
+      });
+    }
+  }, [products.length, savedState]);
 
   const handleToggleAvailability = async (prod: Product, targetAvailability: 'available' | 'sold_out') => {
     const confirmMsg = targetAvailability === 'sold_out'
@@ -171,7 +246,7 @@ export const AdminProducts: React.FC = () => {
         </div>
 
         <button 
-          onClick={() => navigate('/admin/products/new')} 
+          onClick={() => handleNavigateToEditor('/admin/products/new')} 
           className="btn btn-primary btn-md" 
           style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
         >
@@ -506,7 +581,7 @@ export const AdminProducts: React.FC = () => {
                     <td style={{ padding: '14px 18px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                         <button 
-                          onClick={() => navigate(`/admin/products/${prod.id}/edit`)} 
+                          onClick={() => handleNavigateToEditor(`/admin/products/${prod.id}/edit`)} 
                           className="btn btn-outline btn-sm"
                         >
                           <Edit3 size={14} /> Edit
@@ -649,7 +724,7 @@ export const AdminProducts: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => navigate(`/admin/products/${prod.id}/edit`)}
+                  onClick={() => handleNavigateToEditor(`/admin/products/${prod.id}/edit`)}
                   className="btn btn-primary btn-sm"
                   style={{ fontSize: '0.75rem', padding: '4px 12px' }}
                 >
