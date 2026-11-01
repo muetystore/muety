@@ -4,7 +4,7 @@ import { getCanonicalStoreUrl } from '@/shared/utils/domainRouting';
 /**
  * Sets document title according to MUETY brand requirements:
  * Page title format: MUETY | [Page Name]
- * Dynamically keeps the canonical URL tag synchronized to store.muety.in
+ * Dynamically keeps the canonical URL tag synchronized to muety.in
  */
 export function useDocumentTitle(pageName?: string, path?: string) {
   useEffect(() => {

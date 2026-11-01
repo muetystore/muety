@@ -102,7 +102,7 @@ describe('MODULE B & C — Automated Order Email Notifications & Lifecycle Syste
 
   describe('01. Patron Order Confirmation Template', () => {
     it('renders customer receipt with customer-facing order number, line items, 5% GST, and complimentary shipping for online payments', () => {
-      const { subject, html } = renderOrderConfirmationEmail(mockPrepaidOrder, 'https://store.muety.in');
+      const { subject, html } = renderOrderConfirmationEmail(mockPrepaidOrder, 'https://muety.in');
 
       expect(subject).toContain('Order Confirmed: MT-849201 — MUETY Atelier');
       expect(html).toContain('MT-849201');
@@ -114,13 +114,13 @@ describe('MODULE B & C — Automated Order Email Notifications & Lifecycle Syste
       expect(html).toContain('Complimentary (FREE)');
       expect(html).toContain('18,375');
       expect(html).toContain('100% Fully Settled via Secure Online Payment');
-      expect(html).toContain('https://store.muety.in/orders');
+      expect(html).toContain('https://muety.in/orders');
       // Must not leak private internal Firestore document IDs
       expect(html).not.toContain(mockPrepaidOrder.id);
     });
 
     it('renders correct COD advance online payment (₹89) and outstanding doorstep balance for COD orders', () => {
-      const { subject, html } = renderOrderConfirmationEmail(mockCodOrder, 'https://store.muety.in');
+      const { subject, html } = renderOrderConfirmationEmail(mockCodOrder, 'https://muety.in');
 
       expect(subject).toContain('MT-552194');
       expect(html).toContain('COD Advance Paid Online:');

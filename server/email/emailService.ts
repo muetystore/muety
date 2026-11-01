@@ -501,7 +501,7 @@ export async function saveCampaign(
     bodyContent: campaign.bodyContent || existing?.bodyContent || '<p>Discover our newest pure silk creations.</p>',
     heroImageUrl: campaign.heroImageUrl || existing?.heroImageUrl || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c',
     ctaText: campaign.ctaText || existing?.ctaText || 'Explore Handlooms',
-    ctaUrl: campaign.ctaUrl || existing?.ctaUrl || 'https://store.muety.in',
+    ctaUrl: campaign.ctaUrl || existing?.ctaUrl || 'https://muety.in',
     status: campaign.status || existing?.status || 'draft',
     audienceFilter: campaign.audienceFilter || (campaign.audienceFilters?.[0]) || existing?.audienceFilter || 'all_consented',
     audienceFilters: campaign.audienceFilters || (campaign.audienceFilter ? [campaign.audienceFilter] : existing?.audienceFilters) || ['all_consented'],
@@ -574,7 +574,7 @@ export async function sendCampaignTestEmail(
 
   const settings = await getEmailSettings();
   const token = generateUnsubscribeToken(testRecipient);
-  const storeUrl = process.env.MUETY_STORE_URL || 'https://store.muety.in';
+  const storeUrl = process.env.MUETY_STORE_URL || 'https://muety.in';
   const unsubscribeUrl = `${storeUrl}/unsubscribe?email=${encodeURIComponent(testRecipient)}&token=${token}`;
 
   const html = renderPromotionalCampaign({
@@ -650,7 +650,7 @@ export async function dispatchCampaign(
   let sentCount = 0;
   let failedCount = 0;
   const errors: string[] = [];
-  const storeUrl = process.env.MUETY_STORE_URL || 'https://store.muety.in';
+  const storeUrl = process.env.MUETY_STORE_URL || 'https://muety.in';
 
   // 2. Dispatch individually to ensure complete privacy (never expose one patron's email to another)
   for (const patron of eligible) {
@@ -735,7 +735,7 @@ export async function processOrderConfirmationEmails(orderPayload: OrderEmailDat
 
   const db = getDb();
   const settings = await getEmailSettings();
-  const storeUrl = process.env.MUETY_STORE_URL || 'https://store.muety.in';
+  const storeUrl = process.env.MUETY_STORE_URL || 'https://muety.in';
 
   // -------------------------------------------------------------
   // Part 1: Patron Order Confirmation (Idempotent per Order ID)

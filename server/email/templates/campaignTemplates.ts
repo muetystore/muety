@@ -21,7 +21,7 @@ export interface CampaignTemplateOptions {
 }
 
 export function renderPromotionalCampaign(options: CampaignTemplateOptions): string {
-  const storeUrl = options.storeUrl || process.env.MUETY_STORE_URL || 'https://store.muety.in';
+  const storeUrl = options.storeUrl || process.env.MUETY_STORE_URL || 'https://muety.in';
   const ctaLink = options.ctaUrl || storeUrl;
   const ctaLabel = options.ctaText || 'Explore Atelier Showcase';
   const heroImage = options.heroImageUrl || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c';

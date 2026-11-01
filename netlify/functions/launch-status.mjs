@@ -26,7 +26,7 @@ export async function handler() {
       serverTime: new Date(now).toISOString(),
       serverTimestamp: now,
       timeRemainingMs: Math.max(0, targetTime - now),
-      storeUrl: process.env.STORE_URL || process.env.MUETY_STORE_URL || 'https://store.muety.in',
+      storeUrl: process.env.STORE_URL || process.env.MUETY_STORE_URL || 'https://muety.in',
       mode: process.env.NODE_ENV || 'production'
     })
   };

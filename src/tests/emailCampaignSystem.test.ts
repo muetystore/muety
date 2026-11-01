@@ -152,14 +152,14 @@ describe('MODULE A — Promotional Email Campaign & Marketing Consent System', (
         headline: 'The Grand Varanasi Collection',
         previewText: 'Exclusive preview of master handlooms',
         bodyContent: '<p>Woven with royal grace.</p>',
-        unsubscribeUrl: 'https://store.muety.in/unsubscribe?email=test%40example.com&token=123',
-        storeUrl: 'https://store.muety.in'
+        unsubscribeUrl: 'https://muety.in/unsubscribe?email=test%40example.com&token=123',
+        storeUrl: 'https://muety.in'
       });
 
       expect(html).toContain('MUETY');
       expect(html).toContain('The Grand Varanasi Collection');
       expect(html).toContain('Unsubscribe from Promotional Emails');
-      expect(html).toContain('https://store.muety.in/unsubscribe?email=test%40example.com&token=123');
+      expect(html).toContain('https://muety.in/unsubscribe?email=test%40example.com&token=123');
     });
 
     it('sends authentic test preview email with [TEST PREVIEW] prefix', async () => {

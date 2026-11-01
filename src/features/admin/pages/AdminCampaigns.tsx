@@ -224,7 +224,7 @@ export const AdminCampaigns: React.FC = () => {
       bodyContent: '<p>Distinguished Patron,<br/><br/>We are delighted to present an exclusive showcase of handloom masterpieces, woven with pure silk and regal artistry.</p>',
       heroImageUrl: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c',
       ctaText: 'Explore Atelier Showcase',
-      ctaUrl: 'https://store.muety.in',
+      ctaUrl: 'https://muety.in',
       audienceFilter: validSegment,
       audienceFilters: [validSegment],
       senderIdentity: {
@@ -1061,7 +1061,7 @@ export const AdminCampaigns: React.FC = () => {
                     <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--brand-primary)' }}>Button Destination Link</label>
                     <input
                       type="url"
-                      placeholder="https://store.muety.in/catalog"
+                      placeholder="https://muety.in/catalog"
                       value={editingCampaign.ctaUrl || ''}
                       onChange={e => setEditingCampaign({ ...editingCampaign, ctaUrl: e.target.value })}
                       className="form-input"

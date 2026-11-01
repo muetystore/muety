@@ -9,7 +9,7 @@ export function renderAdminOrderNotificationEmail(order: OrderEmailData, adminUr
     timeStyle: 'short'
   });
 
-  const dashboardUrl = `${adminUrl || process.env.MUETY_STORE_URL || 'https://store.muety.in'}/admin/orders`;
+  const dashboardUrl = `${adminUrl || process.env.MUETY_STORE_URL || 'https://muety.in'}/admin/orders`;
 
   const itemsListHtml = (order.items || []).map((item, idx) => {
     const itemName = escapeHtml(item.product?.name || item.name || 'Bespoke Atelier Creation');

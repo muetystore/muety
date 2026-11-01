@@ -19,7 +19,7 @@ export interface EmailLayoutOptions {
 }
 
 export function renderEmailLayout(options: EmailLayoutOptions): string {
-  const storeUrl = options.storeUrl || process.env.MUETY_STORE_URL || 'https://store.muety.in';
+  const storeUrl = options.storeUrl || process.env.MUETY_STORE_URL || 'https://muety.in';
   const supportEmail = options.supportEmail || 'support@muety.in';
   const preheaderText = options.preheader ? escapeHtml(options.preheader) : '';
 

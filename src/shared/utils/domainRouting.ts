@@ -1,10 +1,10 @@
 /**
  * Domain & Subdomain Routing Utilities for MUETY
  * 
- * Handles multi-subdomain routing for:
+ * Handles multi-domain routing for:
  * - admin.muety.in / www.admin.muety.in -> Dedicated Admin Panel
- * - store.muety.in / www.store.muety.in -> Customer Storefront (pre-launch & launch)
- * - muety.in / www.muety.in             -> Countdown (pre-launch) -> Storefront (post-launch)
+ * - muety.in / www.muety.in             -> Customer Storefront & Primary Brand Domain
+ * - store.muety.in / www.store.muety.in -> Legacy Subdomain (301 Permanent Redirect to muety.in)
  * - localhost / 127.0.0.1              -> Local Development (both accessible)
  */
 
@@ -27,14 +27,26 @@ export const isAdminDomain = (customHost?: string): boolean => {
 };
 
 /**
- * Returns true if current hostname is the dedicated storefront subdomain.
+ * Returns true if current hostname is the legacy storefront subdomain (store.muety.in).
  */
-export const isStoreDomain = (customHost?: string): boolean => {
+export const isLegacyStoreDomain = (customHost?: string): boolean => {
   const host = (customHost ?? getHostname()).toLowerCase();
   return (
     host === 'store.muety.in' ||
     host === 'www.store.muety.in' ||
     host.startsWith('store.')
+  );
+};
+
+/**
+ * Returns true if current hostname is the primary storefront domain (muety.in or www.muety.in).
+ */
+export const isStoreDomain = (customHost?: string): boolean => {
+  const host = (customHost ?? getHostname()).toLowerCase();
+  return (
+    host === 'muety.in' ||
+    host === 'www.muety.in' ||
+    isLegacyStoreDomain(host)
   );
 };
 
@@ -62,24 +74,25 @@ export const isLocalOrDev = (customHost?: string): boolean => {
 };
 
 /**
- * Checks whether store.muety.in should route/redirect to muety.in.
- * As per architecture requirements, store.muety.in is dedicated only to the customer storefront
- * and must never redirect to www.muety.in or muety.in. Always returns false.
+ * Checks whether the current hostname should redirect to muety.in.
+ * As per client requirements, store.muety.in is removed and must redirect to muety.in.
  */
-export const shouldRedirectStoreToRoot = (): boolean => {
-  return false;
+export const shouldRedirectStoreToRoot = (customHost?: string): boolean => {
+  const host = (customHost ?? getHostname()).toLowerCase();
+  return isLegacyStoreDomain(host);
 };
 
 /**
  * Resolves the absolute storefront URL based on current environment.
- * Used for "View Storefront" links from Admin Panel and Countdown redirects.
+ * Primary storefront domain is https://muety.in.
+ * Used for "View Storefront" links from Admin Panel, canonical tags, and transactional emails.
  */
 export const getCanonicalStoreUrl = (path = '/'): string => {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   if (isLocalOrDev()) {
     return cleanPath;
   }
-  return `https://store.muety.in${cleanPath}`;
+  return `https://muety.in${cleanPath}`;
 };
 
 /**
@@ -95,53 +108,38 @@ export const getAdminPortalUrl = (path = '/admin'): string => {
 };
 
 /**
- * Checks if the hostname is candidate for post-launch apex consolidation (muety.in / www.muety.in).
+ * Checks if the hostname is candidate for legacy store redirect to apex (store.muety.in).
  * Strips port if present.
  */
-export const isRedirectableApexHost = (hostname?: string): boolean => {
+export const isLegacyStoreHost = (hostname?: string): boolean => {
   const host = (hostname ?? getHostname()).toLowerCase().trim().split(':')[0];
-  return host === 'muety.in' || host === 'www.muety.in';
+  return host === 'store.muety.in' || host === 'www.store.muety.in';
 };
 
 /**
- * Evaluates whether configured launch date has passed against a reference UTC timestamp.
- * Interprets ISO 8601 strings with timezone offsets accurately.
+ * Legacy alias for backwards compatibility with previous test suites.
  */
-export const isLaunchPassed = (
-  launchDateStr?: string,
-  referenceTime: number = Date.now()
-): { isPassed: boolean; timestamp: number; isValid: boolean } => {
-  if (!launchDateStr || typeof launchDateStr !== 'string' || !launchDateStr.trim()) {
-    return { isPassed: false, timestamp: NaN, isValid: false };
-  }
-  const timestamp = new Date(launchDateStr.trim()).getTime();
-  if (isNaN(timestamp)) {
-    return { isPassed: false, timestamp: NaN, isValid: false };
-  }
-  return {
-    isPassed: referenceTime >= timestamp,
-    timestamp,
-    isValid: true
-  };
+export const isRedirectableApexHost = (hostname?: string): boolean => {
+  return isLegacyStoreHost(hostname);
 };
 
 /**
- * Constructs the permanent 301 redirect target URL on store.muety.in,
+ * Constructs the permanent 301 redirect target URL on muety.in,
  * preserving pathname, query string, and URL-encoded characters.
  */
 export const buildRedirectUrl = (
   requestUrl: string,
-  targetOrigin: string = 'https://store.muety.in'
+  targetOrigin: string = 'https://muety.in'
 ): string => {
   const parsed = new URL(requestUrl);
   const cleanOrigin = targetOrigin.replace(/\/+$/, '');
 
-  // Apex root with no query parameters -> canonical storefront root without trailing slash
+  // Root with no query parameters -> canonical storefront root without trailing slash
   if ((parsed.pathname === '/' || parsed.pathname === '') && !parsed.search) {
     return cleanOrigin;
   }
 
-  // Apex root with query parameters -> e.g. https://store.muety.in/?utm_source=...
+  // Root with query parameters -> e.g. https://muety.in/?utm_source=...
   if (parsed.pathname === '/' || parsed.pathname === '') {
     return `${cleanOrigin}/${parsed.search}`;
   }
@@ -151,17 +149,10 @@ export const buildRedirectUrl = (
 };
 
 /**
- * Determines whether a given request should be consolidated from apex to storefront.
- * Returns true ONLY if hostname is muety.in/www.muety.in AND launch timestamp has passed.
+ * Checks if incoming request hostname should be redirected to muety.in.
  */
 export const shouldConsolidateApexDomain = (
-  hostname?: string,
-  launchDateStr?: string,
-  referenceTime: number = Date.now()
+  hostname?: string
 ): boolean => {
-  if (!isRedirectableApexHost(hostname)) {
-    return false;
-  }
-  const evalResult = isLaunchPassed(launchDateStr, referenceTime);
-  return evalResult.isValid && evalResult.isPassed;
+  return isLegacyStoreHost(hostname);
 };

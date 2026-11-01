@@ -54,7 +54,7 @@ export function renderOrderConfirmationEmail(order: OrderEmailData, storeUrl?: s
     year: 'numeric'
   });
 
-  const trackingUrl = `${storeUrl || process.env.MUETY_STORE_URL || 'https://store.muety.in'}/orders`;
+  const trackingUrl = `${storeUrl || process.env.MUETY_STORE_URL || 'https://muety.in'}/orders`;
 
   const itemsHtml = (order.items || []).map(item => {
     const itemName = escapeHtml(item.product?.name || item.name || 'Bespoke Atelier Creation');

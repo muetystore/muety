@@ -57,7 +57,7 @@ export const CookiePolicyPage: React.FC = () => {
             1. Overview of Cookies &amp; Web Storage
           </h2>
           <p style={{ marginBottom: '1rem' }}>
-            This Cookie Policy explains how <strong>MUETY</strong> (&ldquo;we&rdquo;, &ldquo;our&rdquo;, or &ldquo;us&rdquo;) uses cookies, local browser storage, and related web technologies when you visit our online store at <strong>https://store.muety.in</strong>.
+            This Cookie Policy explains how <strong>MUETY</strong> (&ldquo;we&rdquo;, &ldquo;our&rdquo;, or &ldquo;us&rdquo;) uses cookies, local browser storage, and related web technologies when you visit our online store at <strong>https://muety.in</strong>.
           </p>
           <p style={{ marginBottom: '1.5rem' }}>
             Cookies are small data files placed on your device by your browser. We also utilize standard browser technologies such as <code>localStorage</code> and <code>IndexedDB</code> to preserve essential session state (such as your shopping bag and secure authentication session) so you can navigate our boutique seamlessly.
@@ -219,7 +219,7 @@ export const CookiePolicyPage: React.FC = () => {
         {/* Brand Footer */}
         <div style={{ textAlign: 'center', marginTop: '2.5rem', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
           <p style={{ marginBottom: '4px' }}><strong>MUETY — Traditional Sarees &amp; Wear</strong></p>
-          <p style={{ marginBottom: '4px' }}>Website: <a href="https://store.muety.in" style={{ color: 'var(--brand-accent)' }}>https://store.muety.in</a></p>
+          <p style={{ marginBottom: '4px' }}>Website: <a href="https://muety.in" style={{ color: 'var(--brand-accent)' }}>https://muety.in</a></p>
           <p>Email: <strong style={{ color: 'var(--brand-primary)' }}>support@muety.in</strong></p>
         </div>
       </div>

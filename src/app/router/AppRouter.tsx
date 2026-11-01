@@ -134,6 +134,14 @@ export const AppRouter: React.FC = () => {
   useEffect(() => {
     // Initialize privacy consent default mode and listen for updates
     trackerService.init();
+
+    // Client-side guard: If visitor arrives via legacy store.muety.in, redirect to primary muety.in domain
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname.toLowerCase();
+      if (hostname === 'store.muety.in' || hostname === 'www.store.muety.in' || hostname.startsWith('store.')) {
+        window.location.replace(`https://muety.in${window.location.pathname}${window.location.search}`);
+      }
+    }
   }, []);
 
   // 1. DEDICATED ADMIN SUBDOMAIN ROUTING (admin.muety.in)
@@ -207,7 +215,7 @@ export const AppRouter: React.FC = () => {
     );
   }
 
-  // 2. STOREFRONT ROUTING (store.muety.in / muety.in / localhost)
+  // 2. STOREFRONT ROUTING (muety.in / www.muety.in / localhost)
   return (
     <>
       <ScrollToTop />

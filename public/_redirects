@@ -1,9 +1,9 @@
 # ==============================================================================
 # Netlify Redirects & Domain Rewrites Configuration for MUETY
 # One Deployment Serving:
-# - https://muety.in & www.muety.in (Countdown / Launch Gate)
-# - https://store.muety.in          (Storefront SPA)
-# - https://admin.muety.in          (Admin Panel SPA)
+# - https://muety.in & www.muety.in (Primary Customer Storefront SPA)
+# - https://admin.muety.in          (Dedicated Admin Panel SPA)
+# - https://store.muety.in          (301 Permanent Redirect to muety.in)
 # ==============================================================================
 
 # 1. API & Netlify Functions
@@ -35,15 +35,11 @@
 /countdown                   /countdown.html                  200!
 /countdown.html              /countdown.html                  200
 
-# 3. Domain-Specific Hostname Routing
-# Apex domain API routes
-https://muety.in/api/orders/*                     /.netlify/functions/orders            200
-https://www.muety.in/api/orders/*                 /.netlify/functions/orders            200
+# 3. Legacy Subdomain Redirects (store.muety.in -> muety.in)
+https://store.muety.in/*     https://muety.in/:splat          301!
+https://www.store.muety.in/* https://muety.in/:splat          301!
 
-# Apex domain pre-launch: serves Countdown on root
-https://muety.in/            /countdown.html                  200!
-https://www.muety.in/        /countdown.html                  200!
-
+# 4. Domain-Specific Hostname Routing
 # Admin subdomain API routes (must precede Admin SPA wildcard)
 https://admin.muety.in/api/admin/create-user          /.netlify/functions/admin-api            200
 https://admin.muety.in/api/admin/update-role          /.netlify/functions/admin-api            200
@@ -69,18 +65,13 @@ https://admin.muety.in/api/orders/*                   /.netlify/functions/orders
 https://admin.muety.in/      /index.html                      200
 https://admin.muety.in/*     /index.html                      200
 
-# Storefront subdomain API routes
-https://store.muety.in/api/newsletter/subscribe       /.netlify/functions/subscribe            200
-https://store.muety.in/api/launch-status              /.netlify/functions/launch-status         200
-https://store.muety.in/api/media/cloudinary-signature /.netlify/functions/cloudinary-signature 200
-https://store.muety.in/api/cloudinary/sign            /.netlify/functions/cloudinary-signature 200
-https://store.muety.in/api/media/cloudinary-delete    /.netlify/functions/cloudinary-delete    200
-https://store.muety.in/api/cloudinary/delete          /.netlify/functions/cloudinary-delete    200
-https://store.muety.in/api/orders/*                  /.netlify/functions/orders               200
+# Primary Storefront Domain (muety.in & www.muety.in): serves Storefront SPA
+https://muety.in/api/orders/*                     /.netlify/functions/orders            200
+https://www.muety.in/api/orders/*                 /.netlify/functions/orders            200
+https://muety.in/            /index.html                      200
+https://muety.in/*           /index.html                      200
+https://www.muety.in/        /index.html                      200
+https://www.muety.in/*       /index.html                      200
 
-# Storefront subdomain: serves Storefront SPA entry point (dedicated storefront, never redirects to root)
-https://store.muety.in/      /index.html                      200
-https://store.muety.in/*     /index.html                      200
-
-# 4. Global Single Page Application (SPA) Fallback
+# 5. Global Single Page Application (SPA) Fallback
 /*                           /index.html                      200

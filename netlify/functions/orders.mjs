@@ -445,7 +445,7 @@ async function dispatchOrderConfirmationEmails(order) {
   }
 
   const fromSender = process.env.RESEND_ORDERS_FROM_EMAIL || 'MUETY Orders <orders@muety.in>';
-  const storeUrl = process.env.STORE_URL || process.env.MUETY_STORE_URL || 'https://store.muety.in';
+  const storeUrl = process.env.STORE_URL || process.env.MUETY_STORE_URL || 'https://muety.in';
   const adminRecipient = process.env.CENTRAL_ORDERS_RECIPIENT || 'orders@muety.in';
   const db = getAdminDb();
 

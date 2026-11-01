@@ -28,7 +28,7 @@ describe('Netlify Orders API & Automated Email Delivery Suite', () => {
     expect(content).toContain('/api/orders/*                    /.netlify/functions/orders');
     expect(content).toContain('https://muety.in/api/orders/*                     /.netlify/functions/orders');
     expect(content).toContain('https://admin.muety.in/api/orders/*                   /.netlify/functions/orders');
-    expect(content).toContain('https://store.muety.in/api/orders/*                  /.netlify/functions/orders');
+    expect(content).toContain('https://store.muety.in/*     https://muety.in/:splat          301!');
   });
 
   it('3. Verifies netlify.toml routes /api/orders/* to netlify orders function', () => {
@@ -39,7 +39,7 @@ describe('Netlify Orders API & Automated Email Delivery Suite', () => {
     expect(content).toContain('to = "/.netlify/functions/orders"');
     expect(content).toContain('from = "https://muety.in/api/orders/*"');
     expect(content).toContain('from = "https://admin.muety.in/api/orders/*"');
-    expect(content).toContain('from = "https://store.muety.in/api/orders/*"');
+    expect(content).toContain('from = "https://store.muety.in/*"');
   });
 
   it('4. Verifies orderService.ts triggers background /api/orders/send-confirmation', () => {

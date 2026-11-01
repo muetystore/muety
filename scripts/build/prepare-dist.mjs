@@ -6,9 +6,9 @@ import path from 'node:path';
  * 
  * Prepares the production 'dist/' directory to serve:
  * - https://admin.muety.in  -> Admin Panel (SPA /index.html)
- * - https://store.muety.in  -> Storefront (SPA /index.html)
- * - https://muety.in        -> Countdown / Launch (/countdown.html & /countdown/*)
- * - https://www.muety.in    -> Countdown / Launch (/countdown.html & /countdown/*)
+ * - https://muety.in        -> Primary Storefront (SPA /index.html)
+ * - https://www.muety.in    -> Primary Storefront (SPA /index.html)
+ * - https://store.muety.in  -> 301 Permanent Redirect to muety.in
  */
 
 const rootDir = process.cwd();
@@ -96,7 +96,7 @@ function getCountdownBuildConfig() {
     launchTimestamp: new Date(launchDateIso).getTime(),
     establishment,
     establishmentDisplay,
-    storeUrl: process.env.MUETY_STORE_URL || process.env.STORE_URL || 'https://store.muety.in',
+    storeUrl: process.env.MUETY_STORE_URL || process.env.STORE_URL || 'https://muety.in',
     mode
   };
 }
