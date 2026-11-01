@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Product } from '@/types';
 import { useCart } from '@/shared/context/CartContext';
 import { recommendationService } from '@/features/catalog/services/recommendationService';
+import { getOptimizedImageUrl, getCloudinarySrcSet } from '@/lib/media/cloudinary';
 import { Heart, ShoppingBag, Eye, Star, Check } from 'lucide-react';
 
 interface ProductCardProps {
@@ -11,7 +12,7 @@ interface ProductCardProps {
   priority?: boolean;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, priority = false }) => {
+const ProductCardComponent: React.FC<ProductCardProps> = ({ product, onQuickView, priority = false }) => {
   const { addToCart, toggleWishlist, isInWishlist } = useCart();
   const [isHovered, setIsHovered] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
@@ -21,11 +22,25 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
 
   const images = Array.isArray(product.images) && product.images.length > 0 
     ? product.images 
-    : ['/saree_model_individual.jpg'];
+    : ['/saree_model_individual.webp'];
 
   const displayImage = isHovered && images.length > 1 
     ? images[1] 
     : images[0];
+
+  const optimizedDisplayImage = getOptimizedImageUrl(displayImage, {
+    width: 600,
+    height: 648,
+    crop: 'fill',
+    format: 'auto',
+    quality: 'auto'
+  });
+
+  const srcSet = getCloudinarySrcSet(displayImage, [300, 450, 600], {
+    crop: 'fill',
+    format: 'auto',
+    quality: 'auto'
+  });
 
   const isSoldOut = product.availability === 'sold_out' || product.stock === 0;
   const isManualSoldOut = product.availability === 'sold_out';
@@ -103,8 +118,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
           aria-label={`View details for ${product.name}`}
         >
           <img 
-            src={hasError ? '/saree_model_individual.jpg' : displayImage} 
+            src={hasError ? '/saree_model_individual.webp' : optimizedDisplayImage} 
+            srcSet={hasError ? undefined : srcSet}
+            sizes={srcSet ? '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw' : undefined}
             alt={product.name}
+            width={300}
+            height={324}
             loading={priority ? 'eager' : 'lazy'}
             {...({ fetchpriority: priority ? 'high' : 'auto' } as any)}
             decoding="async"
@@ -406,6 +425,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
     </div>
   );
 };
+
+export const ProductCard = React.memo(ProductCardComponent);
 
 export const ProductCardSkeleton: React.FC = () => {
   return (

@@ -4,6 +4,7 @@ import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { useCart } from '@/shared/context/CartContext';
 import { useAuth } from '@/shared/context/AuthContext';
 import { orderService } from '@/features/orders/services/orderService';
+import { metaPixel } from '@/lib/analytics/metaPixel';
 import { storageService } from '@/lib/storage/storageService';
 import { razorpayService } from '@/lib/payments/razorpayService';
 import { useNotification } from '@/shared/context/NotificationContext';
@@ -70,6 +71,7 @@ export const CheckoutPage: React.FC = () => {
   }, []);
 
   // Synchronize expansion if coupon is already applied
+
   useEffect(() => {
     if (appliedCoupon) {
       setIsPromoExpanded(true);
@@ -169,6 +171,15 @@ export const CheckoutPage: React.FC = () => {
     taxRate: settings.taxRate || 5,
     paymentMethod
   });
+
+  // Track Meta Pixel InitiateCheckout once when customer enters checkout
+  const hasTrackedCheckoutRef = React.useRef(false);
+  useEffect(() => {
+    if (!hasTrackedCheckoutRef.current && items.length > 0) {
+      hasTrackedCheckoutRef.current = true;
+      metaPixel.trackInitiateCheckout(items, financials.total || subtotal);
+    }
+  }, [items, financials.total, subtotal]);
 
   // Automatically prompt login modal if user lands on checkout without being signed in
   useEffect(() => {
@@ -338,6 +349,9 @@ export const CheckoutPage: React.FC = () => {
     const amountToPayNow = financials.amountDueOnline;
     const isCod = paymentMethod === 'cash_on_delivery';
 
+    // Track Meta Pixel AddPaymentInfo event
+    metaPixel.trackAddPaymentInfo(paymentMethod, amountToPayNow, items);
+
     // Open Razorpay Payment Gateway (Full order total for online, or ₹89 advance for COD)
     await razorpayService.openCheckout({
       amount: amountToPayNow,
@@ -404,6 +418,9 @@ export const CheckoutPage: React.FC = () => {
               orderId: newOrder.id
             });
           }
+
+          // Track Meta Pixel Purchase event (deduplicated per order ID)
+          metaPixel.trackPurchase(newOrder);
 
           clearCart();
           if (isCod) {

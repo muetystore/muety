@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
+import { useSEO } from '@/shared/hooks/useSEO';
 import { productService } from '@/features/catalog/services/productService';
 import { storageService } from '@/lib/storage/storageService';
 import { recommendationService } from '@/features/catalog/services/recommendationService';
 import { ProductCard } from '@/features/catalog/components/ProductCard';
-import { QuickViewModal } from '@/features/catalog/components/QuickViewModal';
 import { SortDropdown } from '@/features/catalog/components/SortDropdown';
+
+const QuickViewModal = React.lazy(() => import('@/features/catalog/components/QuickViewModal').then(m => ({ default: m.QuickViewModal })));
 import { ProductFilterPanel } from '@/features/catalog/components/ProductFilterPanel';
 import { ProductFilterDrawer } from '@/features/catalog/components/ProductFilterDrawer';
 import { ActiveFilterChips } from '@/features/catalog/components/ActiveFilterChips';
@@ -32,7 +34,31 @@ import {
 } from 'lucide-react';
 
 export const ProductsPage: React.FC = () => {
-  useDocumentTitle('Pure Silk Sarees & Ethnic Catalog | MUETY');
+  useSEO({
+    title: 'Pure Silk Sarees & Ethnic Catalog',
+    description: 'Explore the complete MUETY catalog of handcrafted pure silk sarees, Salem handlooms, wedding drapes, and festive ethnic collections.',
+    canonicalPath: '/products',
+    ogType: 'website',
+    ogImage: '/diwali_hero_banner.webp',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Home',
+          item: 'https://muety.in'
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'Catalog',
+          item: 'https://muety.in/products'
+        }
+      ]
+    }
+  });
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Load initial products & categories from cache
@@ -722,11 +748,15 @@ export const ProductsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick View Modal */}
-      <QuickViewModal 
-        product={quickViewProduct} 
-        onClose={() => setQuickViewProduct(null)} 
-      />
+      {/* Quick View Modal (Code-split with Suspense) */}
+      {quickViewProduct && (
+        <Suspense fallback={null}>
+          <QuickViewModal 
+            product={quickViewProduct} 
+            onClose={() => setQuickViewProduct(null)} 
+          />
+        </Suspense>
+      )}
 
       {/* Mobile Slide-Up Filter Drawer (Rendered via React Portal) */}
       <ProductFilterDrawer

@@ -1271,7 +1271,7 @@ export const AccountPage: React.FC = () => {
                       const prod = item.product || item;
                       const isDelivered = (ord.orderStatus || (ord as any).status || '').toLowerCase() === 'delivered';
                       const existingReview = findExistingReview(ord, prod);
-                      const prodImage = prod?.images?.[0] || prod?.image || '/saree_fabric_detail.jpg';
+                      const prodImage = prod?.images?.[0] || prod?.image || '/saree_fabric_detail.webp';
 
                       return (
                         <div key={i} className="account-order-item" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1985,7 +1985,7 @@ export const AccountPage: React.FC = () => {
               boxSizing: 'border-box'
             }}>
               <img 
-                src={reviewModalItem.product.images?.[0] || (reviewModalItem.product as any).image || '/saree_fabric_detail.jpg'} 
+                src={reviewModalItem.product.images?.[0] || (reviewModalItem.product as any).image || '/saree_fabric_detail.webp'} 
                 alt={reviewModalItem.product.name} 
                 style={{ width: '52px', height: '52px', borderRadius: 'var(--radius-sm)', objectFit: 'cover', backgroundColor: '#ffffff', flexShrink: 0, border: '1px solid var(--brand-border)' }}
               />

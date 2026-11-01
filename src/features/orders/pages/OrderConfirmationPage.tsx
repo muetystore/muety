@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
 import { orderService } from '@/features/orders/services/orderService';
+import { metaPixel } from '@/lib/analytics/metaPixel';
 import { Order } from '@/types';
 import confetti from 'canvas-confetti';
 import { 
@@ -64,6 +65,9 @@ export const OrderConfirmationPage: React.FC = () => {
       if (liveOrder) {
         setOrder(liveOrder);
         setLoading(false);
+
+        // Track Meta Pixel Purchase event (deduplicated per order ID)
+        metaPixel.trackPurchase(liveOrder);
 
         // Ensure patron and admin confirmation emails are dispatched (idempotent on server)
         if (typeof window !== 'undefined' && liveOrder.customerEmail) {

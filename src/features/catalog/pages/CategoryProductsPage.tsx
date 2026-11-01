@@ -111,9 +111,9 @@ export const CategoryProductsPage: React.FC = () => {
   }
 
   const categoryImage = category?.image || (
-    slug === 'bridal' ? '/saree_model_drape.jpg' :
-    slug === 'handloom' ? '/saree_fabric_detail.jpg' :
-    '/saree_model_individual.jpg'
+    slug === 'bridal' ? '/saree_model_drape.webp' :
+    slug === 'handloom' ? '/saree_fabric_detail.webp' :
+    '/saree_model_individual.webp'
   );
 
   return (

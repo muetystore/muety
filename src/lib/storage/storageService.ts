@@ -145,7 +145,7 @@ class StorageService {
       const categories = this.getCategories();
 
       return (items || []).filter((p: any) => p && (p.title || p.name) && p.title !== 'Untitled Product' && p.name !== 'Untitled Product').map((p: any) => {
-        const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : ['/saree_model_individual.jpg'];
+        const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : ['/saree_model_individual.webp'];
         
         // Migration logic for multi-category:
         let categoryIds: string[] = Array.isArray(p.categoryIds) && p.categoryIds.length > 0 ? p.categoryIds : [];
@@ -235,7 +235,7 @@ class StorageService {
           ? (fallbackLetters.length >= 2 ? fallbackLetters.slice(0, 2) : 'XX')
           : c.categoryCode.trim().toUpperCase();
 
-        let imgUrl = (c as any).imageUrl || c.image || (c as any).coverImage || (c as any).coverImageUrl || '/saree_model_individual.jpg';
+        let imgUrl = (c as any).imageUrl || c.image || (c as any).coverImage || (c as any).coverImageUrl || '/saree_model_individual.webp';
         if (imgUrl.startsWith('data:') || imgUrl.startsWith('blob:') || imgUrl.startsWith('file:')) {
           imgUrl = 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1200&q=80';
         }

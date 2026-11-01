@@ -94,9 +94,9 @@ export const CategoriesPage: React.FC = () => {
             {categories.map(cat => {
               const count = getCategoryCount(cat.slug, cat.id);
               const fallbackImg = cat.image || (
-                cat.slug === 'bridal' ? '/saree_model_drape.jpg' :
-                cat.slug === 'handloom' ? '/saree_fabric_detail.jpg' :
-                '/saree_model_individual.jpg'
+                cat.slug === 'bridal' ? '/saree_model_drape.webp' :
+                cat.slug === 'handloom' ? '/saree_fabric_detail.webp' :
+                '/saree_model_individual.webp'
               );
 
               return (

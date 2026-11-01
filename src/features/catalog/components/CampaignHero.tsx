@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { bannerService } from '@/features/banners/services/bannerService';
+import { getCloudinaryUrl } from '@/lib/media/cloudinary';
 
 export interface BannerSlide {
   id: string;
@@ -22,8 +23,8 @@ export interface CampaignHeroProps {
 const DEFAULT_SLIDES: BannerSlide[] = [
   {
     id: 'diwali-hero',
-    image: '/diwali_hero_banner.jpg',
-    mobileImage: '/diwali_hero_banner_mobile.jpg',
+    image: '/diwali_hero_banner.webp',
+    mobileImage: '/diwali_hero_banner_mobile.webp',
     webp: '/diwali_hero_banner.webp',
     mobileWebp: '/diwali_hero_banner_mobile.webp',
     alt: 'MUETY Pure Mulberry Silk & Certified Gold Zari Sarees',
@@ -32,8 +33,8 @@ const DEFAULT_SLIDES: BannerSlide[] = [
   },
   {
     id: 'dasara-campaign',
-    image: '/dasara_campaign_banner_with_text.jpg',
-    mobileImage: '/dasara_campaign_banner_mobile.jpg',
+    image: '/dasara_campaign_banner_with_text.webp',
+    mobileImage: '/dasara_campaign_banner_mobile.webp',
     webp: '/dasara_campaign_banner_with_text.webp',
     mobileWebp: '/dasara_campaign_banner_mobile.webp',
     alt: 'MUETY Dasara Festive Collection - Tradition Meets Elegance',
@@ -43,6 +44,7 @@ const DEFAULT_SLIDES: BannerSlide[] = [
 ];
 
 function getSlideSources(slide: BannerSlide) {
+  // 1. If explicit WebP variants are specified
   if (slide.mobileWebp || slide.webp) {
     return {
       mobileWebp: slide.mobileWebp || slide.webp,
@@ -51,22 +53,38 @@ function getSlideSources(slide: BannerSlide) {
       desktopImage: slide.image
     };
   }
+
+  // 2. Local Diwali banner asset resolution
   if (slide.image.includes('diwali_hero_banner')) {
     return {
       mobileWebp: '/diwali_hero_banner_mobile.webp',
       desktopWebp: '/diwali_hero_banner.webp',
-      mobileImage: '/diwali_hero_banner_mobile.jpg',
-      desktopImage: slide.image
+      mobileImage: '/diwali_hero_banner_mobile.webp',
+      desktopImage: '/diwali_hero_banner.webp'
     };
   }
+
+  // 3. Local Dasara banner asset resolution
   if (slide.image.includes('dasara_campaign_banner')) {
     return {
       mobileWebp: '/dasara_campaign_banner_mobile.webp',
       desktopWebp: '/dasara_campaign_banner_with_text.webp',
-      mobileImage: '/dasara_campaign_banner_mobile.jpg',
-      desktopImage: slide.image
+      mobileImage: '/dasara_campaign_banner_mobile.webp',
+      desktopImage: '/dasara_campaign_banner_with_text.webp'
     };
   }
+
+  // 4. Cloudinary dynamic banner URL optimization
+  if (slide.image.includes('res.cloudinary.com')) {
+    const mobileSource = slide.mobileImage || slide.image;
+    return {
+      mobileWebp: getCloudinaryUrl(mobileSource, { width: 640, format: 'auto', quality: 'auto', crop: 'fill' }),
+      desktopWebp: getCloudinaryUrl(slide.image, { width: 1440, format: 'auto', quality: 'auto', crop: 'fill' }),
+      mobileImage: getCloudinaryUrl(mobileSource, { width: 640, format: 'auto', quality: 'auto', crop: 'fill' }),
+      desktopImage: getCloudinaryUrl(slide.image, { width: 1440, format: 'auto', quality: 'auto', crop: 'fill' })
+    };
+  }
+
   return {
     mobileWebp: undefined,
     desktopWebp: undefined,
@@ -247,13 +265,13 @@ export const CampaignHero: React.FC<CampaignHeroProps> = ({
                         <source media="(max-width: 640px)" srcSet={sources.mobileImage} />
                       )}
                       <img 
-                        src={slide.image} 
+                        src={sources.desktopWebp || sources.desktopImage || slide.image} 
                         alt={slide.alt}
                         width={1376}
                         height={768}
-                        {...({ fetchpriority: idx === currentIndex || idx === 0 ? 'high' : 'auto' } as any)}
+                        {...({ fetchpriority: idx === 0 ? 'high' : 'auto' } as any)}
                         loading={idx === 0 ? 'eager' : 'lazy'}
-                        decoding="async"
+                        decoding={idx === 0 ? 'sync' : 'async'}
                         className="campaign-hero-bg-img"
                         style={{
                           width: '100%',

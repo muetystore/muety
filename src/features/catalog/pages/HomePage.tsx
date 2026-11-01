@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
+import { useSEO } from '@/shared/hooks/useSEO';
 import { productService } from '@/features/catalog/services/productService';
 import { reviewService } from '@/features/reviews/services/reviewService';
 import { storageService } from '@/lib/storage/storageService';
 import { useCart } from '@/shared/context/CartContext';
 import { ProductCard, ProductCardSkeleton } from '@/features/catalog/components/ProductCard';
-import { QuickViewModal } from '@/features/catalog/components/QuickViewModal';
 import { SectionHeader } from '@/features/catalog/components/SectionHeader';
 import { CampaignHero } from '@/features/catalog/components/CampaignHero';
+
+const QuickViewModal = React.lazy(() => import('@/features/catalog/components/QuickViewModal').then(m => ({ default: m.QuickViewModal })));
 import { Product, Category, SareeCollection } from '@/types';
 import { collectionService } from '@/features/catalog/services/collectionService';
 import { PatronReview } from '@/features/reviews/types';
@@ -29,7 +31,51 @@ import {
 } from 'lucide-react';
 
 export const HomePage: React.FC = () => {
-  useDocumentTitle('Home');
+  useSEO({
+    title: 'Luxury Pure Silk Sarees & Salem Handlooms',
+    description: 'MUETY offers handcrafted pure mulberry silk sarees, certified zari bridal silks, and festive ethnic drapes direct from master Salem weavers.',
+    canonicalPath: '/',
+    ogType: 'website',
+    ogImage: '/diwali_hero_banner.webp',
+    jsonLd: [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        name: 'MUETY',
+        alternateName: 'MUETY Handloom Sarees',
+        url: 'https://muety.in',
+        logo: 'https://muety.in/muety-logo-opt.png',
+        description: 'Authentic Salem Handloom Silk Sarees, Pure Zari Bridal Drapes, and Festive Indian Ethnic Wear.',
+        address: {
+          '@type': 'PostalAddress',
+          addressLocality: 'Salem',
+          addressRegion: 'Tamil Nadu',
+          addressCountry: 'IN'
+        },
+        contactPoint: {
+          '@type': 'ContactPoint',
+          telephone: '+91-9876543210',
+          contactType: 'Customer Support',
+          areaServed: 'IN',
+          availableLanguage: ['English', 'Tamil']
+        }
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: 'MUETY',
+        url: 'https://muety.in',
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: {
+            '@type': 'EntryPoint',
+            urlTemplate: 'https://muety.in/products?q={search_term_string}'
+          },
+          'query-input': 'required name=search_term_string'
+        }
+      }
+    ]
+  });
 
   const { wishlist } = useCart();
 
@@ -63,7 +109,7 @@ export const HomePage: React.FC = () => {
   }, [approvedReviews]);
 
   const getReviewPhoto = (rev?: PatronReview, fallbackIdx: number = 0) => {
-    if (!rev) return '/saree_model_individual.jpg';
+    if (!rev) return '/saree_model_individual.webp';
     if (rev.photoUrl && rev.photoUrl.trim()) return rev.photoUrl;
     if (rev.productId || rev.productName || (rev as any).productSlug) {
       const matched = allProducts.find(p => 
@@ -76,9 +122,9 @@ export const HomePage: React.FC = () => {
       }
     }
     const fallbacks = [
-      '/saree_model_individual.jpg',
-      '/saree_model_drape.jpg',
-      '/saree_fabric_detail.jpg'
+      '/saree_model_individual.webp',
+      '/saree_model_drape.webp',
+      '/saree_fabric_detail.webp'
     ];
     const charSum = (rev.id || rev.authorName || String(fallbackIdx)).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
     return fallbacks[charSum % fallbacks.length];
@@ -142,10 +188,10 @@ export const HomePage: React.FC = () => {
 
     // Default canonical 4 occasions if no admin data yet
     return [
-      { id: 'col-bridal', slug: 'bridal', name: 'Bridal Muhurtham', bannerImage: '/saree_model_individual.jpg', featured: true, productCount: 4, displayOrder: 1 },
-      { id: 'col-temple', slug: 'temple', name: 'Temple Ceremonies', bannerImage: '/saree_fabric_detail.jpg', featured: true, productCount: 4, displayOrder: 2 },
-      { id: 'col-reception', slug: 'reception', name: 'Grand Receptions', bannerImage: '/saree_model_drape.jpg', featured: true, productCount: 4, displayOrder: 3 },
-      { id: 'col-festive', slug: 'festive', name: 'Family Festivities', bannerImage: '/diwali_hero_banner.jpg', featured: true, productCount: 4, displayOrder: 4 }
+      { id: 'col-bridal', slug: 'bridal', name: 'Bridal Muhurtham', bannerImage: '/saree_model_individual.webp', featured: true, productCount: 4, displayOrder: 1 },
+      { id: 'col-temple', slug: 'temple', name: 'Temple Ceremonies', bannerImage: '/saree_fabric_detail.webp', featured: true, productCount: 4, displayOrder: 2 },
+      { id: 'col-reception', slug: 'reception', name: 'Grand Receptions', bannerImage: '/saree_model_drape.webp', featured: true, productCount: 4, displayOrder: 3 },
+      { id: 'col-festive', slug: 'festive', name: 'Family Festivities', bannerImage: '/diwali_hero_banner.webp', featured: true, productCount: 4, displayOrder: 4 }
     ];
   }, [collections]);
 
@@ -1288,11 +1334,15 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Quick View Modal for Instant Product Inspection */}
-      <QuickViewModal 
-        product={quickViewProduct} 
-        onClose={() => setQuickViewProduct(null)} 
-      />
+      {/* Quick View Modal for Instant Product Inspection (Code-split with Suspense) */}
+      {quickViewProduct && (
+        <Suspense fallback={null}>
+          <QuickViewModal 
+            product={quickViewProduct} 
+            onClose={() => setQuickViewProduct(null)} 
+          />
+        </Suspense>
+      )}
 
       <style>{`
         .concierge-card-wrapper {

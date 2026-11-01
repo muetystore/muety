@@ -16,6 +16,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { storageService } from '@/lib/storage/storageService';
+import { metaPixel } from '@/lib/analytics/metaPixel';
 
 export const CartPage: React.FC = () => {
   useDocumentTitle('Cart');
@@ -390,6 +391,7 @@ export const CartPage: React.FC = () => {
 
             <button
               onClick={() => {
+                metaPixel.trackInitiateCheckout(items, grandTotal || subtotal);
                 if (!isAuthenticated) {
                   openAuthModal({ redirectPath: '/checkout', reason: 'checkout' });
                   return;

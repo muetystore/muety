@@ -1,0 +1,26 @@
+{
+  "name": "MUETY | Handloom Luxury Sarees",
+  "short_name": "MUETY",
+  "description": "Luxury Pure Mulberry Silk Sarees & Certified Zari Drapes crafted by master Salem artisans.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070a12",
+  "theme_color": "#8E1B32",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/muety-logo-opt.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/muety-logo-opt.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["shopping", "lifestyle", "fashion"]
+}
+

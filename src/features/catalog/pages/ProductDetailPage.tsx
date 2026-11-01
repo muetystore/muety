@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '@/shared/hooks/useDocumentTitle';
+import { useSEO } from '@/shared/hooks/useSEO';
+import { metaPixel } from '@/lib/analytics/metaPixel';
 import { productService } from '@/features/catalog/services/productService';
 import { reviewService } from '@/features/reviews/services/reviewService';
 import { storageService } from '@/lib/storage/storageService';
@@ -100,19 +102,19 @@ export const ProductDetailPage: React.FC = () => {
   const galleryImages = useMemo(() => {
     return Array.isArray(product?.images) && product.images.length > 0
       ? product.images
-      : ['/saree_model_individual.jpg'];
+      : ['/saree_model_individual.webp'];
   }, [product?.images]);
 
   // Desktop 2-column gallery images (Flipkart Pattern - Screenshot 3 & 4)
   const desktopDisplayImages = useMemo(() => {
     const list = Array.isArray(product?.images) && product.images.length > 0
       ? [...product.images]
-      : ['/saree_model_individual.jpg'];
+      : ['/saree_model_individual.webp'];
     
     const fallbacks = [
-      '/saree_fabric_detail.jpg',
-      '/saree_model_drape.jpg',
-      '/saree_model_individual.jpg'
+      '/saree_fabric_detail.webp',
+      '/saree_model_drape.webp',
+      '/saree_model_individual.webp'
     ];
     for (const fb of fallbacks) {
       if (list.length >= 4) break;
@@ -879,7 +881,51 @@ export const ProductDetailPage: React.FC = () => {
     setIsDragging(false);
   };
 
-  useDocumentTitle(product?.name || 'Creation Details');
+  // Meta Pixel ViewContent tracking (deduplicated per product load)
+  const trackedProductIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (product && product.id && trackedProductIdRef.current !== product.id) {
+      trackedProductIdRef.current = product.id;
+      metaPixel.trackViewContent(product);
+    }
+  }, [product]);
+
+  // Advanced SEO, OpenGraph, Twitter Cards & JSON-LD Product Schema
+  useSEO({
+    title: product?.name || 'Creation Details',
+    description: product?.description || (product?.name ? `${product.name} - Pure Handloom Silk Saree with Certified Zari from Salem artisans.` : undefined),
+    canonicalPath: `/products/${product?.slug || product?.id || id}`,
+    ogType: 'product',
+    ogImage: (product?.images && product.images[0]) || '/saree_model_individual.webp',
+    price: product?.salePrice ?? product?.price,
+    currency: 'INR',
+    jsonLd: product ? {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: product.name,
+      description: product.description || `${product.name} - Luxury Handloom Saree by MUETY.`,
+      image: (product.images && product.images.length > 0) ? product.images : ['https://muety.in/saree_model_individual.webp'],
+      sku: product.sku || product.id,
+      brand: {
+        '@type': 'Brand',
+        name: 'MUETY'
+      },
+      offers: {
+        '@type': 'Offer',
+        url: `https://muety.in/products/${product.slug || product.id}`,
+        priceCurrency: 'INR',
+        price: product.salePrice ?? product.price,
+        itemCondition: 'https://schema.org/NewCondition',
+        availability: (product.availability === 'sold_out' || product.stock === 0) 
+          ? 'https://schema.org/OutOfStock' 
+          : 'https://schema.org/InStock',
+        seller: {
+          '@type': 'Organization',
+          name: 'MUETY'
+        }
+      }
+    } : undefined
+  });
 
   const isSaved = product ? isInWishlist(product.id) : false;
   const relatedProducts = product ? productService.getRelatedProducts(product.id, 4, product) : [];
@@ -1039,7 +1085,7 @@ export const ProductDetailPage: React.FC = () => {
                             draggable={false}
                             onDoubleClick={handleImageDoubleClick}
                             onError={(e) => {
-                              (e.target as HTMLImageElement).src = '/saree_model_individual.jpg';
+                              (e.target as HTMLImageElement).src = '/saree_model_individual.webp';
                             }}
                             style={isCurrent && zoomScale > 1 ? {
                               transform: `scale(${zoomScale}) translate(${panOffset.x / zoomScale}px, ${panOffset.y / zoomScale}px)`,
@@ -1162,7 +1208,7 @@ export const ProductDetailPage: React.FC = () => {
                         src={img} 
                         alt="" 
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/saree_model_individual.jpg';
+                          (e.target as HTMLImageElement).src = '/saree_model_individual.webp';
                         }}
                       />
                     </button>
@@ -1198,7 +1244,7 @@ export const ProductDetailPage: React.FC = () => {
                     className="pdp-desktop-extra-img"
                     loading={idx < 2 ? "eager" : "lazy"}
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/saree_model_individual.jpg';
+                      (e.target as HTMLImageElement).src = '/saree_model_individual.webp';
                     }}
                   />
                   <div className="pdp-desktop-grid-card-overlay" aria-hidden="true">
@@ -2184,7 +2230,7 @@ export const ProductDetailPage: React.FC = () => {
 
               <div className="pdp-lightbox-img-wrap">
                 <img
-                  src={galleryImages[selectedImage] || '/saree_model_individual.jpg'}
+                  src={galleryImages[selectedImage] || '/saree_model_individual.webp'}
                   alt={`${product.name} - view ${selectedImage + 1}`}
                   className="pdp-lightbox-img"
                   onDoubleClick={handleImageDoubleClick}
@@ -2195,7 +2241,7 @@ export const ProductDetailPage: React.FC = () => {
                   onTouchMove={handleGalleryTouchMove}
                   onTouchEnd={handleGalleryTouchEnd}
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/saree_model_individual.jpg';
+                    (e.target as HTMLImageElement).src = '/saree_model_individual.webp';
                   }}
                   style={zoomScale > 1 ? {
                     transform: `scale(${zoomScale}) translate(${panOffset.x / zoomScale}px, ${panOffset.y / zoomScale}px)`,
@@ -2233,7 +2279,7 @@ export const ProductDetailPage: React.FC = () => {
                       src={img} 
                       alt="" 
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/saree_model_individual.jpg';
+                        (e.target as HTMLImageElement).src = '/saree_model_individual.webp';
                       }}
                     />
                   </button>
@@ -2339,7 +2385,7 @@ export const ProductDetailPage: React.FC = () => {
               {/* Product preview card */}
               <div className="pdp-share-product-preview">
                 <img 
-                  src={galleryImages[0] || '/saree_model_individual.jpg'} 
+                  src={galleryImages[0] || '/saree_model_individual.webp'} 
                   alt={product.name} 
                   className="pdp-share-product-thumb"
                 />

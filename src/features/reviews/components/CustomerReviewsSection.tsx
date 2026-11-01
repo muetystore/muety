@@ -273,7 +273,7 @@ export const CustomerReviewsSection: React.FC = () => {
                         }}
                       >
                         <img 
-                          src={review.photoUrl || '/saree_model_individual.jpg'} 
+                          src={review.photoUrl || '/saree_model_individual.webp'} 
                           alt={`Patron ${review.authorName}`}
                           loading="lazy"
                           style={{
@@ -285,7 +285,7 @@ export const CustomerReviewsSection: React.FC = () => {
                           }}
                           onError={(e) => {
                             // Graceful fallback to verified model portrait
-                            (e.target as HTMLImageElement).src = '/saree_model_individual.jpg';
+                            (e.target as HTMLImageElement).src = '/saree_model_individual.webp';
                           }}
                         />
                       </div>

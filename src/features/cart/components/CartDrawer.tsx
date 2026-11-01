@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/shared/context/CartContext';
 import { useAuth } from '@/shared/context/AuthContext';
+import { metaPixel } from '@/lib/analytics/metaPixel';
 import { X, Trash2, Plus, Minus, ArrowRight, ShoppingBag } from 'lucide-react';
 
 export const CartDrawer: React.FC = () => {
@@ -213,6 +214,7 @@ export const CartDrawer: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <button 
                 onClick={() => {
+                  metaPixel.trackInitiateCheckout(items, subtotal);
                   setIsDrawerOpen(false);
                   if (!isAuthenticated) {
                     openAuthModal({ redirectPath: '/checkout', reason: 'checkout' });

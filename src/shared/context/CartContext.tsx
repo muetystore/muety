@@ -6,6 +6,7 @@ import { useNotification } from './NotificationContext';
 import { useAuth } from './AuthContext';
 import { calculateOrderFinancials } from '@/shared/utils/pricingEngine';
 import { recommendationService } from '@/features/catalog/services/recommendationService';
+import { metaPixel } from '@/lib/analytics/metaPixel';
 
 interface CartContextType {
   items: CartItem[];
@@ -141,6 +142,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const selectedSize = size || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
 
     recommendationService.recordAddToCart(product);
+    metaPixel.trackAddToCart(product, quantity);
 
     setItems(prev => {
       const existingIndex = prev.findIndex(
